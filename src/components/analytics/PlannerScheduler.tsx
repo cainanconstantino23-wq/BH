@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { 
   Calendar as CalendarIcon, List, BookOpen, Trash2, 
   Plus, ChevronLeft, ChevronRight, Image as ImageIcon, X, Clock, 
@@ -23,7 +24,7 @@ const initialPosts: ScheduledPost[] = [
   {
     id: 'post-1',
     title: 'Tour Villa Trancoso',
-    caption: 'Rascunho sdasdas — Tour exclusivo pelos detalhes e arquitetura de alto padrão.',
+    caption: 'Rascunho — Tour exclusivo pelos detalhes e arquitetura de alto padrão.',
     dayIndex: 3,
     hour: 19,
     timeString: '7:11 PM',
@@ -63,6 +64,32 @@ export function PlannerScheduler() {
   const [targetDay, setTargetDay] = useState(3);
   const [targetHour, setTargetHour] = useState(19);
 
+  // Carregar posts do Supabase ao iniciar a página
+  useEffect(() => {
+    async function fetchPosts() {
+      const { data, error } = await supabase.from('posts').select('*');
+      if (error) {
+        console.error('Erro ao buscar posts do Supabase:', error);
+      } else if (data && data.length > 0) {
+        // Mapeia os dados da base de dados para o formato esperado pelo componente
+        const formattedPosts: ScheduledPost[] = data.map((item: any) => ({
+          id: item.id.toString(),
+          title: item.title || 'Publicação',
+          caption: item.content || '',
+          dayIndex: item.day_index ?? 3,
+          hour: item.hour ?? 19,
+          timeString: item.time_string || '7:00 PM',
+          image: item.image_url || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
+          platform: 'instagram',
+          postType: item.platform || 'REEL'
+        }));
+        setPosts(formattedPosts);
+      }
+    }
+
+    fetchPosts();
+  }, []);
+
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const reader = new FileReader();
@@ -73,17 +100,42 @@ export function PlannerScheduler() {
     }
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const titleVal = caption.slice(0, 25) || `${postType} Bahia Homes`;
+    const contentVal = caption || 'Nova publicação agendada.';
+    const timeStrVal = `${targetHour > 12 ? targetHour - 12 : targetHour}:00 ${targetHour >= 12 ? 'PM' : 'AM'}`;
+    const imgVal = mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+
+    // Gravar no Supabase
+    const { data, error } = await supabase.from('posts').insert([
+      {
+        title: titleVal,
+        content: contentVal,
+        platform: postType,
+        day_index: targetDay,
+        hour: targetHour,
+        time_string: timeStrVal,
+        image_url: imgVal
+      }
+    ]).select();
+
+    if (error) {
+      console.error('Erro ao inserir post no Supabase:', error);
+      alert('Erro ao guardar na base de dados. Verifique a consola.');
+      return;
+    }
+
+    // Adicionar localmente com o ID gerado (ou temporário)
     const newPost: ScheduledPost = {
-      id: Date.now().toString(),
-      title: caption.slice(0, 25) || `${postType} Bahia Homes`,
-      caption: caption || 'Nova publicação agendada.',
+      id: data && data[0] ? data[0].id.toString() : Date.now().toString(),
+      title: titleVal,
+      caption: contentVal,
       dayIndex: targetDay,
       hour: targetHour,
-      timeString: `${targetHour > 12 ? targetHour - 12 : targetHour}:00 ${targetHour >= 12 ? 'PM' : 'AM'}`,
-      image: mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
+      timeString: timeStrVal,
+      image: imgVal,
       platform: 'instagram',
       postType
     };
@@ -94,7 +146,13 @@ export function PlannerScheduler() {
     setIsCreateOpen(false);
   };
 
-  const handleDeletePost = (id: string) => {
+  const handleDeletePost = async (id: string) => {
+    // Apagar do Supabase (se for numérico ou UUID)
+    const { error } = await supabase.from('posts').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir post:', error);
+    }
+
     setPosts(posts.filter(p => p.id !== id));
     setSelectedPost(null);
   };
@@ -103,10 +161,10 @@ export function PlannerScheduler() {
     setDraggedPostId(id);
   };
 
-  const handleDropOnSlot = (dayIndex: number, hour: number) => {
+  const handleDropOnSlot = async (dayIndex: number, hour: number) => {
     if (!draggedPostId) return;
 
-    setPosts(posts.map(p => {
+    const updatedPosts = posts.map(p => {
       if (p.id === draggedPostId) {
         return {
           ...p,
@@ -116,8 +174,16 @@ export function PlannerScheduler() {
         };
       }
       return p;
-    }));
+    });
+
+    setPosts(updatedPosts);
     setDraggedPostId(null);
+
+    // Opcional: Atualizar a posição na base de dados
+    await supabase.from('posts').update({ 
+      day_index: dayIndex, 
+      hour: hour 
+    }).eq('id', draggedPostId);
   };
 
   const filteredPosts = posts.filter(p => 
@@ -150,10 +216,9 @@ export function PlannerScheduler() {
         </button>
       </div>
 
-      {/* 2. Barra de Ferramentas Exata da Imagem (Pesquisa, Esta Semana, Setas, Calendário Mensal e Filtros) */}
+      {/* 2. Barra de Ferramentas Exata da Imagem */}
       <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         
-        {/* Esquerda: Pesquisa e Botão Esta semana */}
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
@@ -171,10 +236,7 @@ export function PlannerScheduler() {
           </button>
         </div>
 
-        {/* Direita: Controles de Data (< | 📅 | >) e Filtros / Mais */}
         <div className="flex items-center gap-3">
-          
-          {/* Grupo de Setas e Ícone de Calendário Mensal */}
           <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
             <button 
               onClick={() => setCurrentWeekOffset(prev => prev - 1)}
@@ -202,7 +264,6 @@ export function PlannerScheduler() {
             </button>
           </div>
 
-          {/* Botões de Filtro e Mais Opções */}
           <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white shadow-xs">
             <button onClick={() => alert('Filtros avançados')} className="p-2 hover:bg-gray-100 text-gray-700 transition border-r border-gray-200" title="Filtrar">
               <Filter size={16} />
