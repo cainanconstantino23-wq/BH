@@ -20,20 +20,6 @@ interface ScheduledPost {
   postType: 'REEL' | 'POST' | 'STORY';
 }
 
-const initialPosts: ScheduledPost[] = [
-  {
-    id: 'post-1',
-    title: 'Tour Villa Trancoso',
-    caption: 'Rascunho — Tour exclusivo pelos detalhes e arquitetura de alto padrão.',
-    dayIndex: 3,
-    hour: 19,
-    timeString: '7:11 PM',
-    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80',
-    platform: 'instagram',
-    postType: 'REEL'
-  }
-];
-
 const daysOfWeek = [
   { name: 'Segunda-Feira', date: '26' },
   { name: 'Terça-Feira', date: '27' },
@@ -47,7 +33,7 @@ const daysOfWeek = [
 const hours = Array.from({ length: 14 }, (_, i) => i + 11);
 
 export function PlannerScheduler() {
-  const [posts, setPosts] = useState<ScheduledPost[]>(initialPosts);
+  const [posts, setPosts] = useState<ScheduledPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMonthViewOpen, setIsMonthViewOpen] = useState(false);
@@ -64,31 +50,39 @@ export function PlannerScheduler() {
   const [targetDay, setTargetDay] = useState(3);
   const [targetHour, setTargetHour] = useState(19);
 
-  // Carregar posts do Supabase ao iniciar a página com proteção contra erros
+  // Carregar posts do Supabase com select leve e limite para evitar timeout
   useEffect(() => {
     async function fetchPosts() {
       try {
-        const { data, error } = await supabase.from('posts').select('*');
+        const { data, error } = await supabase
+          .from('posts')
+          .select('id, title, content, platform, day_index, hour, time_string, image_url')
+          .limit(50);
+
         if (error) {
-          console.error('Erro ao buscar posts do Supabase:', error);
+          console.error('Erro detalhado do Supabase:', error);
           return;
-        } 
-        if (data && Array.isArray(data) && data.length > 0) {
+        }
+
+        if (data && Array.isArray(data)) {
           const formattedPosts: ScheduledPost[] = data.map((item: any) => ({
-            id: item?.id ? item.id.toString() : Math.random().toString(),
+            id: String(item.id || Date.now()),
             title: item.title || 'Publicação',
             caption: item.content || '',
-            dayIndex: item.day_index ?? 3,
-            hour: item.hour ?? 19,
+            dayIndex: typeof item.day_index === 'number' ? item.day_index : Number(item.day_index ?? 3),
+            hour: typeof item.hour === 'number' ? item.hour : Number(item.hour ?? 19),
             timeString: item.time_string || '7:00 PM',
-            image: item.image_url || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
+            image: (item.image_url && !item.image_url.startsWith('data:')) 
+              ? item.image_url 
+              : 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
             platform: 'instagram',
             postType: item.platform || 'REEL'
           }));
+
           setPosts(formattedPosts);
         }
       } catch (err) {
-        console.error('Erro de conexão ao buscar posts:', err);
+        console.error('Erro ao processar posts:', err);
       }
     }
 
@@ -111,11 +105,14 @@ export function PlannerScheduler() {
     const titleVal = caption.slice(0, 25) || `${postType} Bahia Homes`;
     const contentVal = caption || 'Nova publicação agendada.';
     const timeStrVal = `${targetHour > 12 ? targetHour - 12 : targetHour}:00 ${targetHour >= 12 ? 'PM' : 'AM'}`;
-    const imgVal = mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+    
+    // Evita guardar strings Base64 pesadas no banco de dados para não estourar o limite
+    const defaultFallbackImg = 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+    const dbImgVal = (mediaUrl && !mediaUrl.startsWith('data:')) ? mediaUrl : defaultFallbackImg;
     const scheduledDateVal = `${daysOfWeek[targetDay].name}, ${daysOfWeek[targetDay].date} Outubro`;
 
-    // Inserção sem .select() para evitar timeouts de rede
-    const { error } = await supabase.from('posts').insert([
+    // Inserção no Supabase
+    const { data, error } = await supabase.from('posts').insert([
       {
         title: titleVal,
         content: contentVal,
@@ -123,10 +120,10 @@ export function PlannerScheduler() {
         day_index: targetDay,
         hour: targetHour,
         time_string: timeStrVal,
-        image_url: imgVal,
+        image_url: dbImgVal,
         scheduled_date: scheduledDateVal
       }
-    ]);
+    ]).select();
 
     if (error) {
       console.error('Erro ao inserir post no Supabase:', error);
@@ -134,14 +131,16 @@ export function PlannerScheduler() {
       return;
     }
 
+    const insertedId = data && data[0] ? String(data[0].id) : Date.now().toString();
+
     const newPost: ScheduledPost = {
-      id: Date.now().toString(),
+      id: insertedId,
       title: titleVal,
       caption: contentVal,
       dayIndex: targetDay,
       hour: targetHour,
       timeString: timeStrVal,
-      image: imgVal,
+      image: mediaUrl || defaultFallbackImg,
       platform: 'instagram',
       postType
     };
@@ -156,6 +155,8 @@ export function PlannerScheduler() {
     const { error } = await supabase.from('posts').delete().eq('id', id);
     if (error) {
       console.error('Erro ao excluir post:', error);
+      alert(`Erro ao excluir post: ${error.message}`);
+      return;
     }
 
     setPosts(posts.filter(p => p.id !== id));
@@ -182,12 +183,13 @@ export function PlannerScheduler() {
     });
 
     setPosts(updatedPosts);
+    const targetId = draggedPostId;
     setDraggedPostId(null);
 
     await supabase.from('posts').update({ 
       day_index: dayIndex, 
       hour: hour 
-    }).eq('id', draggedPostId);
+    }).eq('id', targetId);
   };
 
   const filteredPosts = posts.filter(p => 
@@ -199,7 +201,7 @@ export function PlannerScheduler() {
     <div className="space-y-4 animate-in fade-in duration-300">
       
       {/* 1. Sub-menu superior do Planner */}
-      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-6 text-xs font-semibold text-gray-600">
           <button className="flex items-center gap-1.5 text-gray-900 border-b-2 border-amber-500 pb-1 font-bold">
             <CalendarIcon size={14} className="text-amber-500" /> Calendário
@@ -214,14 +216,14 @@ export function PlannerScheduler() {
 
         <button 
           onClick={() => setIsCreateOpen(true)}
-          className="bg-[#231b2d] hover:bg-black text-[#ccf600] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-sm"
+          className="bg-[#231b2d] hover:bg-black text-[#ccf600] px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition shadow-xs"
         >
           <Plus size={16} /> Criar publicação
         </button>
       </div>
 
       {/* 2. Barra de Ferramentas */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
@@ -279,7 +281,7 @@ export function PlannerScheduler() {
       </div>
 
       {/* 3. CALENDAR GRID SEMANAL */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-x-auto select-none">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-x-auto select-none">
         <div className="min-w-[900px]">
           <div className="grid grid-cols-8 border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-700">
             <div className="p-3 text-center border-r border-gray-200 text-gray-400">Horário</div>
@@ -336,7 +338,7 @@ export function PlannerScheduler() {
         </div>
       </div>
 
-      {/* 4. MODAL DE CALENDÁRIO MENSAL COMPLETO */}
+      {/* 4. MODAL DE CALENDÁRIO MENSAL */}
       {isMonthViewOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -356,7 +358,7 @@ export function PlannerScheduler() {
               </div>
               <div className="grid grid-cols-7 gap-2">
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((dayNum) => {
-                  const hasPostOnThisDay = posts.some(p => p.dayIndex === (dayNum % 7) && p.hour === 19);
+                  const hasPostOnThisDay = posts.some(p => p.dayIndex === (dayNum % 7));
                   return (
                     <div 
                       key={dayNum}
@@ -424,14 +426,14 @@ export function PlannerScheduler() {
                   <img src={mediaUrl} alt="Preview Mídia" className="absolute inset-0 w-full h-full object-cover" />
                 ) : (
                   <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center shadow-sm">
+                    <div className="w-16 h-16 rounded-full bg-pink-50 text-pink-600 flex items-center justify-center shadow-xs">
                       <ImageIcon size={32} />
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gray-800">Carregar Foto ou Vídeo</p>
                       <p className="text-xs text-gray-400 mt-1">Arraste o arquivo ou clique abaixo</p>
                     </div>
-                    <label className="cursor-pointer bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+                    <label className="cursor-pointer bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-xs">
                       Selecionar Arquivo
                       <input type="file" accept="image/*,video/*" onChange={handleMediaUpload} className="hidden" />
                     </label>
@@ -481,7 +483,7 @@ export function PlannerScheduler() {
               <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg">
                 Cancelar
               </button>
-              <button type="submit" className="bg-[#231b2d] hover:bg-black text-[#ccf600] px-6 py-2 text-xs font-bold rounded-lg shadow-sm">
+              <button type="submit" className="bg-[#231b2d] hover:bg-black text-[#ccf600] px-6 py-2 text-xs font-bold rounded-lg shadow-xs">
                 Agendar
               </button>
             </div>
@@ -516,7 +518,7 @@ export function PlannerScheduler() {
 
               <div className="flex justify-between items-center text-xs text-gray-500 pt-2 border-t border-gray-100">
                 <span className="flex items-center gap-1 font-medium">
-                  <Clock size={14} className="text-amber-500" /> Agendado para {daysOfWeek[selectedPost.dayIndex].name} às {selectedPost.timeString}
+                  <Clock size={14} className="text-amber-500" /> Agendado para {daysOfWeek[selectedPost.dayIndex]?.name || 'Dia'} às {selectedPost.timeString}
                 </span>
                 <button 
                   onClick={() => handleDeletePost(selectedPost.id)}
