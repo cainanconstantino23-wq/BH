@@ -108,8 +108,8 @@ export function PlannerScheduler() {
     const imgVal = mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
     const scheduledDateVal = `${daysOfWeek[targetDay].name}, ${daysOfWeek[targetDay].date} Outubro`;
 
-    // Gravar no Supabase incluindo todas as colunas da tabela
-    const { data, error } = await supabase.from('posts').insert([
+    // Gravar no Supabase sem .select() para evitar timeouts
+    const { error } = await supabase.from('posts').insert([
       {
         title: titleVal,
         content: contentVal,
@@ -120,7 +120,7 @@ export function PlannerScheduler() {
         image_url: imgVal,
         scheduled_date: scheduledDateVal
       }
-    ]).select();
+    ]);
 
     if (error) {
       console.error('Erro ao inserir post no Supabase:', error);
@@ -129,7 +129,7 @@ export function PlannerScheduler() {
     }
 
     const newPost: ScheduledPost = {
-      id: data && data[0] ? data[0].id.toString() : Date.now().toString(),
+      id: Date.now().toString(),
       title: titleVal,
       caption: contentVal,
       dayIndex: targetDay,
@@ -214,7 +214,7 @@ export function PlannerScheduler() {
         </button>
       </div>
 
-      {/* 2. Barra de Ferramentas Exata da Imagem */}
+      {/* 2. Barra de Ferramentas */}
       <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="relative">
