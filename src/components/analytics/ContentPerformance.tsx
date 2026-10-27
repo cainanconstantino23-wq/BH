@@ -1,88 +1,86 @@
 'use client';
 
 import { VideoContentMetric } from '@/types/analytics';
-import { Film, Eye, Bookmark, Share2, Heart } from 'lucide-react';
+import { Eye, Heart, Share2, Bookmark, TrendingUp } from 'lucide-react';
 
 interface Props {
-  content: VideoContentMetric[];
+  content?: VideoContentMetric[];
 }
 
-export function ContentPerformance({ content }: Props) {
-  return (
-    <div className="space-y-6 pt-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-          <Film className="w-5 h-5 text-indigo-500" />
-          Desempenho dos Vídeos de Imóveis
-        </h2>
-        <span className="text-xs text-gray-500">Tours, Reels e Minidocumentários</span>
-      </div>
+export function ContentPerformance({ content = [] }: Props) {
+  const safeContent = Array.isArray(content) ? content : [];
 
-      <div className="bg-white border border-gray-200 shadow-sm rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider border-b border-gray-200 text-xs">
-              <tr>
-                <th className="p-4 font-semibold">Vídeo / Imóvel</th>
-                <th className="p-4 font-semibold">Ref. Imóvel</th>
-                <th className="p-4 font-semibold">Alcance</th>
-                <th className="p-4 font-semibold">Visualizações</th>
-                <th className="p-4 font-semibold">Retenção</th>
-                <th className="p-4 font-semibold text-right">Interações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 text-gray-700">
-              {content.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-4 font-medium text-gray-900 flex items-center gap-2">
-                    <span className="truncate max-w-xs">{item.title}</span>
-                  </td>
-                  <td className="p-4">
-                    {item.propertyRef ? (
-                      <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded text-[10px] font-bold">
-                        {item.propertyRef}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="p-4 font-semibold text-gray-600">
-                    {item.reach.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="p-4 font-semibold text-gray-900 flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5 text-blue-500" />
-                    {item.views.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-700 text-xs">{item.retentionRate}%</span>
-                      <div className="w-16 bg-gray-200 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-emerald-500 h-full rounded-full"
-                          style={{ width: `${item.retentionRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-3 text-gray-500">
-                      <span className="flex items-center gap-1 hover:text-red-500 transition cursor-pointer">
-                        <Heart className="w-3.5 h-3.5" /> {item.likes}
-                      </span>
-                      <span className="flex items-center gap-1 hover:text-amber-500 transition cursor-pointer">
-                        <Bookmark className="w-3.5 h-3.5" /> {item.saves}
-                      </span>
-                      <span className="flex items-center gap-1 hover:text-blue-500 transition cursor-pointer">
-                        <Share2 className="w-3.5 h-3.5" /> {item.shares}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+  return (
+    <div className="bg-white border border-gray-200/80 rounded-2xl p-6 shadow-2xs space-y-6">
+      
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <TrendingUp size={20} />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">Desempenho de Conteúdo</h3>
+            <p className="text-xs text-gray-500">Métricas de visualizações, alcance e engajamento dos vídeos</p>
+          </div>
         </div>
       </div>
+
+      {/* Tabela de Conteúdos */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-gray-100 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+              <th className="pb-3 font-semibold">Conteúdo / Imóvel</th>
+              <th className="pb-3 font-semibold">Plataforma</th>
+              <th className="pb-3 font-semibold">Visualizações</th>
+              <th className="pb-3 font-semibold">Alcance</th>
+              <th className="pb-3 font-semibold">Engajamento</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
+            {safeContent.map((item) => (
+              <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                <td className="py-3.5 pr-4 flex items-center gap-3">
+                  <img 
+                    src={item.thumbnail} 
+                    alt={item.title} 
+                    className="w-12 h-10 object-cover rounded-lg border border-gray-200 shrink-0" 
+                  />
+                  <div>
+                    <span className="font-semibold text-gray-900 line-clamp-1">{item.title}</span>
+                    <span className="text-[11px] text-gray-400">{item.propertyRef || 'Campanha Geral'}</span>
+                  </div>
+                </td>
+                <td className="py-3.5 capitalize font-medium text-gray-600">
+                  <span className="px-2.5 py-1 rounded-full bg-gray-100 text-[11px] font-semibold text-gray-800">
+                    {item.platform}
+                  </span>
+                </td>
+                <td className="py-3.5 font-semibold text-gray-900">
+                  {item.views.toLocaleString()}
+                </td>
+                <td className="py-3.5 text-gray-600 font-medium">
+                  {(item.reach ?? 0).toLocaleString()}
+                </td>
+                <td className="py-3.5">
+                  <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md text-[11px]">
+                    {item.engagementRate}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {safeContent.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-gray-400 text-xs">
+                  Nenhum conteúdo registado para este período.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
     </div>
   );
 }
