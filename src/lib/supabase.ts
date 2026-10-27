@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-
-// Limpeza rigorosa: remove barras finais e qualquer sufixo /rest/v1 acidental
-const cleanUrl = rawUrl.trim().replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '');
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(cleanUrl, supabaseAnonKey);
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Erro crítico: As variáveis de ambiente do Supabase estão em falta!');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
