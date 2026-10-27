@@ -71,7 +71,6 @@ export function PlannerScheduler() {
       if (error) {
         console.error('Erro ao buscar posts do Supabase:', error);
       } else if (data && data.length > 0) {
-        // Mapeia os dados da base de dados para o formato esperado pelo componente
         const formattedPosts: ScheduledPost[] = data.map((item: any) => ({
           id: item.id.toString(),
           title: item.title || 'Publicação',
@@ -107,8 +106,9 @@ export function PlannerScheduler() {
     const contentVal = caption || 'Nova publicação agendada.';
     const timeStrVal = `${targetHour > 12 ? targetHour - 12 : targetHour}:00 ${targetHour >= 12 ? 'PM' : 'AM'}`;
     const imgVal = mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+    const scheduledDateVal = `${daysOfWeek[targetDay].name}, ${daysOfWeek[targetDay].date} Outubro`;
 
-    // Gravar no Supabase
+    // Gravar no Supabase incluindo todas as colunas da tabela
     const { data, error } = await supabase.from('posts').insert([
       {
         title: titleVal,
@@ -117,17 +117,17 @@ export function PlannerScheduler() {
         day_index: targetDay,
         hour: targetHour,
         time_string: timeStrVal,
-        image_url: imgVal
+        image_url: imgVal,
+        scheduled_date: scheduledDateVal
       }
     ]).select();
 
     if (error) {
       console.error('Erro ao inserir post no Supabase:', error);
-      alert('Erro ao guardar na base de dados. Verifique a consola.');
+      alert(`Erro ao guardar na base de dados: ${error.message}`);
       return;
     }
 
-    // Adicionar localmente com o ID gerado (ou temporário)
     const newPost: ScheduledPost = {
       id: data && data[0] ? data[0].id.toString() : Date.now().toString(),
       title: titleVal,
@@ -147,7 +147,6 @@ export function PlannerScheduler() {
   };
 
   const handleDeletePost = async (id: string) => {
-    // Apagar do Supabase (se for numérico ou UUID)
     const { error } = await supabase.from('posts').delete().eq('id', id);
     if (error) {
       console.error('Erro ao excluir post:', error);
@@ -179,7 +178,6 @@ export function PlannerScheduler() {
     setPosts(updatedPosts);
     setDraggedPostId(null);
 
-    // Opcional: Atualizar a posição na base de dados
     await supabase.from('posts').update({ 
       day_index: dayIndex, 
       hour: hour 
@@ -218,7 +216,6 @@ export function PlannerScheduler() {
 
       {/* 2. Barra de Ferramentas Exata da Imagem */}
       <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-        
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
@@ -272,7 +269,6 @@ export function PlannerScheduler() {
               <MoreVertical size={16} />
             </button>
           </div>
-
         </div>
       </div>
 
