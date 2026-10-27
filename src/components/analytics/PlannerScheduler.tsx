@@ -64,25 +64,31 @@ export function PlannerScheduler() {
   const [targetDay, setTargetDay] = useState(3);
   const [targetHour, setTargetHour] = useState(19);
 
-  // Carregar posts do Supabase ao iniciar a página
+  // Carregar posts do Supabase ao iniciar a página com proteção contra erros
   useEffect(() => {
     async function fetchPosts() {
-      const { data, error } = await supabase.from('posts').select('*');
-      if (error) {
-        console.error('Erro ao buscar posts do Supabase:', error);
-      } else if (data) {
-        const formattedPosts: ScheduledPost[] = data.map((item: any) => ({
-          id: item.id.toString(),
-          title: item.title || 'Publicação',
-          caption: item.content || '',
-          dayIndex: item.day_index ?? 3,
-          hour: item.hour ?? 19,
-          timeString: item.time_string || '7:00 PM',
-          image: item.image_url || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
-          platform: 'instagram',
-          postType: item.platform || 'REEL'
-        }));
-        setPosts(formattedPosts);
+      try {
+        const { data, error } = await supabase.from('posts').select('*');
+        if (error) {
+          console.error('Erro ao buscar posts do Supabase:', error);
+          return;
+        } 
+        if (data && Array.isArray(data) && data.length > 0) {
+          const formattedPosts: ScheduledPost[] = data.map((item: any) => ({
+            id: item?.id ? item.id.toString() : Math.random().toString(),
+            title: item.title || 'Publicação',
+            caption: item.content || '',
+            dayIndex: item.day_index ?? 3,
+            hour: item.hour ?? 19,
+            timeString: item.time_string || '7:00 PM',
+            image: item.image_url || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80',
+            platform: 'instagram',
+            postType: item.platform || 'REEL'
+          }));
+          setPosts(formattedPosts);
+        }
+      } catch (err) {
+        console.error('Erro de conexão ao buscar posts:', err);
       }
     }
 
@@ -108,8 +114,8 @@ export function PlannerScheduler() {
     const imgVal = mediaUrl || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
     const scheduledDateVal = `${daysOfWeek[targetDay].name}, ${daysOfWeek[targetDay].date} Outubro`;
 
-    // Gravar no Supabase e retornar o registo criado
-    const { data, error } = await supabase.from('posts').insert([
+    // Inserção sem .select() para evitar timeouts de rede
+    const { error } = await supabase.from('posts').insert([
       {
         title: titleVal,
         content: contentVal,
@@ -120,7 +126,7 @@ export function PlannerScheduler() {
         image_url: imgVal,
         scheduled_date: scheduledDateVal
       }
-    ]).select();
+    ]);
 
     if (error) {
       console.error('Erro ao inserir post no Supabase:', error);
@@ -128,10 +134,8 @@ export function PlannerScheduler() {
       return;
     }
 
-    const createdItem = data && data[0] ? data[0] : null;
-
     const newPost: ScheduledPost = {
-      id: createdItem ? createdItem.id.toString() : Date.now().toString(),
+      id: Date.now().toString(),
       title: titleVal,
       caption: contentVal,
       dayIndex: targetDay,
