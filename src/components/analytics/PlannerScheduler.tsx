@@ -24,6 +24,7 @@ interface ScheduledPost {
   postType: 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
 }
 
+// Interface adicionada para aceitar a prop 'content' enviada pelo page.tsx
 interface PlannerSchedulerProps {
   content?: any;
 }
