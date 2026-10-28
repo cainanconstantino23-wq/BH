@@ -24,9 +24,13 @@ interface ScheduledPost {
   postType: 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
 }
 
+interface PlannerSchedulerProps {
+  content?: any;
+}
+
 const hours = Array.from({ length: 14 }, (_, i) => i + 11);
 
-export function PlannerScheduler() {
+export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
@@ -67,7 +71,7 @@ export function PlannerScheduler() {
     return `${midWeek.monthName} ${midWeek.fullDateStr.substring(0, 4)}`;
   }, [currentWeekDays]);
 
-  // Buscar posts ordenados por data e horário no Supabase
+  // Buscar posts do Supabase
   const fetchPosts = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -112,7 +116,7 @@ export function PlannerScheduler() {
     fetchPosts();
   }, [fetchPosts]);
 
-  // Função para excluir post do Supabase
+  // Excluir post do Supabase
   const handleDeletePost = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta publicação?')) return;
 
@@ -148,7 +152,7 @@ export function PlannerScheduler() {
     setDraggedPostId(null);
   };
 
-  // Posts filtrados e ordenados em fila de agendamento (cronológica)
+  // Posts filtrados e ordenados cronologicamente
   const sortedAndFilteredPosts = useMemo(() => {
     return posts
       .filter(p => 
@@ -291,7 +295,7 @@ export function PlannerScheduler() {
           </div>
         </div>
       ) : (
-        /* VISUALIZAÇÃO EM LISTA POR ORDEM CRONOLÓGICA DE AGENDAMENTO */
+        /* VISUALIZAÇÃO EM LISTA CRONOLÓGICA */
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-4">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="font-bold text-sm text-gray-800">Fila de Agendamentos (Ordem de Publicação)</h3>
@@ -364,7 +368,6 @@ export function PlannerScheduler() {
               </div>
             </div>
 
-            {/* Rodapé com Ação de Excluir */}
             <div className="p-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
               <button 
                 onClick={() => handleDeletePost(selectedPost.id)}

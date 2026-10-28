@@ -154,7 +154,7 @@ export default function Home() {
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Período principal</span>
                   <div className="flex items-center gap-2 border border-gray-200/80 rounded-xl px-3 py-1 mt-1 text-xs text-gray-700 bg-white shadow-2xs font-medium">
                     <CalendarIcon size={13} className="text-gray-400" />
-                    {mockAnalyticsData?.period?.startDate} - {mockAnalyticsData?.period?.endDate}
+                    <span>{mockAnalyticsData?.period?.startDate} - {mockAnalyticsData?.period?.endDate}</span>
                   </div>
                 </div>
               </div>
@@ -185,7 +185,7 @@ export default function Home() {
             )}
 
             {activeTab === 'planner' && (
-              <PlannerScheduler />
+              <PlannerScheduler content={mockAnalyticsData?.topContent || []} />
             )}
 
           </div>
