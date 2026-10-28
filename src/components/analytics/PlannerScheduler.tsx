@@ -24,8 +24,8 @@ interface ScheduledPost {
   postType: 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
 }
 
-// Interface adicionada para aceitar a prop 'content' enviada pelo page.tsx
-interface PlannerSchedulerProps {
+// Declaração de props permitidas
+export interface PlannerSchedulerProps {
   content?: any;
 }
 
@@ -38,11 +38,9 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [draggedPostId, setDraggedPostId] = useState<string | null>(null);
 
-  // Navegação e Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
 
-  // Geração Dinâmica da Semana Atual
   const currentWeekDays = useMemo(() => {
     const today = new Date();
     const currentDay = today.getDay();
@@ -72,7 +70,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
     return `${midWeek.monthName} ${midWeek.fullDateStr.substring(0, 4)}`;
   }, [currentWeekDays]);
 
-  // Buscar posts do Supabase
   const fetchPosts = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -117,7 +114,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
     fetchPosts();
   }, [fetchPosts]);
 
-  // Excluir post do Supabase
   const handleDeletePost = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta publicação?')) return;
 
@@ -153,7 +149,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
     setDraggedPostId(null);
   };
 
-  // Posts filtrados e ordenados cronologicamente
   const sortedAndFilteredPosts = useMemo(() => {
     return posts
       .filter(p => 
@@ -170,7 +165,7 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       
-      {/* HEADER CONTROLS */}
+      {/* CONTROLES */}
       <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-6 text-xs font-semibold text-gray-600">
           <button 
@@ -236,7 +231,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
       {activeTab === 'calendar' ? (
         <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-x-auto select-none">
           <div className="min-w-[900px]">
-            {/* Cabeçalho Dias */}
             <div className="grid grid-cols-8 border-b border-gray-200 bg-gray-50 text-xs font-bold text-gray-700">
               <div className="p-3 text-center border-r border-gray-200 text-gray-400">Horário</div>
               {currentWeekDays.map((day, idx) => (
@@ -246,7 +240,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
               ))}
             </div>
 
-            {/* Grid de Horas */}
             <div className="divide-y divide-gray-100">
               {hours.map((hour) => (
                 <div key={hour} className="grid grid-cols-8 min-h-[70px]">
@@ -296,7 +289,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
           </div>
         </div>
       ) : (
-        /* VISUALIZAÇÃO EM LISTA CRONOLÓGICA */
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-4">
           <div className="flex justify-between items-center border-b border-gray-100 pb-3">
             <h3 className="font-bold text-sm text-gray-800">Fila de Agendamentos (Ordem de Publicação)</h3>
@@ -334,14 +326,12 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
         </div>
       )}
 
-      {/* MODAL CRIAR PUBLICAÇÃO */}
       <CreatePostModal 
         isOpen={isCreateOpen} 
         onClose={() => setIsCreateOpen(false)} 
         onPostCreated={fetchPosts}
       />
 
-      {/* MODAL DE DETALHES E EXCLUSÃO DO POST */}
       {selectedPost && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden">

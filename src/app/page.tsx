@@ -184,9 +184,10 @@ export default function Home() {
               <MessagesInbox />
             )}
 
-            {activeTab === 'planner' && (
-              <PlannerScheduler />
-            )}
+          {/* Linha 167 no page.tsx */}
+{activeTab === 'planner' && (
+  <PlannerScheduler />
+)}
 
           </div>
         </main>
