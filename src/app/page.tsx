@@ -94,14 +94,14 @@ export default function Home() {
 
             <button 
               onClick={() => setActiveTab('inbox')} 
-              className={`flex items-center gap-2 transition ${activeTab === 'inbox' ? 'text-gray-900 border-b-2 border-gray-900 pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`flex items-center gap-2 transition ${activeTab === 'inbox' ? 'text-[#231b2d] border-b-2 border-[#231b2d] pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
             >
               <Inbox size={15} /> Inbox
             </button>
 
             <button 
               onClick={() => setActiveTab('planner')} 
-              className={`flex items-center gap-2 transition ${activeTab === 'planner' ? 'text-gray-900 border-b-2 border-gray-900 pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`flex items-center gap-2 transition ${activeTab === 'planner' ? 'text-[#231b2d] border-b-2 border-[#231b2d] pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
             >
               <CalendarDays size={15} /> Programar Post
             </button>
@@ -185,7 +185,7 @@ export default function Home() {
             )}
 
             {activeTab === 'planner' && (
-              <PlannerScheduler content={mockAnalyticsData?.topContent || []} />
+              <PlannerScheduler />
             )}
 
           </div>
