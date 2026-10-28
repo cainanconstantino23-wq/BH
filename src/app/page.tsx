@@ -11,9 +11,10 @@ import { AuthScreen } from '@/components/auth/AuthScreen';
 import { GrowthStats } from '@/components/analytics/GrowthStats';
 import { MessagesInbox } from '@/components/analytics/MessagesInbox';
 import { PlannerScheduler } from '@/components/analytics/PlannerScheduler';
+import ApprovalSectionOrange from '@/components/ApprovalSectionOrange';
 import { 
   BarChart2, Inbox, Calendar as CalendarIcon, 
-  FolderPlus, User, LogOut, CalendarDays
+  FolderPlus, User, LogOut, CalendarDays, CheckCircle2
 } from 'lucide-react';
 
 function InstagramIcon({ className = 'w-4 h-4' }) { return <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069z"/></svg>; }
@@ -25,7 +26,7 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>({ name: 'Cainan', email: 'cainan@daimefilmes.com' });
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'comunidade' | 'demografia' | 'conta' | 'inbox' | 'planner'>('comunidade');
+  const [activeTab, setActiveTab] = useState<'comunidade' | 'demografia' | 'conta' | 'inbox' | 'approval' | 'planner'>('comunidade');
 
   if (!currentUser) {
     return <AuthScreen onLogin={(data) => setCurrentUser(data)} />;
@@ -96,6 +97,14 @@ export default function Home() {
               <Inbox size={15} /> Inbox
             </button>
 
+            {/* Nova aba de Aprovação em Laranja */}
+            <button 
+              onClick={() => setActiveTab('approval')} 
+              className={`flex items-center gap-2 transition ${activeTab === 'approval' ? 'text-orange-600 border-b-2 border-orange-500 pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              <CheckCircle2 size={15} className={activeTab === 'approval' ? 'text-orange-500' : ''} /> Aprovação
+            </button>
+
             <button 
               onClick={() => setActiveTab('planner')} 
               className={`flex items-center gap-2 transition ${activeTab === 'planner' ? 'text-gray-900 border-b-2 border-gray-900 pb-1 font-bold' : 'text-gray-500 hover:text-gray-800'}`}
@@ -127,6 +136,7 @@ export default function Home() {
               </button>
             </div>
           </div>
+          
         </header>
 
         <main className="flex-1 overflow-y-auto bg-[#fafbfc] p-8">
@@ -181,6 +191,10 @@ export default function Home() {
 
             {activeTab === 'planner' && (
               <PlannerScheduler />
+            )}
+
+            {activeTab === 'approval' && (
+              <ApprovalSectionOrange />
             )}
 
           </div>
