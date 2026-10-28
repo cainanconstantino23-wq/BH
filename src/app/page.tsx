@@ -185,9 +185,7 @@ export default function Home() {
             )}
 
           {/* Linha 167 no page.tsx */}
-{activeTab === 'planner' && (
-  <PlannerScheduler />
-)}
+<PlannerScheduler />
 
           </div>
         </main>
