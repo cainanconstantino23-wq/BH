@@ -19,7 +19,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
   const [isAutoPublish, setIsAutoPublish] = useState(true);
   const [previewDevice, setPreviewDevice] = useState<'mobile' | 'desktop' | 'grid'>('mobile');
   
-  // Arquivo local e URL de preview leve
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState('');
   const [isVideo, setIsVideo] = useState(false);
@@ -31,7 +30,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
   if (!isOpen) return null;
 
-  // Carregamento instantâneo via URL local do browser
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -48,7 +46,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     try {
       let finalMediaUrl = 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
 
-      // 1. Upload do arquivo para o Storage do Supabase se houver arquivo selecionado
       if (selectedFile) {
         setUploadStatus('Enviando mídia...');
         const fileExt = selectedFile.name.split('.').pop();
@@ -63,10 +60,9 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
           });
 
         if (uploadError) {
-          throw new Error(`Erro no storage: ${uploadError.message}. Verifique se o bucket 'posts' foi criado e está público.`);
+          throw new Error(`Erro no storage: ${uploadError.message}. Verifique se o bucket 'posts' foi criado.`);
         }
 
-        // Resgatar a URL pública do arquivo
         const { data: publicUrlData } = supabase.storage
           .from('posts')
           .getPublicUrl(filePath);
@@ -74,8 +70,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         finalMediaUrl = publicUrlData.publicUrl;
       }
 
-      // 2. Gravando o post com a URL do arquivo no banco de dados
-      setUploadStatus('Agendando publicação...');
+      setUploadStatus('Agendando...');
       const titleVal = caption.slice(0, 25) || `${contentType} Novo`;
       const timeStrVal = `${scheduledHour > 12 ? scheduledHour - 12 : scheduledHour}:00 ${scheduledHour >= 12 ? 'PM' : 'AM'}`;
 
@@ -98,7 +93,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
       if (onPostCreated) onPostCreated();
       onClose();
       
-      // Limpa os estados
       setCaption('');
       setSelectedFile(null);
       setMediaPreviewUrl('');
@@ -115,7 +109,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
       <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden text-gray-900">
         
-        {/* Cabeçalho */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-gray-200 bg-gray-50/50">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-gray-100 transition shadow-xs">
@@ -129,10 +122,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
           </button>
         </div>
 
-        {/* Corpo Principal */}
         <div className="flex-1 flex overflow-hidden">
           
-          {/* Painel Esquerdo: Editor */}
           <div className="w-1/2 p-6 flex flex-col gap-4 overflow-y-auto border-r border-gray-200">
             
             <div className="flex items-center gap-3">
@@ -156,7 +147,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
               </button>
             </div>
 
-            {/* Caixa de Texto e Barra de Mídia */}
             <div className="flex-1 flex flex-col bg-gray-50 border border-gray-200 rounded-xl overflow-hidden min-h-[220px]">
               <textarea 
                 value={caption} 
@@ -187,7 +177,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
               </div>
             </div>
 
-            {/* Configurações de Data e Horário */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -229,7 +218,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
           </div>
 
-          {/* Painel Direito: Preview em Tempo Real */}
           <div className="w-1/2 p-6 bg-gray-50/60 flex flex-col items-center justify-between">
             
             <div className="flex items-center gap-1 bg-white border border-gray-200 p-1 rounded-xl shadow-xs">
@@ -253,14 +241,12 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
               </button>
             </div>
 
-            {/* Simulação do Smartphone */}
             <div className="w-[260px] h-[430px] bg-black border-4 border-gray-800 rounded-3xl flex flex-col justify-between overflow-hidden relative shadow-xl">
               <div className="flex items-center gap-2 p-3 bg-gradient-to-b from-black/80 to-transparent z-10">
                 <div className="w-6 h-6 rounded-full bg-[#231b2d] text-[#ccf600] flex items-center justify-center text-[10px] font-bold">D</div>
                 <span className="text-[11px] font-bold text-white">daimefilmes</span>
               </div>
 
-              {/* Preview de Mídia */}
               {mediaPreviewUrl ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black">
                   {isVideo || contentType === 'REEL' ? (
@@ -290,7 +276,6 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
         </div>
 
-        {/* Rodapé */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-gray-200 bg-white">
           <button onClick={onClose} disabled={loading} className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-800 transition">
             Cancelar

@@ -41,7 +41,6 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-[#f8faf8] text-gray-900 font-sans overflow-hidden antialiased">
       
-      {/* 1. BARRA LATERAL */}
       <aside className="w-64 border-r border-gray-200/80 flex flex-col bg-white shrink-0 shadow-2xs z-10">
         <div className="h-16 flex items-center px-6 border-b border-gray-100">
           <span className="font-bold text-gray-900 flex items-center gap-2.5 tracking-tight text-sm">
@@ -75,10 +74,8 @@ export default function Home() {
         </nav>
       </aside>
 
-      {/* ÁREA PRINCIPAL */}
       <div className="flex-1 flex flex-col overflow-hidden">
         
-        {/* 2. TOPBAR */}
         <header className="h-16 bg-white border-b border-gray-200/80 text-gray-800 flex items-center justify-between px-8 shrink-0 shadow-2xs z-20">
           <div className="flex items-center gap-6 text-xs font-medium">
             <button 
@@ -132,7 +129,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* 3. CONTEÚDO */}
         <main className="flex-1 overflow-y-auto bg-[#fafbfc] p-8">
           <div className="max-w-7xl mx-auto space-y-6">
             
@@ -160,7 +156,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* RENDERIZAÇÃO DAS ABAS */}
             {activeTab === 'comunidade' && (
                <div className="space-y-6 animate-in fade-in duration-300">
                  <GrowthStats />

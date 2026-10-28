@@ -24,7 +24,6 @@ interface ScheduledPost {
   postType: 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
 }
 
-// Declaração de props permitidas
 export interface PlannerSchedulerProps {
   content?: any;
 }
@@ -165,7 +164,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
   return (
     <div className="space-y-4 animate-in fade-in duration-300">
       
-      {/* CONTROLES */}
       <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-6 text-xs font-semibold text-gray-600">
           <button 
@@ -190,7 +188,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
         </button>
       </div>
 
-      {/* FILTROS E NAVEGAÇÃO DE SEMANA */}
       <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -227,7 +224,6 @@ export function PlannerScheduler({ content }: PlannerSchedulerProps = {}) {
         </div>
       </div>
 
-      {/* CALENDÁRIO / LISTA */}
       {activeTab === 'calendar' ? (
         <div className="bg-white border border-gray-200 rounded-xl shadow-xs overflow-x-auto select-none">
           <div className="min-w-[900px]">
