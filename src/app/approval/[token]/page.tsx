@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Home, LoaderCircle } from 'lucide-react';
 
@@ -18,33 +18,62 @@ interface Post {
 
 export default function ClientApprovalPage() {
   const params = useParams();
-  const token = params?.token as string;
+  const rawToken = params?.token as string;
+  const token = rawToken ? decodeURIComponent(rawToken) : '';
 
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState('');
   const [actionDone, setActionDone] = useState(false);
 
-  useEffect(() => {
-    if (token) fetchPostByToken();
-  }, [token]);
+  const supabase = createClient();
 
-  const fetchPostByToken = async () => {
+  const fetchPostByToken = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
+
+      // Busca flexível: aceita tanto o approval_token quanto o ID do post
       const { data, error } = await supabase
         .from('posts')
         .select('*')
-        .eq('approval_token', token)
-        .single();
+        .or(`approval_token.eq.${token},id.eq.${token}`)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na consulta do Supabase:', error);
+        throw error;
+      }
 
       if (data) {
+        // 1. Procura a URL do arquivo em todas as colunas possíveis
+        const rawMediaUrl = 
+          data.media_url || 
+          data.video_url || 
+          data.image_url || 
+          data.url || 
+          data.file_url || 
+          '';
+
+        // 2. Identifica se é vídeo pela extensão (.mp4, .mov, etc.) ou tipo registrado
+        const rawType = (data.media_type || data.type || '').toString().toLowerCase();
+        const isVideoUrl = rawMediaUrl.match(/\.(mp4|mov|webm|m3u8)($|\?)/i);
+        
+        const isVideo = 
+          rawType === 'video' || 
+          rawType === 'reel' || 
+          rawType === 'video_url' || 
+          Boolean(isVideoUrl);
+
         const formattedPost: Post = {
           ...data,
-          media_url: data.image_url || data.media_url || '',
-          caption: data.caption || data.content || '',
+          media_url: rawMediaUrl,
+          media_type: isVideo ? 'video' : 'image',
+          caption: data.caption || data.content || data.notes || '',
           house_name: data.house_name || data.title || 'Casa'
         };
 
@@ -53,13 +82,20 @@ export default function ClientApprovalPage() {
         if (formattedPost.approval_status && formattedPost.approval_status !== 'pending') {
           setActionDone(true);
         }
+      } else {
+        setPost(null);
       }
     } catch (err) {
-      console.error('Erro:', err);
+      console.error('Falha ao carregar conteúdo para aprovação:', err);
+      setPost(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, supabase]);
+
+  useEffect(() => {
+    void fetchPostByToken();
+  }, [fetchPostByToken]);
 
   const handleResponse = async (status: 'approved' | 'changes_requested' | 'rejected') => {
     if (!post) return;
@@ -143,20 +179,26 @@ export default function ClientApprovalPage() {
           </span>
         </header>
 
-        <div className="flex w-full items-center justify-center overflow-hidden bg-ink">
-          {post.media_type === 'video' ? (
-            <video
-              src={post.media_url}
-              controls
-              playsInline
-              className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
-            />
+        {/* Mídia: Vídeo com Player HTML5 ou Imagem */}
+        <div className="flex min-h-[280px] w-full items-center justify-center overflow-hidden bg-ink">
+          {post.media_url ? (
+            post.media_type === 'video' ? (
+              <video
+                src={post.media_url}
+                controls
+                playsInline
+                preload="metadata"
+                className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
+              />
+            ) : (
+              <img
+                src={post.media_url}
+                alt="Mídia da publicação"
+                className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
+              />
+            )
           ) : (
-            <img
-              src={post.media_url}
-              alt="Mídia da publicação"
-              className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
-            />
+            <p className="p-6 text-sm text-white/60">Nenhum ficheiro de mídia disponível.</p>
           )}
         </div>
 
