@@ -2,12 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
-import { useRef, useState, type ComponentType } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { mockAnalyticsData } from '@/data/mockAnalytics';
 import type { SocialPlatform } from '@/types/analytics';
 import { ContentPerformance } from '@/components/analytics/ContentPerformance';
-import { AuthScreen } from '@/components/auth/AuthScreen';
 import { GrowthStats } from '@/components/analytics/GrowthStats';
+import { ConnectMetaButton } from '@/components/ConnectMetaButton';
+import { supabase } from '@/lib/supabase';
 import {
   BarChart2,
   Inbox,
@@ -74,21 +76,23 @@ const LinkedinIcon = ({ className = 'h-4 w-4' }: { className?: string }) => (
   </svg>
 );
 
-interface DemoUser {
+interface DashboardUser {
   name: string;
   email: string;
+}
+
+interface MetaStats {
+  spend: string;
+  impressions: string;
+  clicks: string;
+  cpc: string;
+  ctr: string;
+  reach: string;
 }
 
 type DashboardTab = 'comunidade' | 'demografia' | 'conta' | 'inbox' | 'approval' | 'planner';
 
 const sectionEntranceClass = 'section-enter';
-
-const overviewMetrics = [
-  { label: 'Seguidores', value: '1.250', context: 'base atual' },
-  { label: 'Seguidores diários', value: '3,5', context: 'média do período' },
-  { label: 'Seguidores por publicação', value: '12', context: 'média' },
-  { label: 'Conteúdo total', value: '84', context: 'publicações' },
-];
 
 function AudienceSnapshot() {
   const demographics = mockAnalyticsData.demographics;
@@ -165,12 +169,117 @@ function AudienceSnapshot() {
 }
 
 export default function Home() {
-  const [currentUser, setCurrentUser] = useState<DemoUser | null>(null);
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<DashboardUser | null>(null);
   const [platform, setPlatform] = useState<SocialPlatform>('instagram');
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTab>('comunidade');
+  const [metaStats, setMetaStats] = useState<MetaStats | null>(null);
+  const [loadingMeta, setLoadingMeta] = useState(false);
+  const [metaStatsError, setMetaStatsError] = useState<string | null>(null);
+  const [isSupabaseAuthenticated, setIsSupabaseAuthenticated] = useState(false);
+  const [isRestoringUser, setIsRestoringUser] = useState(true);
   const mobileMenuRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    const url = new URL(window.location.href);
+    let hasAuthenticatedUser = false;
+
+    const restoreUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error && error.name !== 'AuthSessionMissingError') {
+          console.error('Não foi possível restaurar a sessão Supabase:', error);
+        }
+
+        if (!isActive) return;
+
+        if (user) {
+          hasAuthenticatedUser = true;
+          const fullName = user.user_metadata?.full_name;
+          const displayName = typeof fullName === 'string'
+            ? fullName
+            : user.email?.split('@')[0] || 'Usuário';
+          setCurrentUser({ name: displayName, email: user.email ?? '' });
+          setIsSupabaseAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Falha ao restaurar a sessão Supabase:', error);
+      } finally {
+        if (isActive) {
+          if (!hasAuthenticatedUser) {
+            const loginUrl = new URL('/login', window.location.origin);
+            for (const key of ['meta', 'error', 'reason']) {
+              const value = url.searchParams.get(key);
+              if (value) loginUrl.searchParams.set(key, value);
+            }
+            router.replace(`${loginUrl.pathname}${loginUrl.search}`);
+          } else {
+            url.searchParams.delete('meta');
+            url.searchParams.delete('error');
+            url.searchParams.delete('reason');
+            if (url.hash === '#_=_') url.hash = '';
+
+            if (
+              url.pathname !== window.location.pathname ||
+              url.search !== window.location.search ||
+              url.hash !== window.location.hash
+            ) {
+              window.history.replaceState(
+                window.history.state,
+                '',
+                `${url.pathname}${url.search}${url.hash}`,
+              );
+            }
+          }
+
+          setIsRestoringUser(false);
+        }
+      }
+    };
+
+    void restoreUser();
+
+    return () => {
+      isActive = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!currentUser || !isSupabaseAuthenticated) return;
+
+    const controller = new AbortController();
+    const loadMetaStats = async () => {
+      setLoadingMeta(true);
+      setMetaStatsError(null);
+
+      try {
+        const response = await fetch('/api/meta/stats', {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const result: { stats?: MetaStats | null; error?: string } = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || `Meta stats request failed with status ${response.status}.`);
+        }
+
+        setMetaStats(result.stats ?? null);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error('Erro ao carregar métricas do Meta Ads:', error);
+        setMetaStatsError('Não foi possível carregar as métricas do Meta Ads. Verifique a conexão e tente novamente.');
+        setMetaStats(null);
+      } finally {
+        if (!controller.signal.aborted) setLoadingMeta(false);
+      }
+    };
+
+    void loadMetaStats();
+    return () => controller.abort();
+  }, [currentUser, isSupabaseAuthenticated]);
 
   const openMobileMenu = () => {
     mobileMenuRef.current?.showModal();
@@ -190,7 +299,19 @@ export default function Home() {
   ];
 
   if (!currentUser) {
-    return <AuthScreen onEnterDemo={setCurrentUser} />;
+    if (isRestoringUser) {
+      return (
+        <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-ink-muted">
+          <p role="status">Validando sessão…</p>
+        </main>
+      );
+    }
+
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-ink-muted">
+        <p role="status">Redirecionando para o login…</p>
+      </main>
+    );
   }
 
   return (
@@ -407,7 +528,6 @@ export default function Home() {
               <Inbox size={15} /> Inbox
             </button>
 
-            {/* Nova aba de Aprovação em Laranja */}
             <button 
               onClick={() => setActiveTab('approval')} 
               aria-current={activeTab === 'approval' ? 'page' : undefined}
@@ -439,10 +559,20 @@ export default function Home() {
                 <div className="rounded-full bg-surface-muted p-1.5"><User size={13} className="text-ink-muted" /></div>
                 <span className="hidden font-semibold capitalize text-ink sm:inline">{currentUser.name}</span>
               </div>
-              <button 
-                onClick={() => setCurrentUser(null)} 
-                title="Sair da demonstração"
-                aria-label="Sair da demonstração"
+              <button
+                type="button"
+                onClick={async () => {
+                  const { error } = await supabase.auth.signOut();
+                  if (error) {
+                    console.error('Não foi possível encerrar a sessão Supabase:', error);
+                    return;
+                  }
+                  setIsSupabaseAuthenticated(false);
+                  setCurrentUser(null);
+                  router.replace('/login');
+                }}
+                title="Sair da conta"
+                aria-label="Sair da conta"
                 className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 <LogOut size={15} />
@@ -454,11 +584,6 @@ export default function Home() {
 
         <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-7 xl:px-8">
           <div className="mx-auto max-w-[1600px] space-y-5">
-            <div role="note" className="flex flex-col gap-1 rounded-control border border-status-warning-border bg-status-warning-soft px-4 py-3 text-xs leading-relaxed text-status-warning sm:flex-row sm:items-center sm:gap-2">
-              <span className="font-semibold">Modo demonstração</span>
-              <span>O painel não protege dados. Não use informações reais ou confidenciais.</span>
-            </div>
-            
             {(activeTab === 'comunidade' || activeTab === 'demografia' || activeTab === 'conta') && (
               <>
                 <div className="flex flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
@@ -504,17 +629,63 @@ export default function Home() {
 
             {activeTab === 'comunidade' && (
                <div key="community" className={`space-y-4 ${sectionEntranceClass}`}>
-                 <section aria-label="Indicadores principais" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                   {overviewMetrics.map((metric) => (
-                     <div key={metric.label} className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
-                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">{metric.label}</p>
+
+                 {/* Bloco Dinâmico do Meta Ads ou Botão de Conexão */}
+                 {loadingMeta ? (
+                   <div role="status" className="rounded-control border border-border bg-surface p-5 text-sm text-ink-muted">
+                     Carregando métricas do Meta Ads…
+                   </div>
+                 ) : !metaStats ? (
+                   <div className="flex flex-col items-center justify-between gap-4 rounded-control border border-dashed border-border bg-surface p-5 text-center sm:flex-row sm:text-left">
+                     <div>
+                       <h3 className="text-sm font-semibold text-ink">{metaStatsError ? 'Não foi possível carregar as métricas' : 'Conectar Meta Ads'}</h3>
+                       <p className="text-xs text-ink-muted">{metaStatsError || 'Ligue a sua conta para ver estatísticas de anúncios em tempo real.'}</p>
+                     </div>
+                     <ConnectMetaButton />
+                   </div>
+                 ) : metaStats ? (
+                   <section aria-label="Métricas Meta Ads" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
+                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">Investimento Total</p>
                        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">{metric.value}</span>
-                         <span className="text-[10px] text-ink-muted">{metric.context}</span>
+                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
+                           R$ {parseFloat(metaStats.spend || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                         </span>
+                         <span className="text-[10px] text-ink-muted">últimos 30d</span>
                        </div>
                      </div>
-                   ))}
-                 </section>
+
+                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
+                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">Impressões / Alcance</p>
+                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
+                           {parseInt(metaStats.impressions || '0').toLocaleString('pt-BR')}
+                         </span>
+                         <span className="text-[10px] text-ink-muted">Alcance: {parseInt(metaStats.reach || '0').toLocaleString('pt-BR')}</span>
+                       </div>
+                     </div>
+
+                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
+                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Cliques no Anúncio</p>
+                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
+                           {parseInt(metaStats.clicks || '0').toLocaleString('pt-BR')}
+                         </span>
+                         <span className="text-[10px] text-ink-muted">CTR: {parseFloat(metaStats.ctr || '0').toFixed(2)}%</span>
+                       </div>
+                     </div>
+
+                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
+                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">CPC Médio</p>
+                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
+                           R$ {parseFloat(metaStats.cpc || '0').toFixed(2)}
+                         </span>
+                         <span className="text-[10px] text-ink-muted">por clique</span>
+                       </div>
+                     </div>
+                   </section>
+                 ) : null}
 
                  {mockAnalyticsData.period && <GrowthStats period={mockAnalyticsData.period} />}
 

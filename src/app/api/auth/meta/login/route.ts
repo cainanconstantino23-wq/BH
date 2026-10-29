@@ -2,12 +2,28 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const appId = process.env.META_CLIENT_ID;
-  const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/meta/callback`;
-  const scope = 'ads_read,read_insights';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const redirectUri = `${baseUrl}/api/auth/meta/callback`;
 
-  const metaAuthUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
+  if (!appId) {
+    return NextResponse.json(
+      { error: 'META_CLIENT_ID não está configurado no .env.local' },
+      { status: 500 }
+    );
+  }
+
+  // Escopos para ler métricas orgânicas do Instagram/Página + Ads
+  const scopes = [
+    'ads_read',
+    'instagram_basic',
+    'instagram_manage_insights',
+    'pages_read_engagement',
+    'business_management'
+  ].join(',');
+
+  const authUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(
     redirectUri
-  )}&scope=${scope}&response_type=code`;
+  )}&scope=${scopes}&response_type=code`;
 
-  return NextResponse.redirect(metaAuthUrl);
+  return NextResponse.redirect(authUrl);
 }
