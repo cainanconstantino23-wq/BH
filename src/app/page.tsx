@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { useRef, useState, type ComponentType } from 'react';
 import { mockAnalyticsData } from '@/data/mockAnalytics';
 import type { SocialPlatform } from '@/types/analytics';
@@ -197,9 +198,15 @@ export default function Home() {
     <div className="flex h-dvh min-h-0 overflow-hidden overscroll-none bg-[#f7f5f0] font-sans text-[#302d34] antialiased [-webkit-tap-highlight-color:transparent] [&_button]:touch-manipulation [&_button]:select-none [&_button]:[-webkit-touch-callout:none] [&_button:active]:scale-[0.98] motion-reduce:[&_button:active]:scale-100">
       <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-[#e8e4dc] bg-[#fffefa] xl:flex">
         <div className="flex h-16 items-center border-b border-[#eee9e0] px-6">
-          <span className="flex items-center gap-3 text-sm font-semibold tracking-tight text-[#302d34]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-plum text-xs font-bold text-brand-lime">BH</span>
-            Bahia Homes <span className="font-normal text-[#89847f]">Analytics</span>
+          <span className="flex items-center gap-2.5 text-sm font-semibold tracking-tight text-[#302d34]">
+            <Image
+              src="/bahia-homes-logo.png"
+              alt="Bahia Homes"
+              width={1834}
+              height={276}
+              className="h-auto w-28"
+            />
+            <span className="font-normal text-[#89847f]">Analytics</span>
           </span>
         </div>
         <nav className="flex-1 space-y-8 px-3 py-7">
@@ -255,8 +262,14 @@ export default function Home() {
           <aside className="flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-[#e8e4dc] bg-[#fffefa] pb-[env(safe-area-inset-bottom)] shadow-xl">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#eee9e0] px-5 pt-[env(safe-area-inset-top)]">
               <span id="mobile-menu-title" className="flex items-center gap-2.5 text-sm font-bold tracking-tight text-ink">
-                <span className="flex h-7 w-7 items-center justify-center rounded-control bg-brand-plum text-xs text-brand-lime">BH</span>
-                Bahia Homes Analytics
+                <Image
+                  src="/bahia-homes-logo.png"
+                  alt="Bahia Homes"
+                  width={1834}
+                  height={276}
+                  className="h-auto w-32"
+                />
+                <span className="font-normal text-[#89847f]">Analytics</span>
               </span>
               <button
                 type="button"
@@ -365,7 +378,13 @@ export default function Home() {
             >
               <Menu size={20} />
             </button>
-            <span className="truncate text-sm font-semibold tracking-tight text-[#302d34]">Bahia Homes</span>
+            <Image
+              src="/bahia-homes-logo.png"
+              alt="Bahia Homes"
+              width={1834}
+              height={276}
+              className="h-auto w-28"
+            />
           </div>
 
           <nav aria-label="Navegação principal" className="hidden h-full items-center gap-2 text-xs font-medium xl:flex 2xl:gap-3">
