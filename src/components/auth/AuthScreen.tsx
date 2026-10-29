@@ -1,159 +1,49 @@
 'use client';
 
-import { useState } from 'react';
-import { Mail, Lock, User, ArrowRight, BarChart2, AlertCircle } from 'lucide-react';
+import { ArrowRight, BarChart2, TriangleAlert } from 'lucide-react';
 
-interface Props {
-  onLogin: (userData: { name: string; email: string }) => void;
+interface DemoUser {
+  name: string;
+  email: string;
 }
 
-export function AuthScreen({ onLogin }: Props) {
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+interface AuthScreenProps {
+  onEnterDemo: (user: DemoUser) => void;
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-
-    if (!email || !password || (!isLogin && !name)) {
-      setErrorMessage('Por favor, preencha todos os campos.');
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMessage('A palavra-passe deve ter pelo menos 6 caracteres.');
-      return;
-    }
-
-    const storedUsers = JSON.parse(localStorage.getItem('bh_users') || '[]');
-
-    if (isLogin) {
-      // Procura exatamente pelo e-mail e pela senha correspondente
-      const foundUser = storedUsers.find((u: any) => u.email === email && u.password === password);
-      
-      if (foundUser) {
-        onLogin({ name: foundUser.name, email });
-      } else {
-        // Verifica se o e-mail existe mas a senha está errada
-        const emailExists = storedUsers.some((u: any) => u.email === email);
-        if (emailExists) {
-          setErrorMessage('Palavra-passe incorreta para este e-mail.');
-        } else {
-          setErrorMessage('Conta não encontrada. Por favor, faça o cadastro primeiro.');
-        }
-      }
-    } else {
-      const userExists = storedUsers.some((u: any) => u.email === email);
-      if (userExists) {
-        setErrorMessage('Este e-mail já está cadastrado. Faça login.');
-        return;
-      }
-
-      const newUser = { name, email, password };
-      storedUsers.push(newUser);
-      localStorage.setItem('bh_users', JSON.stringify(storedUsers));
-      
-      onLogin({ name, email });
-    }
-  };
-
+export function AuthScreen({ onEnterDemo }: AuthScreenProps) {
   return (
-    <div className="min-h-screen bg-[#f4f7f4] flex flex-col justify-center items-center p-4">
-      <div className="flex items-center gap-2 mb-8 text-[#231b2d]">
-        <BarChart2 size={32} className="text-[#ccf600] bg-[#231b2d] p-1.5 rounded-lg" />
+    <main className="flex min-h-screen flex-col items-center justify-center bg-canvas p-4">
+      <div className="mb-8 flex items-center gap-2 text-brand-plum">
+        <BarChart2 size={32} className="rounded-lg bg-brand-plum p-1.5 text-brand-lime" />
         <h1 className="text-2xl font-bold">Bahia Homes Analytics</h1>
       </div>
 
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-8 animate-in fade-in zoom-in duration-300">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          {isLogin ? 'Bem-vindo de volta' : 'Criar nova conta'}
-        </h2>
-        <p className="text-sm text-gray-500 mb-6">
-          {isLogin 
-            ? 'Insira suas credenciais seguras para aceder ao painel.' 
-            : 'Preencha os dados abaixo para registar o seu acesso.'}
+      <section className="w-full max-w-md rounded-panel border border-border bg-surface p-8 shadow-xl">
+        <h2 className="mb-2 text-2xl font-bold text-ink">Acesso de demonstração</h2>
+        <p className="mb-6 text-sm text-ink-muted">
+          Entre para explorar a interface e os dados de exemplo.
         </p>
 
-        {errorMessage && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
-            <AlertCircle size={14} className="shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Nome Completo</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                  <User size={16} />
-                </div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Cainan Daime"
-                  className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#231b2d] focus:ring-1 focus:ring-[#231b2d] transition"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">E-mail</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <Mail size={16} />
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#231b2d] focus:ring-1 focus:ring-[#231b2d] transition"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Palavra-passe (mínimo 6 caracteres)</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <Lock size={16} />
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#231b2d] focus:ring-1 focus:ring-[#231b2d] transition"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-[#ccf600] hover:bg-[#bce300] text-[#231b2d] font-bold text-sm py-2.5 rounded-lg transition flex items-center justify-center gap-2 mt-2 shadow-sm"
-          >
-            {isLogin ? 'Entrar no Painel' : 'Criar minha conta'}
-            <ArrowRight size={16} />
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          {isLogin ? 'Ainda não tem uma conta? ' : 'Já tem uma conta? '}
-          <button
-            onClick={() => { setIsLogin(!isLogin); setErrorMessage(''); }}
-            className="text-blue-600 font-bold hover:underline"
-          >
-            {isLogin ? 'Cadastre-se' : 'Faça login'}
-          </button>
+        <div
+          role="note"
+          className="mb-6 flex items-start gap-3 rounded-control border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+        >
+          <TriangleAlert size={18} className="mt-0.5 shrink-0" />
+          <p>
+            Este modo não autentica usuários nem protege o painel. Não use dados reais ou confidenciais.
+          </p>
         </div>
-      </div>
-    </div>
+
+        <button
+          type="button"
+          onClick={() => onEnterDemo({ name: 'Demonstração', email: 'demo@bahiahomes.local' })}
+          className="flex w-full items-center justify-center gap-2 rounded-control bg-brand-plum py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+        >
+          Entrar na demonstração
+          <ArrowRight size={16} />
+        </button>
+      </section>
+    </main>
   );
 }

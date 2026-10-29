@@ -78,7 +78,7 @@ export interface AnalyticsData {
   engagement: number;
   followers: number;
   growthRate: number;
-  period?: any;
+  period?: PeriodData;
   platform?: SocialPlatform;
   topContent?: VideoContentMetric[];
   demographics?: DemographicData;

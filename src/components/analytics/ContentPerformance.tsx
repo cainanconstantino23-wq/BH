@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, Heart, MessageCircle, Share2, TrendingUp, Video, Image as ImageIcon } from 'lucide-react';
+import { Heart, MessageCircle, Share2, TrendingUp, Video, Image as ImageIcon } from 'lucide-react';
 
 interface ContentItem {
   id: string;
@@ -64,34 +64,40 @@ export function ContentPerformance() {
   });
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-6">
+    <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-bold text-gray-900">Performance de Conteúdo</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Análise das últimas publicações e engajamento</p>
+          <h2 className="text-base font-semibold text-ink">Conteúdo de melhor desempenho</h2>
+          <p className="mt-1 text-xs text-ink-muted">Publicações recentes e principais indicadores</p>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
+        <div className="flex items-center gap-1 rounded-control bg-canvas p-1">
           <button
+            type="button"
             onClick={() => setFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              filter === 'ALL' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+            aria-pressed={filter === 'ALL'}
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+              filter === 'ALL' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
             Todos
           </button>
           <button
+            type="button"
             onClick={() => setFilter('REEL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              filter === 'REEL' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+            aria-pressed={filter === 'REEL'}
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+              filter === 'REEL' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
             Reels
           </button>
           <button
+            type="button"
             onClick={() => setFilter('POST')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-              filter === 'POST' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'
+            aria-pressed={filter === 'POST'}
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+              filter === 'POST' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
             Posts
@@ -100,65 +106,61 @@ export function ContentPerformance() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-gray-100 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-              <th className="pb-3 font-semibold">Conteúdo</th>
-              <th className="pb-3 font-semibold">Tipo</th>
-              <th className="pb-3 font-semibold">Visualizações</th>
-              <th className="pb-3 font-semibold">Curtidas</th>
-              <th className="pb-3 font-semibold">Comentários</th>
-              <th className="pb-3 font-semibold">Compartilhamentos</th>
-              <th className="pb-3 font-semibold text-right">Taxa Engajamento</th>
+        <table className="w-full min-w-[600px] border-collapse text-left">
+          <thead className="bg-canvas">
+            <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+              <th className="px-3 py-2.5 font-semibold">Conteúdo</th>
+              <th className="px-3 py-2.5 font-semibold">Tipo</th>
+              <th className="px-3 py-2.5 font-semibold">Visualizações</th>
+              <th className="px-3 py-2.5 font-semibold">Interações</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Taxa de engajamento</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-50 text-xs">
+          <tbody className="divide-y divide-border text-xs">
             {filteredContent.map((item) => (
-              <tr key={item.id} className="hover:bg-gray-50/80 transition">
-                <td className="py-3.5 pr-4">
+              <tr key={item.id} className="transition-colors hover:bg-canvas/70">
+                <td className="py-2.5 pl-3 pr-4">
                   <div className="flex items-center gap-3">
                     <img 
                       src={item.thumbnail} 
                       alt={item.title} 
-                      className="w-12 h-12 rounded-lg object-cover shrink-0" 
+                      className="h-10 w-10 shrink-0 rounded-control object-cover"
                     />
                     <div>
-                      <p className="font-bold text-gray-900 truncate max-w-xs">{item.title}</p>
-                      <span className="text-[10px] text-gray-400">{item.publishedAt}</span>
+                      <p className="max-w-xs truncate font-medium text-ink">{item.title}</p>
+                      <span className="text-[10px] text-ink-muted">{item.publishedAt}</span>
                     </div>
                   </div>
                 </td>
-                <td className="py-3.5">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                    item.type === 'REEL' ? 'bg-pink-50 text-pink-700' : 'bg-blue-50 text-blue-700'
+                <td className="px-3 py-2.5">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                    item.type === 'REEL' ? 'bg-brand-plum text-white' : 'bg-canvas text-ink'
                   }`}>
                     {item.type === 'REEL' ? <Video size={12} /> : <ImageIcon size={12} />}
                     {item.type}
                   </span>
                 </td>
-                <td className="py-3.5 font-semibold text-gray-900">
+                <td className="px-3 py-2.5 font-semibold tabular-nums text-ink">
                   {item.views.toLocaleString('pt-BR')}
                 </td>
-                <td className="py-3.5 text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <Heart size={13} className="text-red-500" />
-                    {item.likes.toLocaleString('pt-BR')}
-                  </span>
+                <td className="px-3 py-2.5 text-ink-muted">
+                  <div className="flex items-center gap-3">
+                    <span aria-label={`${item.likes.toLocaleString('pt-BR')} curtidas`} className="inline-flex items-center gap-1">
+                      <Heart aria-hidden="true" size={13} className="text-red-500" />
+                      {item.likes.toLocaleString('pt-BR')}
+                    </span>
+                    <span aria-label={`${item.comments.toLocaleString('pt-BR')} comentários`} className="inline-flex items-center gap-1">
+                      <MessageCircle aria-hidden="true" size={13} className="text-blue-500" />
+                      {item.comments.toLocaleString('pt-BR')}
+                    </span>
+                    <span aria-label={`${item.shares.toLocaleString('pt-BR')} compartilhamentos`} className="inline-flex items-center gap-1">
+                      <Share2 aria-hidden="true" size={13} className="text-emerald-500" />
+                      {item.shares.toLocaleString('pt-BR')}
+                    </span>
+                  </div>
                 </td>
-                <td className="py-3.5 text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <MessageCircle size={13} className="text-blue-500" />
-                    {item.comments.toLocaleString('pt-BR')}
-                  </span>
-                </td>
-                <td className="py-3.5 text-gray-600">
-                  <span className="flex items-center gap-1">
-                    <Share2 size={13} className="text-emerald-500" />
-                    {item.shares.toLocaleString('pt-BR')}
-                  </span>
-                </td>
-                <td className="py-3.5 text-right font-bold text-emerald-600">
-                  <span className="inline-flex items-center gap-0.5 bg-emerald-50 px-2 py-1 rounded-lg">
+                <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-brand-plum">
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-canvas px-2 py-1">
                     <TrendingUp size={12} />
                     {item.engagementRate}%
                   </span>
@@ -168,6 +170,6 @@ export function ContentPerformance() {
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }

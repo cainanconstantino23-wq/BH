@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Filter, MoreVertical, Send, CheckCheck, MessageSquare } from 'lucide-react';
+import { Search, Filter, MoreVertical, Send, CheckCheck, MessageSquare, ArrowLeft } from 'lucide-react';
 
 // SVG Inline do Instagram para evitar erros de export do lucide-react
 function InstagramIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -88,6 +88,7 @@ export function MessagesInbox() {
   const [filter, setFilter] = useState<'unresolved' | 'unread' | 'all'>('unresolved');
   const [inputText, setInputText] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const filteredConversations = conversations.filter((c) => {
     const matchesSearch = c.sender.toLowerCase().includes(searchTerm.toLowerCase());
@@ -118,10 +119,10 @@ export function MessagesInbox() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-140px)] bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in duration-300">
+    <div className="flex h-[calc(100dvh-6rem)] min-h-96 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm animate-in fade-in duration-300 md:h-[calc(100vh-140px)]">
       
       {/* LATERAL ESQUERDA */}
-      <div className="w-96 border-r border-gray-200 flex flex-col bg-white shrink-0">
+      <div className={`${isChatOpen ? 'hidden' : 'flex'} w-full shrink-0 flex-col border-gray-200 bg-white md:flex md:w-96 md:border-r`}>
         <div className="p-4 border-b border-gray-200 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full">
@@ -172,7 +173,10 @@ export function MessagesInbox() {
                 key={chat.id}
                 onClick={() => {
                   setActiveChat(chat);
-                  setConversations(conversations.map(c => c.id === chat.id ? { ...c, status: 'read' } : c));
+                  setConversations(conversations.map(c =>
+                    c.id === chat.id && c.status === 'unread' ? { ...c, status: 'read' } : c
+                  ));
+                  setIsChatOpen(true);
                 }}
                 className={`p-4 flex items-start gap-3 cursor-pointer transition ${
                   activeChat.id === chat.id ? 'bg-gray-50 border-l-4 border-pink-500' : 'hover:bg-gray-50/50'
@@ -215,11 +219,19 @@ export function MessagesInbox() {
       </div>
 
       {/* PAINEL DIREITO */}
-      <div className="flex-1 flex flex-col bg-[#fafafa]">
+      <div className={`${isChatOpen ? 'flex' : 'hidden'} min-w-0 flex-1 flex-col bg-[#fafafa] md:flex`}>
         {activeChat ? (
           <>
             <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-xs">
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Voltar para conversas"
+                  onClick={() => setIsChatOpen(false)}
+                  className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 md:hidden"
+                >
+                  <ArrowLeft size={18} />
+                </button>
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-0.5 flex items-center justify-center text-white font-bold text-xs">
                   <div className="w-full h-full bg-gray-800 rounded-full flex items-center justify-center">
                     {activeChat.avatar}

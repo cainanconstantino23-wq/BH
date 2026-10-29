@@ -1,117 +1,232 @@
 'use client';
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { PeriodData } from '@/types/analytics';
 
-const chartData = [
-  { date: 'out 1', seguidores: 0, seguindo: 0, adquiridos: 0, perdidos: 0 },
-  { date: 'out 2', seguidores: 4, seguindo: 1, adquiridos: 5, perdidos: 1 },
-  { date: 'out 3', seguidores: 7, seguindo: 2, adquiridos: 8, perdidos: 3 },
-  { date: 'out 4', seguidores: 5, seguindo: 2, adquiridos: 4, perdidos: 2 },
+interface GrowthStatsProps {
+  period: PeriodData;
+}
+
+interface ChartPoint {
+  date: string;
+  followers: number;
+  following: number;
+  acquired: number;
+  lost: number;
+}
+
+const chartValues = [
+  { followers: 1204, following: 431, acquired: 0, lost: 0 },
+  { followers: 1218, following: 438, acquired: 8, lost: 2 },
+  { followers: 1237, following: 445, acquired: 19, lost: 4 },
+  { followers: 1250, following: 450, acquired: 24, lost: 6 },
 ];
 
-export function GrowthStats() {
+const chartWidth = 720;
+const chartHeight = 220;
+const chartPadding = { top: 16, right: 12, bottom: 34, left: 48 };
+
+function createChartPoints(period: PeriodData): ChartPoint[] {
+  const start = new Date(`${period.startDate}T00:00:00`);
+  const end = new Date(`${period.endDate}T00:00:00`);
+  const range = end.getTime() - start.getTime();
+
+  return chartValues.map((values, index) => {
+    const date = new Date(start.getTime() + (range * index) / (chartValues.length - 1));
+
+    return {
+      ...values,
+      date: new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' })
+        .format(date)
+        .replace('.', ''),
+    };
+  });
+}
+
+function LineChart({
+  points,
+  series,
+  maxValue,
+  label,
+  compact = false,
+}: {
+  points: ChartPoint[];
+  series: { key: 'followers' | 'following' | 'acquired' | 'lost'; color: string; label: string }[];
+  maxValue: number;
+  label: string;
+  compact?: boolean;
+}) {
+  const viewWidth = compact ? 360 : chartWidth;
+  const padding = compact ? { top: 16, right: 8, bottom: 34, left: 34 } : chartPadding;
+  const plotWidth = viewWidth - padding.left - padding.right;
+  const plotHeight = chartHeight - padding.top - padding.bottom;
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((fraction) => Math.round(maxValue * fraction));
+
+  const getX = (index: number) =>
+    padding.left + (plotWidth * index) / Math.max(points.length - 1, 1);
+  const getY = (value: number) => padding.top + plotHeight * (1 - value / maxValue);
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      
-      {/* SEÇÃO 1: CRESCIMENTO */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h2 className="text-xl font-bold text-gray-900">Crescimento</h2>
-          
-          <div className="flex gap-3 text-sm">
-            <div className="bg-[#879cf6] text-white px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">1.250</span>
-              <span className="text-xs">Seguidores</span>
-            </div>
-            <div className="bg-[#8ccfa8] text-gray-800 px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">450</span>
-              <span className="text-xs">Seguindo</span>
-            </div>
-            <div className="bg-[#f3dfb9] text-gray-700 px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">84</span>
-              <span className="text-xs">Conteúdo total</span>
-            </div>
+    <div>
+      <div className="mb-2 flex flex-wrap gap-x-4 gap-y-2" aria-hidden="true">
+        {series.map(({ key, color, label: seriesLabel }) => (
+          <span key={key} className="inline-flex items-center gap-2 text-xs text-ink-muted">
+            <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: color }} />
+            {seriesLabel}
+          </span>
+        ))}
+      </div>
+      <div className={`w-full ${compact ? 'h-40' : 'h-56'}`} role="img" aria-label={label}>
+        <svg className="h-full w-full overflow-visible" viewBox={`0 0 ${viewWidth} ${chartHeight}`} preserveAspectRatio="none">
+          {yTicks.map((tick) => {
+            const y = getY(tick);
+
+            return (
+              <g key={tick}>
+                <line
+                  x1={padding.left}
+                  x2={viewWidth - padding.right}
+                  y1={y}
+                  y2={y}
+                  stroke="#e5e7eb"
+                  strokeDasharray="3 5"
+                />
+                <text
+                  x={padding.left - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  fill="#6b7280"
+                  fontSize={compact ? '8' : '11'}
+                >
+                  {tick.toLocaleString('pt-BR')}
+                </text>
+              </g>
+            );
+          })}
+
+          {points.map((point, index) => (
+            <text
+              key={`${point.date}-${index}`}
+              x={getX(index)}
+              y={chartHeight - 8}
+              textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
+              fill="#6b7280"
+              fontSize={compact ? '8' : '11'}
+            >
+              {point.date}
+            </text>
+          ))}
+
+          {series.map(({ key, color }) => {
+            const coordinates = points.map((point, index) => `${getX(index)},${getY(point[key])}`).join(' ');
+
+            return (
+              <g key={key}>
+                <polyline
+                  points={coordinates}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {points.map((point, index) => (
+                  <circle
+                    key={`${key}-${point.date}`}
+                    cx={getX(index)}
+                    cy={getY(point[key])}
+                    r="4"
+                    fill="white"
+                    stroke={color}
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 border-l border-border pl-3 first:border-l-0 first:pl-0">
+      <span className="block text-base font-semibold tabular-nums text-ink">{value}</span>
+      <span className="text-[11px] leading-tight text-ink-muted">{label}</span>
+    </div>
+  );
+}
+
+export function GrowthStats({ period }: GrowthStatsProps) {
+  const points = createChartPoints(period);
+  const summary = [
+    { label: 'Seguindo', value: '450' },
+    { label: 'Posts diários', value: '0,5' },
+    { label: 'Posts por semana', value: '3' },
+  ];
+
+  return (
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)]">
+      <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-ink">Crescimento da comunidade</h2>
+            <p className="mt-1 text-xs text-ink-muted">Evolução de seguidores e perfis seguidos</p>
           </div>
         </div>
 
-        {/* Gráfico de Linha - Crescimento */}
-        <div className="h-64 w-full mb-8 relative">
-          <div className="absolute inset-0 flex items-center justify-between px-10 pointer-events-none opacity-5">
-            <span className="text-4xl font-black tracking-tighter">metricool</span>
-            <span className="text-4xl font-black tracking-tighter">metricool</span>
-          </div>
+        <LineChart
+          points={points}
+          maxValue={1300}
+          label="Evolução de seguidores e perfis seguidos durante o período"
+          series={[
+            { key: 'followers', color: '#231b2d', label: 'Seguidores' },
+            { key: 'following', color: '#87909d', label: 'Seguindo' },
+          ]}
+        />
 
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} ticks={[0, 2.5, 5, 7.5, 10]} />
-              <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-              <Line type="monotone" dataKey="seguidores" stroke="#879cf6" strokeWidth={3} dot={{ r: 4, fill: '#879cf6' }} />
-              <Line type="monotone" dataKey="seguindo" stroke="#8ccfa8" strokeWidth={3} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Caixas Cinzas Inferiores */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          {[
-            { label: 'Seguidores', value: '1.250' },
-            { label: 'Seguidores diários', value: '3,5' },
-            { label: 'Seguidores por publicação', value: '12' },
-            { label: 'Seguindo', value: '450' },
-            { label: 'Posts diários', value: '0,5' },
-            { label: 'Posts por semana', value: '3' },
-          ].map((item, idx) => (
-            <div key={idx} className="bg-[#eef1f5] text-gray-700 p-4 rounded-lg text-center flex flex-col justify-center items-center h-24 border border-gray-200/60">
-              <span className="block font-bold text-lg mb-1 text-gray-900">{item.value}</span>
-              <span className="text-[11px] leading-tight font-medium px-1 text-gray-500">{item.label}</span>
-            </div>
+        <div className="grid grid-cols-3 gap-3 border-t border-border pt-3">
+          {summary.map((item) => (
+            <SummaryCard key={item.label} {...item} />
           ))}
         </div>
-      </div>
+      </section>
 
-      {/* SEÇÃO 2: SALDO DE SEGUIDORES */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h2 className="text-xl font-bold text-gray-900">Saldo de seguidores</h2>
-          
-          <div className="flex gap-3 text-sm">
-            <div className="bg-[#879cf6] text-white px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">24</span>
-              <span className="text-xs">Adquiridos</span>
-            </div>
-            <div className="bg-[#fca5ec] text-gray-900 px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">6</span>
-              <span className="text-xs">Perdidos</span>
-            </div>
-            <div className="bg-[#df9f2f] text-white px-6 py-3 rounded-lg text-center min-w-[120px] shadow-sm">
-              <span className="block font-bold text-lg">18</span>
-              <span className="text-xs">Saldo líquido</span>
-            </div>
+      <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+        <div>
+          <h2 className="text-base font-semibold text-ink">Saldo de seguidores</h2>
+          <p className="mt-1 text-xs text-ink-muted">Entradas e saídas no período</p>
+        </div>
+
+        <div className="grid grid-cols-3 divide-x divide-border border-y border-border py-3 text-center">
+          <div className="px-1">
+            <span className="block text-lg font-semibold tabular-nums text-ink">24</span>
+            <span className="text-[10px] text-ink-muted">Adquiridos</span>
+          </div>
+          <div className="px-1">
+            <span className="block text-lg font-semibold tabular-nums text-ink">6</span>
+            <span className="text-[10px] text-ink-muted">Perdidos</span>
+          </div>
+          <div className="px-1">
+            <span className="block text-lg font-semibold tabular-nums text-brand-plum">18</span>
+            <span className="text-[10px] text-ink-muted">Saldo líquido</span>
           </div>
         </div>
 
-        {/* Gráfico de Linha - Saldo */}
-        <div className="h-64 w-full relative">
-           <div className="absolute inset-0 flex items-center justify-between px-10 pointer-events-none opacity-5">
-            <span className="text-4xl font-black tracking-tighter">metricool</span>
-            <span className="text-4xl font-black tracking-tighter">metricool</span>
-          </div>
-
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} ticks={[0, 2.5, 5, 7.5, 10]} />
-              <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-              <Line type="monotone" dataKey="adquiridos" stroke="#879cf6" strokeWidth={3} dot={{ r: 4, fill: '#879cf6' }} />
-              <Line type="monotone" dataKey="perdidos" stroke="#fca5ec" strokeWidth={3} dot={{ r: 4, fill: '#fca5ec' }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
+        <LineChart
+          points={points}
+          maxValue={24}
+          label="Seguidores adquiridos e perdidos durante o período"
+          series={[
+            { key: 'acquired', color: '#231b2d', label: 'Adquiridos' },
+            { key: 'lost', color: '#87909d', label: 'Perdidos' },
+          ]}
+          compact
+        />
+      </section>
     </div>
   );
 }

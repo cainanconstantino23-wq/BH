@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-brand-plum: #231b2d;
+  --color-brand-lime: #ccf600;
+  --color-canvas: #f8faf8;
+  --color-surface: #ffffff;
+  --color-ink: #1f2937;
+  --color-ink-muted: #6b7280;
+  --color-border: #e5e7eb;
+
+  --radius-panel: 1rem;
+  --radius-control: 0.75rem;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-geist-sans), sans-serif;
+}

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface ApprovalPost {
   id: string | number;
@@ -18,6 +18,13 @@ interface ApprovalPost {
   created_at?: string;
 }
 
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return 'Erro inesperado.';
+};
+
 export default function ApprovalSectionOrange() {
   const [posts, setPosts] = useState<ApprovalPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,45 +36,82 @@ export default function ApprovalSectionOrange() {
   const [caption, setCaption] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [scheduledDate, setScheduledDate] = useState('2026-10-28');
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  });
   const [scheduledTime, setScheduledTime] = useState('19:00');
   const [submitting, setSubmitting] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
 
   useEffect(() => {
-    fetchPosts();
+    return () => {
+      if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+    };
+  }, [mediaPreview]);
+
+  const fetchPosts = useCallback(async (): Promise<ApprovalPost[]> => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Record<string, unknown>[];
+    return rows.map((item, index) => {
+      const id = typeof item.id === 'string' || typeof item.id === 'number' ? item.id : `post-${index}`;
+      const stringValue = (value: unknown) => typeof value === 'string' ? value : '';
+      const captionValue = stringValue(item.caption) || stringValue(item.content);
+      const houseNameValue = stringValue(item.house_name) || stringValue(item.title) || 'Casa';
+
+      return {
+        ...item,
+        id,
+        caption: captionValue,
+        media_url: stringValue(item.image_url) || stringValue(item.media_url),
+        media_type: item.media_type === 'video' ? 'video' : 'image',
+        house_name: houseNameValue,
+        approval_status: stringValue(item.approval_status) || 'pending',
+        approval_token: stringValue(item.approval_token) || String(id),
+        client_feedback: stringValue(item.client_feedback),
+        scheduled_date: stringValue(item.scheduled_date),
+        scheduled_time: stringValue(item.scheduled_time) || stringValue(item.time_string),
+        created_at: stringValue(item.created_at),
+      };
+    });
   }, []);
 
-  const fetchPosts = async (selectLatest = false) => {
+  useEffect(() => {
+    let active = true;
+    void fetchPosts()
+      .then((formatted) => {
+        if (!active) return;
+        setPosts(formatted);
+        setSelectedPost(formatted[0] ?? null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.error('Erro ao buscar posts:', error);
+        setFeedbackMessage(`Não foi possível carregar a fila: ${getErrorMessage(error)}`);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [fetchPosts]);
+
+  const refreshPosts = async () => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('id', { ascending: false });
-
-      if (error) throw error;
-      
-      const formatted = (data || []).map((item: any) => ({
-        ...item,
-        caption: item.caption || item.content || '',
-        media_url: item.image_url || item.media_url || '',
-        house_name: item.house_name || item.title || 'Casa',
-        approval_token: item.approval_token || String(item.id)
-      }));
-
+      const formatted = await fetchPosts();
       setPosts(formatted);
-      
-      if (formatted.length > 0) {
-        if (selectLatest || !selectedPost) {
-          setSelectedPost(formatted[0]);
-        }
-      } else {
-        setSelectedPost(null);
-      }
-    } catch (err) {
-      console.error('Erro ao buscar posts:', err);
-    } finally {
-      setLoading(false);
+      setSelectedPost(formatted[0] ?? null);
+    } catch (error) {
+      console.error('Erro ao atualizar a fila de aprovação:', error);
+      setFeedbackMessage(`Não foi possível atualizar a fila: ${getErrorMessage(error)}`);
     }
   };
 
@@ -75,17 +119,20 @@ export default function ApprovalSectionOrange() {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
-      setMediaPreview(URL.createObjectURL(selectedFile));
+      setMediaPreview((previousPreview) => {
+        if (previousPreview) URL.revokeObjectURL(previousPreview);
+        return URL.createObjectURL(selectedFile);
+      });
     }
   };
 
   const handleSendForApproval = async () => {
     if (!houseName.trim()) {
-      alert('Por favor, insira o nome da casa / cliente.');
+      setFeedbackMessage('Informe o nome da casa ou do cliente.');
       return;
     }
     if (!file) {
-      alert('Por favor, selecione uma imagem ou vídeo.');
+      setFeedbackMessage('Selecione uma imagem ou vídeo para continuar.');
       return;
     }
 
@@ -129,23 +176,30 @@ export default function ApprovalSectionOrange() {
       setCaption('');
       setFile(null);
       setMediaPreview(null);
+      setFeedbackMessage('');
       
-      await fetchPosts(true);
+      await refreshPosts();
       
-      alert('Conteúdo enviado com sucesso e adicionado à fila!');
-    } catch (err: any) {
-      console.error('Erro detalhado:', err);
-      alert(`Erro ao enviar: ${err.message || 'Erro desconhecido'}`);
+      setFeedbackMessage('Conteúdo enviado e adicionado à fila de aprovação.');
+    } catch (error) {
+      console.error('Erro ao enviar conteúdo para aprovação:', error);
+      setFeedbackMessage(`Não foi possível enviar o conteúdo: ${getErrorMessage(error)}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const copyApprovalLink = (token: string, postId: string | number) => {
+  const copyApprovalLink = async (token: string, postId: string | number) => {
     const link = `${window.location.origin}/approval/${token}`;
-    navigator.clipboard.writeText(link);
-    setCopiedId(String(postId));
-    setTimeout(() => setCopiedId(null), 3000);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(String(postId));
+      setFeedbackMessage('Link de aprovação copiado.');
+      window.setTimeout(() => setCopiedId(null), 3000);
+    } catch (error) {
+      console.error('Não foi possível copiar o link de aprovação:', error);
+      setFeedbackMessage('Não foi possível copiar automaticamente. Selecione e copie o link.');
+    }
   };
 
   const deletePost = async (postId: string | number) => {
@@ -153,122 +207,141 @@ export default function ApprovalSectionOrange() {
     try {
       const { error } = await supabase.from('posts').delete().eq('id', postId);
       if (error) throw error;
-      fetchPosts();
+      await refreshPosts();
       setSelectedPost(null);
-    } catch (err: any) {
-      alert(`Erro ao eliminar: ${err.message}`);
+      setFeedbackMessage('Conteúdo removido da fila de aprovação.');
+    } catch (error) {
+      setFeedbackMessage(`Não foi possível eliminar o conteúdo: ${getErrorMessage(error)}`);
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border-2 border-orange-400 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 rounded-panel border border-border bg-surface p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="flex items-center gap-3">
-          <div className="w-4 h-8 bg-orange-500 rounded-full"></div>
+          <div className="h-9 w-1 shrink-0 rounded-full bg-brand-plum"></div>
           <div>
-            <h2 className="text-base font-bold text-gray-900">Central de Aprovação de Clientes</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Gerencie os conteúdos enviados, verifique aprovações/reprovações e crie novos links.</p>
+            <h2 className="text-base font-semibold text-ink">Central de aprovação</h2>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">Revise conteúdos, acompanhe as respostas e compartilhe links de aprovação.</p>
           </div>
         </div>
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
-          className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs px-5 py-3 rounded-xl flex items-center gap-2 transition shadow-md cursor-pointer"
+          onClick={() => { setFeedbackMessage(''); setIsModalOpen(true); }}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
         >
-          <Plus size={16} /> Novo Post para Aprovação
+          <Plus size={16} /> Novo post para aprovação
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {feedbackMessage && !isModalOpen && <p role="status" className="rounded-control border border-border bg-surface px-4 py-3 text-xs text-ink">{feedbackMessage}</p>}
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.7fr)]">
         
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm lg:col-span-1">
-          <div className="p-4 border-b border-gray-100 font-bold text-xs uppercase tracking-wider text-orange-600 bg-orange-50 flex justify-between items-center">
+        <div className="overflow-hidden rounded-panel border border-border bg-surface">
+          <div className="flex items-center justify-between border-b border-border bg-canvas p-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">
             <span>Fila de Aprovação</span>
-            <span className="bg-orange-200 text-orange-900 px-2 py-0.5 rounded-full text-[10px] font-bold">{posts.length}</span>
+            <span className="rounded-full bg-[#f3f0e9] px-2.5 py-1 text-[10px] font-semibold text-brand-plum">{posts.length}</span>
           </div>
-          <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+          <div className="max-h-[600px] divide-y divide-border overflow-y-auto">
             {loading ? (
               <div className="p-8 text-center text-xs text-gray-400">A carregar...</div>
             ) : posts.length === 0 ? (
               <div className="p-8 text-center text-xs text-gray-400">Nenhum conteúdo em aprovação.</div>
             ) : (
               posts.map((p) => (
-                <div
+                <button
                   key={p.id}
+                  type="button"
+                  aria-pressed={selectedPost?.id === p.id}
                   onClick={() => setSelectedPost(p)}
-                  className={`p-4 cursor-pointer transition flex items-center gap-3 ${
-                    selectedPost?.id === p.id ? 'bg-orange-50/60 border-l-4 border-orange-500' : 'hover:bg-gray-50'
+                  className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand-plum ${
+                    selectedPost?.id === p.id ? 'border-l-4 border-brand-plum bg-[#f3f0e9]/70' : 'hover:bg-canvas/70'
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden shrink-0">
+                  <span className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
                     {p.media_type === 'video' ? (
-                      <video src={p.media_url} className="w-full h-full object-cover" />
+                      <video src={p.media_url} className="h-full w-full object-cover" />
                     ) : (
-                      <img src={p.media_url} alt="Mídia" className="w-full h-full object-cover" />
+                      <img src={p.media_url} alt="" className="h-full w-full object-cover" />
                     )}
-                  </div>
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase text-gray-900 truncate max-w-[90px]">{p.house_name || 'Casa'}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold flex items-center gap-1 ${
-                        p.approval_status === 'approved' ? 'bg-green-50 text-green-700' :
-                        p.approval_status === 'changes_requested' ? 'bg-amber-50 text-amber-700' :
-                        p.approval_status === 'rejected' ? 'bg-red-50 text-red-700' :
-                        'bg-orange-50 text-orange-700'
+                      <span className="max-w-[90px] truncate text-[10px] font-semibold uppercase text-ink">{p.house_name || 'Casa'}</span>
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        p.approval_status === 'approved' ? 'bg-emerald-50 text-emerald-800' :
+                        p.approval_status === 'changes_requested' ? 'bg-amber-50 text-amber-800' :
+                        p.approval_status === 'rejected' ? 'bg-rose-50 text-rose-800' :
+                        'bg-canvas text-brand-plum'
                       }`}>
+                        {p.approval_status === 'approved' ? <CheckCircle2 size={11} /> :
+                         p.approval_status === 'changes_requested' ? <AlertCircle size={11} /> :
+                         p.approval_status === 'rejected' ? <X size={11} /> : <Clock size={11} />}
                         {p.approval_status === 'approved' ? 'Aprovado' :
                          p.approval_status === 'changes_requested' ? 'Ajustes' :
                          p.approval_status === 'rejected' ? 'Reprovado' : 'Pendente'}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 truncate mt-1">{p.caption || 'Sem legenda'}</p>
+                    <p className="mt-1 truncate text-xs text-ink-muted">{p.caption || 'Sem legenda'}</p>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm lg:col-span-2 flex flex-col justify-between">
+        <div className="flex min-h-[420px] flex-col justify-between rounded-panel border border-border bg-surface p-4 sm:p-6">
           {selectedPost ? (
-            <div className="space-y-6">
-              <div className="flex justify-between items-start border-b border-gray-100 pb-4">
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-800 px-2.5 py-1 rounded-lg">
+                  <span className="inline-flex rounded-full bg-[#f3f0e9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
                     {selectedPost.house_name || 'Casa'}
                   </span>
-                  <h3 className="text-sm font-bold text-gray-900 mt-2">Gestão de Link e Resposta do Cliente</h3>
+                  <h3 className="mt-2 text-sm font-semibold text-ink">Link de aprovação e resposta do cliente</h3>
+                  {(selectedPost.scheduled_date || selectedPost.scheduled_time) && (
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+                      <Calendar aria-hidden="true" size={13} />
+                      {selectedPost.scheduled_date ?? 'Data não definida'}
+                      {selectedPost.scheduled_time ? ` às ${selectedPost.scheduled_time}` : ''}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
+                    aria-label={`Excluir publicação de ${selectedPost.house_name}`}
                     onClick={() => deletePost(selectedPost.id)}
-                    className="p-2.5 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-500 rounded-xl transition cursor-pointer"
-                    title="Eliminar"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    title="Excluir publicação"
                   >
                     <Trash2 size={15} />
                   </button>
                 </div>
               </div>
 
-              <div className="bg-orange-50/50 border border-orange-200 p-4 rounded-2xl space-y-2">
-                <label className="block text-[10px] font-bold uppercase text-orange-800 tracking-wider">
-                  Link Exclusivo de Aprovação para o Cliente (Sem Login)
+              <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
+                <label htmlFor="approval-link" className="block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                  Link exclusivo de aprovação para o cliente
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
+                    id="approval-link"
                     type="text"
                     readOnly
                     value={`${typeof window !== 'undefined' ? window.location.origin : ''}/approval/${selectedPost.approval_token}`}
-                    className="w-full p-2.5 text-xs bg-white border border-orange-200 rounded-xl text-gray-700 font-mono select-all"
+                    className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-surface px-3 text-xs font-mono text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                   />
                   <button
+                    type="button"
                     onClick={() => copyApprovalLink(selectedPost.approval_token, selectedPost.id)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-sm shrink-0 cursor-pointer"
+                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                   >
                     <Copy size={13} />
-                    {copiedId === String(selectedPost.id) ? '✓ Copiado!' : 'Copiar Link'}
+                    {copiedId === String(selectedPost.id) ? 'Copiado!' : 'Copiar link'}
                   </button>
                   
                   <a
@@ -277,34 +350,34 @@ export default function ApprovalSectionOrange() {
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-green-600 hover:bg-green-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 transition shadow-sm shrink-0 cursor-pointer"
-                    title="Enviar por WhatsApp"
+                    aria-label="Enviar link de aprovação por WhatsApp"
+                    className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-[#f3f0e9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                   >
-                    WhatsApp
+                    Enviar por WhatsApp
                   </a>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-black rounded-2xl overflow-hidden aspect-[9/16] max-h-[320px] flex items-center justify-center">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
+                <div className="flex max-h-[360px] min-h-[240px] items-center justify-center overflow-hidden rounded-panel bg-brand-plum">
                   {selectedPost.media_type === 'video' ? (
-                    <video src={selectedPost.media_url} controls className="w-full h-full object-contain" />
+                    <video src={selectedPost.media_url} controls className="h-full max-h-[360px] w-full object-contain" />
                   ) : (
-                    <img src={selectedPost.media_url} alt="Mídia" className="w-full h-full object-contain" />
+                    <img src={selectedPost.media_url} alt={`Mídia para ${selectedPost.house_name}`} className="h-full max-h-[360px] w-full object-contain" />
                   )}
                 </div>
 
-                <div className="flex flex-col justify-between space-y-4">
+                <div className="space-y-4">
                   <div>
-                    <h4 className="text-xs font-bold uppercase text-gray-400 mb-1">Legenda / Copy</h4>
-                    <div className="p-3 bg-gray-50 rounded-xl text-xs text-gray-800 max-h-36 overflow-y-auto border border-gray-100 font-medium">
+                    <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Legenda / copy</h4>
+                    <div className="max-h-36 overflow-y-auto rounded-control border border-border bg-canvas p-3 text-xs font-medium text-ink">
                       {selectedPost.caption || 'Sem legenda inserida.'}
                     </div>
 
                     {selectedPost.client_feedback && (
                       <div className="mt-4">
-                        <h4 className="text-xs font-bold uppercase text-amber-600 mb-1">Feedback / Comentário do Cliente</h4>
-                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 font-medium">
+                        <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">Feedback do cliente</h4>
+                        <div className="rounded-control border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
                           {selectedPost.client_feedback}
                         </div>
                       </div>
@@ -314,75 +387,102 @@ export default function ApprovalSectionOrange() {
               </div>
             </div>
           ) : (
-            <div className="py-20 text-center text-xs text-gray-400">Selecione um item na lista ao lado para ver os detalhes e o link.</div>
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center text-xs text-ink-muted">
+              <Copy aria-hidden="true" size={20} className="text-brand-plum" />
+              <p>Selecione um item na fila para ver a prévia e compartilhar o link.</p>
+            </div>
           )}
         </div>
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl border border-gray-100 flex flex-col md:flex-row max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
             
-            <div className="flex-1 p-6 overflow-y-auto space-y-4 border-r border-gray-100">
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+            <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
+              <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase bg-orange-100 text-orange-800 px-3 py-1 rounded-xl">REELS (Vídeo Vertical)</span>
+                  <div>
+                    <h2 id="approval-create-title" className="text-base font-semibold text-ink">Novo post para aprovação</h2>
+                    <p className="mt-1 text-xs text-ink-muted">Prepare a mídia e o link que será enviado ao cliente.</p>
+                  </div>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-sm font-bold cursor-pointer">✕</button>
+                <button type="button" aria-label="Fechar janela de aprovação" onClick={() => setIsModalOpen(false)} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50">
+                  <X size={18} />
+                </button>
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">Nome da Casa / Cliente</label>
+                <label htmlFor="approval-house-name" className="mb-1.5 block text-xs font-semibold text-ink">Nome da casa / cliente</label>
                 <input
+                  id="approval-house-name"
                   type="text"
                   value={houseName}
-                  onChange={(e) => setHouseName(e.target.value)}
+                  onChange={(e) => { setHouseName(e.target.value); setFeedbackMessage(''); }}
                   placeholder="Ex: Villa Trancoso"
-                  className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-semibold"
+                  className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                 />
               </div>
 
-              <div className="border border-gray-200 rounded-2xl p-4 bg-white shadow-2xs space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Calendar size={14} className="text-brand-plum" /> Data prevista</span>
+                  <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} className="min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Clock size={14} className="text-brand-plum" /> Horário previsto</span>
+                  <input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} className="min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum" />
+                </label>
+              </div>
+
+              <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
                 <textarea
                   value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
+                  onChange={(e) => { setCaption(e.target.value); setFeedbackMessage(''); }}
                   placeholder="Escreva sua legenda aqui..."
                   rows={6}
-                  className="w-full text-xs text-gray-800 focus:outline-none resize-none font-medium"
+                  maxLength={2200}
+                  aria-label="Legenda para o cliente"
+                  className="min-h-28 w-full resize-y text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-none"
                 />
                 
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-gray-500">
-                  <div className="flex items-center gap-3">
-                    <label className="cursor-pointer hover:text-orange-600 transition"><ImageIcon size={16} /><input type="file" accept="video/*,image/*" onChange={handleFileChange} className="hidden" /></label>
-                  </div>
-                  <span className="text-[10px] text-gray-400">{caption.length}/2200</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-ink-muted">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-xs font-semibold transition-colors hover:bg-canvas hover:text-brand-plum focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
+                    <ImageIcon size={16} />
+                    <span>{file ? 'Substituir mídia' : 'Selecionar mídia'}</span>
+                    <input type="file" accept="video/*,image/*" onChange={handleFileChange} className="sr-only" aria-label="Selecionar imagem ou vídeo" />
+                  </label>
+                  <span className="text-[10px]">{caption.length}/2200 caracteres</span>
                 </div>
               </div>
+
+              {feedbackMessage && <p role="alert" className="rounded-control border border-border bg-canvas px-3 py-2 text-xs text-ink">{feedbackMessage}</p>}
             </div>
 
-            <div className="w-full md:w-96 bg-gray-50 p-6 flex flex-col justify-between">
-              <div className="flex flex-col items-center justify-center flex-1 my-4">
-                <div className="w-full aspect-[9/16] bg-black rounded-2xl overflow-hidden shadow-lg flex items-center justify-center relative border-4 border-gray-800 max-h-[360px]">
+            <div className="flex w-full flex-col justify-between gap-4 bg-canvas/60 p-4 sm:p-6 md:w-96">
+              <div className="my-2 flex flex-1 flex-col items-center justify-center">
+                <div className="relative flex aspect-[9/16] max-h-[360px] w-full max-w-[240px] items-center justify-center overflow-hidden rounded-panel border border-border bg-brand-plum">
                   {mediaPreview ? (
                     file?.type.startsWith('video/') ? (
-                      <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                      <video src={mediaPreview} controls className="h-full w-full object-contain" />
                     ) : (
-                      <img src={mediaPreview} alt="Preview" className="w-full h-full object-contain" />
+                      <img src={mediaPreview} alt="Pré-visualização da mídia escolhida" className="h-full w-full object-contain" />
                     )
                   ) : (
-                    <div className="text-center p-4">
-                      <ImageIcon size={32} className="text-gray-600 mx-auto mb-2" />
-                      <p className="text-[11px] text-gray-400 font-medium">Selecione uma imagem ou vídeo no ícone de câmara ao lado</p>
+                    <div className="p-4 text-center">
+                      <ImageIcon size={32} className="mx-auto mb-2 text-brand-lime" />
+                      <p className="text-[11px] font-medium text-white/70">A prévia da mídia aparece aqui.</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-200 flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-200 rounded-xl cursor-pointer"
+                  disabled={submitting}
+                  className="min-h-11 rounded-control px-4 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -390,10 +490,10 @@ export default function ApprovalSectionOrange() {
                   type="button"
                   onClick={handleSendForApproval}
                   disabled={submitting}
-                  className="px-6 py-3 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 transition"
+                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
                 >
                   <Send size={14} />
-                  {submitting ? 'A enviar...' : 'Enviar para Aprovação'}
+                  {submitting ? 'Enviando...' : 'Enviar para aprovação'}
                 </button>
               </div>
             </div>
