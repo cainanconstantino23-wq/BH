@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { MediaPreview } from '@/components/MediaPreview';
 import { 
   X, Camera, Smile, Hash, AtSign, MapPin, Link, Percent, Bookmark,
   Smartphone, Monitor, Grid, Calendar, Plus, Video, Loader2, FolderOpen
@@ -226,6 +227,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         hour: scheduledHour,
         time_string: timeStrVal,
         image_url: finalMediaUrl,
+        media_type: selectedFile?.type.startsWith('video/') ? 'video' : 'image',
         scheduled_date: scheduledDate
       }]);
 
@@ -450,11 +452,15 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
               {mediaPreviewUrl ? (
                 <div className={`flex min-h-0 flex-1 items-center justify-center bg-black ${previewDevice === 'desktop' ? 'flex-row' : ''}`}>
-                  {isVideo || contentType === 'REEL' ? (
-                    <video src={mediaPreviewUrl} controls muted className="h-full w-full object-contain" />
-                  ) : (
-                    <img src={mediaPreviewUrl} alt="Pré-visualização da mídia escolhida" className="h-full w-full object-contain" />
-                  )}
+                  <MediaPreview
+                    key={mediaPreviewUrl}
+                    src={mediaPreviewUrl}
+                    mediaType={selectedFile?.type}
+                    alt="Pré-visualização da mídia escolhida"
+                    controls={isVideo}
+                    muted
+                    className="h-full w-full object-contain"
+                  />
                 </div>
               ) : (
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#302d34] p-4 text-center text-xs text-white/60">

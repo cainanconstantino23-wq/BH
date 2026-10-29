@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isVideoMedia } from '@/lib/media';
+import { MediaPreview } from '@/components/MediaPreview';
 import { 
   Calendar as CalendarIcon, List, Trash2, 
   Plus, ChevronLeft, ChevronRight, X,
-  Video, CalendarDays, Search
+  CalendarDays, Search
 } from 'lucide-react';
 
 import CreatePostModal from '@/components/CreatePostModal';
@@ -19,6 +21,7 @@ interface ScheduledPost {
   hour: number;
   timeString: string;
   image: string;
+  mediaType: string;
   isVideo?: boolean;
   platform: 'instagram' | 'tiktok' | 'youtube';
   postType: 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
@@ -103,12 +106,13 @@ export function PlannerScheduler() {
     const rows: Record<string, unknown>[] = data ?? [];
     const readString = (value: unknown) => typeof value === 'string' ? value : '';
     return rows.map((item) => {
-      const img = readString(item.image_url) || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+      const img = readString(item.image_url) || readString(item.media_url) || 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+      const mediaType = readString(item.media_type);
       const platform = readString(item.platform);
       const postType = ['REEL', 'POST', 'STORY', 'CARROSSEL'].includes(platform)
         ? platform as ScheduledPost['postType']
         : 'REEL';
-      const isVid = img.startsWith('data:video') || img.endsWith('.mp4') || platform === 'REEL';
+      const isVid = isVideoMedia(img, mediaType);
 
       return {
         id: String(item.id),
@@ -119,6 +123,7 @@ export function PlannerScheduler() {
         hour: typeof item.hour === 'number' ? item.hour : 19,
         timeString: readString(item.time_string) || '7:00 PM',
         image: img,
+        mediaType,
         isVideo: isVid,
         platform: 'instagram',
         postType
@@ -323,11 +328,24 @@ export function PlannerScheduler() {
                             </div>
                             <div className="flex items-center gap-2">
                               {matchedPost.isVideo ? (
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-brand-plum text-white">
-                                  <Video size={14} />
-                                </span>
+                                <MediaPreview
+                                  key={matchedPost.image}
+                                  src={matchedPost.image}
+                                  mediaType={matchedPost.mediaType}
+                                  alt={`Prévia de ${matchedPost.title}`}
+                                  muted
+                                  loop
+                                  autoPlay
+                                  className="h-8 w-8 shrink-0 rounded object-cover"
+                                />
                               ) : (
-                                <img src={matchedPost.image} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                                <MediaPreview
+                                  key={matchedPost.image}
+                                  src={matchedPost.image}
+                                  mediaType={matchedPost.mediaType}
+                                  alt=""
+                                  className="h-8 w-8 shrink-0 rounded object-cover"
+                                />
                               )}
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-[10px] font-semibold text-ink">{matchedPost.title}</p>
@@ -356,9 +374,18 @@ export function PlannerScheduler() {
               sortedAndFilteredPosts.map(post => (
                 <div key={post.id} className="flex items-center justify-between gap-3 rounded-control border border-border bg-canvas/50 p-3 transition-colors hover:border-brand-plum/30 sm:p-4">
                   <button type="button" onClick={() => setSelectedPost(post)} className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:gap-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control bg-canvas">
-                      {post.isVideo ? <Video size={18} className="text-brand-plum" /> : <img src={post.image} alt="" className="h-full w-full object-cover" />}
-                    </span>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control bg-canvas">
+                      <MediaPreview
+                        key={post.image}
+                        src={post.image}
+                        mediaType={post.mediaType}
+                        alt={`Prévia de ${post.title}`}
+                        muted={post.isVideo}
+                        loop={post.isVideo}
+                        autoPlay={post.isVideo}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-[#f3f0e9] px-1.5 py-0.5 text-[10px] font-semibold text-brand-plum">{post.postType}</span>
@@ -404,11 +431,16 @@ export function PlannerScheduler() {
             
             <div className="p-4 space-y-4">
               <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center relative min-h-[280px]">
-                {selectedPost.isVideo || selectedPost.postType === 'REEL' || selectedPost.image.startsWith('data:video') ? (
-                  <video src={selectedPost.image} controls autoPlay className="max-w-full max-h-[55vh] object-contain" />
-                ) : (
-                  <img src={selectedPost.image} alt="Preview" className="max-w-full max-h-[55vh] object-contain" />
-                )}
+                <MediaPreview
+                  key={selectedPost.image}
+                  src={selectedPost.image}
+                  mediaType={selectedPost.mediaType}
+                  alt={`Prévia de ${selectedPost.title}`}
+                  controls={selectedPost.isVideo}
+                  autoPlay={selectedPost.isVideo}
+                  muted={selectedPost.isVideo}
+                  className="max-w-full max-h-[55vh] object-contain"
+                />
               </div>
               
               <div className="rounded-control border border-border bg-canvas p-3">

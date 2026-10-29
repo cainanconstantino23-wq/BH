@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isVideoMedia } from '@/lib/media';
+import { MediaPreview } from '@/components/MediaPreview';
 import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface ApprovalPost {
@@ -70,7 +72,10 @@ export default function ApprovalSectionOrange() {
         id,
         caption: captionValue,
         media_url: stringValue(item.image_url) || stringValue(item.media_url),
-        media_type: item.media_type === 'video' ? 'video' : 'image',
+        media_type: isVideoMedia(
+          stringValue(item.image_url) || stringValue(item.media_url),
+          stringValue(item.media_type),
+        ) ? 'video' : 'image',
         house_name: houseNameValue,
         approval_status: stringValue(item.approval_status) || 'pending',
         approval_token: stringValue(item.approval_token) || String(id),
@@ -260,13 +265,18 @@ export default function ApprovalSectionOrange() {
                     selectedPost?.id === p.id ? 'border-l-4 border-brand-plum bg-[#f3f0e9]/70' : 'hover:bg-canvas/70'
                   }`}
                 >
-                  <span className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
-                    {p.media_type === 'video' ? (
-                      <video src={p.media_url} className="h-full w-full object-cover" />
-                    ) : (
-                      <img src={p.media_url} alt="" className="h-full w-full object-cover" />
-                    )}
-                  </span>
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
+                    <MediaPreview
+                      key={p.media_url}
+                      src={p.media_url}
+                      mediaType={p.media_type}
+                      alt={`Prévia da publicação de ${p.house_name}`}
+                      className="h-full w-full object-cover"
+                      muted
+                      loop
+                      autoPlay
+                    />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="max-w-[90px] truncate text-[10px] font-semibold uppercase text-ink">{p.house_name || 'Casa'}</span>
@@ -360,11 +370,14 @@ export default function ApprovalSectionOrange() {
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
                 <div className="flex max-h-[360px] min-h-[240px] items-center justify-center overflow-hidden rounded-panel bg-brand-plum">
-                  {selectedPost.media_type === 'video' ? (
-                    <video src={selectedPost.media_url} controls className="h-full max-h-[360px] w-full object-contain" />
-                  ) : (
-                    <img src={selectedPost.media_url} alt={`Mídia para ${selectedPost.house_name}`} className="h-full max-h-[360px] w-full object-contain" />
-                  )}
+                  <MediaPreview
+                    key={selectedPost.media_url}
+                    src={selectedPost.media_url}
+                    mediaType={selectedPost.media_type}
+                    alt={`Mídia para ${selectedPost.house_name}`}
+                    controls={selectedPost.media_type === 'video'}
+                    className="h-full max-h-[360px] w-full object-contain"
+                  />
                 </div>
 
                 <div className="space-y-4">
@@ -463,11 +476,15 @@ export default function ApprovalSectionOrange() {
               <div className="my-2 flex flex-1 flex-col items-center justify-center">
                 <div className="relative flex aspect-[9/16] max-h-[360px] w-full max-w-[240px] items-center justify-center overflow-hidden rounded-panel border border-border bg-brand-plum">
                   {mediaPreview ? (
-                    file?.type.startsWith('video/') ? (
-                      <video src={mediaPreview} controls className="h-full w-full object-contain" />
-                    ) : (
-                      <img src={mediaPreview} alt="Pré-visualização da mídia escolhida" className="h-full w-full object-contain" />
-                    )
+                  <MediaPreview
+                    key={mediaPreview}
+                    src={mediaPreview}
+                    mediaType={file?.type}
+                    alt="Pré-visualização da mídia escolhida"
+                    controls={file?.type.startsWith('video/')}
+                    muted
+                    className="h-full w-full object-contain"
+                  />
                   ) : (
                     <div className="p-4 text-center">
                       <ImageIcon size={32} className="mx-auto mb-2 text-brand-lime" />

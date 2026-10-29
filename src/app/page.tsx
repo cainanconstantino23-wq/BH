@@ -342,7 +342,7 @@ export default function Home() {
                       className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-[#69645f] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] hover:text-brand-plum"
                     >
                       <FolderPlus size={16} />
-                      Catálogo de Imóveis
+                      Grade do feed
                     </button>
                   </li>
                 </ul>
@@ -407,7 +407,7 @@ export default function Home() {
             </button>
             
             <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] hover:text-[#352a42]">
-              <FolderPlus size={15} /> Catálogo de Imóveis
+              <FolderPlus size={15} /> Grade do feed
             </button>
           </nav>
 
