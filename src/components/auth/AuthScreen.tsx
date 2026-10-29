@@ -14,7 +14,7 @@ interface AuthScreenProps {
 
 export function AuthScreen({ onEnterDemo }: AuthScreenProps) {
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#241f1b] p-4">
+    <main className="press-feedback relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-[#241f1b] p-4">
       <Image
         src="/login-background.jpg"
         alt=""
@@ -44,7 +44,7 @@ export function AuthScreen({ onEnterDemo }: AuthScreenProps) {
 
           <div
             role="note"
-            className="mb-6 flex items-start gap-3 rounded-control border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"
+            className="mb-6 flex items-start gap-3 rounded-control border border-status-warning-border bg-status-warning-soft p-4 text-sm text-status-warning"
           >
             <TriangleAlert size={18} className="mt-0.5 shrink-0" />
             <p>
@@ -55,7 +55,7 @@ export function AuthScreen({ onEnterDemo }: AuthScreenProps) {
           <button
             type="button"
             onClick={() => onEnterDemo({ name: 'Demonstração', email: 'demo@bahiahomes.local' })}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-brand-plum py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-brand-plum py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
           >
             Entrar na demonstração
             <ArrowRight size={16} />

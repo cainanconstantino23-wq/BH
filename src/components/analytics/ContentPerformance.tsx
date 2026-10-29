@@ -146,15 +146,15 @@ export function ContentPerformance() {
                 <td className="px-3 py-2.5 text-ink-muted">
                   <div className="flex items-center gap-3">
                     <span aria-label={`${item.likes.toLocaleString('pt-BR')} curtidas`} className="inline-flex items-center gap-1">
-                      <Heart aria-hidden="true" size={13} className="text-red-500" />
+                      <Heart aria-hidden="true" size={13} className="text-platform-instagram" />
                       {item.likes.toLocaleString('pt-BR')}
                     </span>
                     <span aria-label={`${item.comments.toLocaleString('pt-BR')} comentários`} className="inline-flex items-center gap-1">
-                      <MessageCircle aria-hidden="true" size={13} className="text-blue-500" />
+                      <MessageCircle aria-hidden="true" size={13} className="text-ink-muted" />
                       {item.comments.toLocaleString('pt-BR')}
                     </span>
                     <span aria-label={`${item.shares.toLocaleString('pt-BR')} compartilhamentos`} className="inline-flex items-center gap-1">
-                      <Share2 aria-hidden="true" size={13} className="text-emerald-500" />
+                      <Share2 aria-hidden="true" size={13} className="text-ink-muted" />
                       {item.shares.toLocaleString('pt-BR')}
                     </span>
                   </div>

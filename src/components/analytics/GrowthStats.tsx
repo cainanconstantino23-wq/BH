@@ -87,14 +87,14 @@ function LineChart({
                   x2={viewWidth - padding.right}
                   y1={y}
                   y2={y}
-                  stroke="#e5e7eb"
+                  stroke="var(--color-border)"
                   strokeDasharray="3 5"
                 />
                 <text
                   x={padding.left - 8}
                   y={y + 4}
                   textAnchor="end"
-                  fill="#6b7280"
+                  fill="var(--color-ink-muted)"
                   fontSize={compact ? '8' : '11'}
                 >
                   {tick.toLocaleString('pt-BR')}
@@ -109,7 +109,7 @@ function LineChart({
               x={getX(index)}
               y={chartHeight - 8}
               textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'}
-              fill="#6b7280"
+              fill="var(--color-ink-muted)"
               fontSize={compact ? '8' : '11'}
             >
               {point.date}
@@ -183,8 +183,8 @@ export function GrowthStats({ period }: GrowthStatsProps) {
           maxValue={1300}
           label="Evolução de seguidores e perfis seguidos durante o período"
           series={[
-            { key: 'followers', color: '#231b2d', label: 'Seguidores' },
-            { key: 'following', color: '#87909d', label: 'Seguindo' },
+            { key: 'followers', color: 'var(--color-brand-plum)', label: 'Seguidores' },
+            { key: 'following', color: 'var(--color-chart-secondary)', label: 'Seguindo' },
           ]}
         />
 
@@ -221,8 +221,8 @@ export function GrowthStats({ period }: GrowthStatsProps) {
           maxValue={24}
           label="Seguidores adquiridos e perdidos durante o período"
           series={[
-            { key: 'acquired', color: '#231b2d', label: 'Adquiridos' },
-            { key: 'lost', color: '#87909d', label: 'Perdidos' },
+            { key: 'acquired', color: 'var(--color-brand-plum)', label: 'Adquiridos' },
+            { key: 'lost', color: 'var(--color-chart-secondary)', label: 'Perdidos' },
           ]}
           compact
         />

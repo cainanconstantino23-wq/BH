@@ -1,9 +1,10 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams } from 'next/navigation';
-import { Home, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Home, LoaderCircle } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -81,88 +82,119 @@ export default function ClientApprovalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs text-gray-500 font-sans">
-        A carregar conteúdo para aprovação...
-      </div>
+      <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-8 font-sans text-ink">
+        <div role="status" aria-live="polite" className="w-full max-w-sm rounded-panel border border-border bg-surface p-8 text-center shadow-sm">
+          <Image
+            src="/bahia-homes-logo.png"
+            alt="Bahia Homes"
+            width={1834}
+            height={276}
+            className="mx-auto mb-8 h-auto w-36"
+          />
+          <LoaderCircle aria-hidden="true" size={24} className="mx-auto mb-3 animate-spin text-brand-plum motion-reduce:animate-none" />
+          <p className="text-sm font-medium text-ink">A carregar conteúdo para aprovação…</p>
+        </div>
+      </main>
     );
   }
 
   if (!post) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-xs text-gray-500 font-sans">
-        Conteúdo não encontrado ou link inválido.
-      </div>
+      <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-8 font-sans text-ink">
+        <div role="alert" className="w-full max-w-sm rounded-panel border border-border bg-surface p-6 text-center shadow-sm sm:p-8">
+          <Image
+            src="/bahia-homes-logo.png"
+            alt="Bahia Homes"
+            width={1834}
+            height={276}
+            className="mx-auto mb-8 h-auto w-36"
+          />
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-warning-soft text-status-warning">
+            <AlertTriangle aria-hidden="true" size={22} />
+          </span>
+          <h1 className="mt-4 text-lg font-semibold tracking-tight text-ink">Link indisponível</h1>
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+            Conteúdo não encontrado ou link inválido.
+          </p>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f8faf8] py-10 px-4 flex flex-col items-center justify-center font-sans">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-        
-        {/* Cabeçalho */}
-        <div className="p-5 bg-gray-900 text-white flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-white text-gray-900 flex items-center justify-center font-bold text-[10px]">BH</div>
-            <span className="text-xs font-bold uppercase tracking-wider">Aprovação de Conteúdo</span>
+    <main className="press-feedback flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] font-sans text-ink sm:py-10">
+      <div className="w-full max-w-xl overflow-hidden rounded-panel border border-border bg-surface shadow-sm">
+        <header className="flex flex-col gap-3 bg-brand-plum px-4 py-4 text-white sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="flex items-center gap-3">
+            <span className="rounded-control bg-white px-2.5 py-2">
+              <Image
+                src="/bahia-homes-logo.png"
+                alt="Bahia Homes"
+                width={1834}
+                height={276}
+                className="h-auto w-28"
+              />
+            </span>
+            <span className="text-xs font-semibold tracking-wide">Aprovação de conteúdo</span>
           </div>
-          <span className="text-[10px] bg-orange-500 px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
-            <Home size={10} /> {post.house_name}
+          <span className="flex min-h-9 items-center gap-1.5 self-start rounded-full bg-white/10 px-3 text-xs font-medium text-white sm:self-auto">
+            <Home aria-hidden="true" size={13} />
+            {post.house_name}
           </span>
-        </div>
+        </header>
 
-        {/* Pré-visualização com proporção nativa da mídia */}
-        <div className="relative bg-black w-full flex items-center justify-center overflow-hidden">
+        <div className="flex w-full items-center justify-center overflow-hidden bg-ink">
           {post.media_type === 'video' ? (
-            <video 
-              src={post.media_url} 
-              controls 
+            <video
+              src={post.media_url}
+              controls
               playsInline
-              className="w-full h-auto max-h-[550px] object-contain block mx-auto" 
+              className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
             />
           ) : (
-            <img 
-              src={post.media_url} 
-              alt="Mídia" 
-              className="w-full h-auto max-h-[550px] object-contain block mx-auto" 
+            <img
+              src={post.media_url}
+              alt="Mídia da publicação"
+              className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
             />
           )}
         </div>
 
-        {/* Informações e Feedback */}
-        <div className="p-6 space-y-4">
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Comentário / Observações da Produtora</h3>
-            <div className="p-3 bg-gray-50 rounded-2xl text-xs text-gray-800 border border-gray-100 font-medium">
+        <div className="space-y-5 p-4 sm:p-6">
+          <section>
+            <h2 className="text-xs font-semibold text-ink">Observações da produtora</h2>
+            <div className="mt-2 rounded-control border border-border bg-canvas p-4 text-sm leading-relaxed text-ink">
               {post.caption || 'Nenhum comentário adicionado.'}
             </div>
-          </div>
+          </section>
 
           {actionDone ? (
-            <div className={`p-4 rounded-2xl text-center border ${
-              post.approval_status === 'approved' ? 'bg-green-50 border-green-200 text-green-800' :
-              post.approval_status === 'changes_requested' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-              'bg-red-50 border-red-200 text-red-800'
+            <div className={`rounded-control border p-4 text-center ${
+              post.approval_status === 'approved' ? 'border-status-success-border bg-status-success-soft text-status-success' :
+              post.approval_status === 'changes_requested' ? 'border-status-warning-border bg-status-warning-soft text-status-warning' :
+              'border-status-danger-border bg-status-danger-soft text-status-danger'
             }`}>
-              <p className="font-bold text-xs flex items-center justify-center gap-1.5">
-                {post.approval_status === 'approved' && <CheckCircle2 size={16} />}
-                {post.approval_status === 'changes_requested' && <AlertTriangle size={16} />}
-                {post.approval_status === 'approved' ? 'Conteúdo Aprovado com Sucesso!' :
-                 post.approval_status === 'changes_requested' ? 'Ajustes Solicitados Enviados!' : 'Conteúdo Reprovado.'}
+              <p className="flex items-center justify-center gap-1.5 text-sm font-semibold">
+                {post.approval_status === 'approved' && <CheckCircle2 size={17} />}
+                {post.approval_status === 'changes_requested' && <AlertTriangle size={17} />}
+                {post.approval_status === 'approved' ? 'Conteúdo aprovado com sucesso' :
+                 post.approval_status === 'changes_requested' ? 'Pedido de ajustes enviado' : 'Conteúdo reprovado'}
               </p>
-              <p className="text-[11px] mt-1 opacity-80">A equipa da produtora foi notificada instantaneamente.</p>
+              <p className="mt-1 text-xs leading-relaxed opacity-80">A equipa da produtora foi notificada.</p>
             </div>
           ) : (
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                  Deixar Comentário ou Pedido de Ajuste (Opcional)
+                <label htmlFor="client-feedback" className="block text-xs font-semibold text-ink">
+                  Comentário ou pedido de ajuste <span className="font-normal text-ink-muted">(opcional)</span>
                 </label>
                 <textarea
+                  id="client-feedback"
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Ex: Ajustar a cor do vídeo ou trocar o take inicial..."
+                  placeholder="Ex.: ajustar a cor do vídeo ou trocar o take inicial…"
                   rows={3}
-                  className="w-full p-3 text-xs bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none font-medium"
+                  className="mt-2 w-full resize-y rounded-control border border-border bg-surface p-3 text-base text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                 />
               </div>
 
@@ -170,21 +202,21 @@ export default function ClientApprovalPage() {
                 <button
                   type="button"
                   onClick={() => handleResponse('rejected')}
-                  className="py-3 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold rounded-2xl transition border border-red-100 cursor-pointer"
+                  className="min-h-12 rounded-control border border-status-danger-border bg-status-danger-soft px-2 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-status-danger"
                 >
                   Reprovar
                 </button>
                 <button
                   type="button"
                   onClick={() => handleResponse('changes_requested')}
-                  className="py-3 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-bold rounded-2xl transition border border-amber-100 cursor-pointer"
+                  className="min-h-12 rounded-control border border-status-warning-border bg-status-warning-soft px-2 text-xs font-semibold text-status-warning transition-colors hover:bg-status-warning-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-status-warning"
                 >
-                  Pedir Ajustes
+                  Pedir ajustes
                 </button>
                 <button
                   type="button"
                   onClick={() => handleResponse('approved')}
-                  className="py-3 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-2xl transition shadow-md cursor-pointer"
+                  className="min-h-12 rounded-control bg-brand-plum px-2 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                 >
                   Aprovar
                 </button>
@@ -193,6 +225,6 @@ export default function ClientApprovalPage() {
           )}
         </div>
       </div>
-    </div>
+    </main>
   );
 }

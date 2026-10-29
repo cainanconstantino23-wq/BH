@@ -257,16 +257,16 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
   };
 
   const previewFrameClass = previewDevice === 'mobile'
-    ? 'aspect-[9/16] max-h-[430px] max-w-[260px] rounded-3xl border-4 border-gray-800'
+    ? 'aspect-[9/16] max-h-[430px] max-w-[260px] rounded-3xl border-4 border-ink'
     : previewDevice === 'desktop'
       ? 'aspect-video max-h-[320px] max-w-[520px] rounded-panel border border-border'
       : 'aspect-square max-h-[300px] max-w-[300px] rounded-control border border-border';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
-      <div role="dialog" aria-modal="true" aria-labelledby="create-post-title" className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface text-ink">
+    <div className="modal-backdrop-enter fixed inset-0 z-50 flex items-stretch justify-center bg-brand-plum/45 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="create-post-title" className="modal-surface-enter flex h-dvh max-h-dvh w-full max-w-5xl flex-col overflow-hidden border border-x-0 border-border bg-surface text-ink sm:h-auto sm:max-h-[92dvh] sm:rounded-panel sm:border-x">
         
-        <div className="flex items-center justify-between border-b border-border bg-canvas/60 px-4 py-3.5 sm:px-6">
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-canvas/60 px-4 pb-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))] sm:px-6 sm:py-3.5">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2 rounded-control border border-border bg-surface px-3 py-1.5">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-plum text-xs font-bold text-brand-lime">D</span>
@@ -281,7 +281,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
           
-          <div className="flex min-h-0 w-full flex-col gap-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:w-1/2 md:border-b-0 md:border-r">
+          <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 border-b border-border p-4 sm:p-6 md:w-1/2 md:shrink md:overflow-y-auto md:border-b-0 md:border-r">
             
             <div className="flex flex-wrap items-center gap-2">
               <select 
@@ -304,7 +304,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                 <FolderOpen size={16} />
               </button>
 
-              <button type="button" aria-expanded={isNotesOpen} onClick={() => setIsNotesOpen((isOpen) => !isOpen)} className={`min-h-11 rounded-control border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${isNotesOpen ? 'border-brand-plum bg-[#f3f0e9] text-brand-plum' : 'border-border bg-surface text-ink-muted hover:bg-canvas hover:text-ink'}`}>
+              <button type="button" aria-expanded={isNotesOpen} onClick={() => setIsNotesOpen((isOpen) => !isOpen)} className={`min-h-11 rounded-control border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${isNotesOpen ? 'border-brand-plum bg-surface-muted text-brand-plum' : 'border-border bg-surface text-ink-muted hover:bg-canvas hover:text-ink'}`}>
                 {isNotesOpen ? 'Ocultar notas' : 'Notas'}
               </button>
             </div>
@@ -379,7 +379,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
             <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Data</label>
+                  <label className="mb-1 block text-[11px] font-semibold text-ink-muted">Data</label>
                   <input 
                     type="date" 
                     value={scheduledDate}
@@ -388,7 +388,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Horário</label>
+                  <label className="mb-1 block text-[11px] font-semibold text-ink-muted">Horário</label>
                   <select 
                     value={scheduledHour}
                     onChange={(e) => { setScheduledHour(Number(e.target.value)); setDraftSaved(false); }}
@@ -410,7 +410,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
           </div>
 
-          <div className="flex w-full flex-col items-center justify-between gap-5 bg-canvas/60 p-4 sm:p-6 md:w-1/2">
+          <div className="flex w-full shrink-0 flex-col items-center justify-between gap-5 bg-canvas/60 p-4 sm:p-6 md:w-1/2 md:shrink">
             
             <div role="group" aria-label="Formato da pré-visualização" className="flex items-center gap-1 rounded-control border border-border bg-surface p-1">
               <button 
@@ -463,7 +463,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                   />
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-[#302d34] p-4 text-center text-xs text-white/60">
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-ink p-4 text-center text-xs text-white/60">
                   <Video size={24} className="mb-2 text-brand-lime" />
                   <span>Selecione uma imagem ou vídeo</span>
                 </div>
@@ -471,7 +471,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
               {previewDevice !== 'grid' && (
                 <div className={`z-10 p-3 ${previewDevice === 'mobile' ? 'bg-gradient-to-t from-black/90 to-transparent' : 'bg-surface'}`}>
-                  <p className={`line-clamp-2 text-[11px] font-medium ${previewDevice === 'mobile' ? 'text-gray-200' : 'text-ink'}`}>
+                  <p className={`line-clamp-2 text-[11px] font-medium ${previewDevice === 'mobile' ? 'text-white/80' : 'text-ink'}`}>
                     {caption || 'Sua legenda aparecerá aqui...'}
                   </p>
                 </div>
@@ -490,7 +490,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-4 py-3.5 sm:px-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-surface px-4 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 sm:px-6 sm:py-3.5">
           <button type="button" onClick={onClose} disabled={loading} className="min-h-11 rounded-control px-4 text-xs font-semibold text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50">
             Cancelar
           </button>
@@ -505,11 +505,11 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
               type="button"
               onClick={handleSavePost}
               disabled={loading}
-              className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-5 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-5 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
             >
               {loading ? (
                 <>
-                  <Loader2 size={14} className="animate-spin text-[#ccf600]" />
+                  <Loader2 size={14} className="animate-spin text-brand-lime motion-reduce:animate-none" />
                   <span>{uploadStatus}</span>
                 </>
               ) : (

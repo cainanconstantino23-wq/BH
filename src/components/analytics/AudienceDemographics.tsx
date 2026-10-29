@@ -19,63 +19,63 @@ export function AudienceDemographics({ data }: Props) {
   const malePercent = totalGender > 0 ? Math.round(((safeData.gender.male || 0) / totalGender) * 100) : 50;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-6">
+    <section className="space-y-5 rounded-panel border border-border bg-surface p-5 sm:p-6">
       
       {/* Header do Bloco */}
-      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+      <div className="flex items-center justify-between border-b border-border pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-pink-50 text-pink-600 rounded-xl">
+          <div className="rounded-control bg-surface-muted p-2 text-brand-plum">
             <Users size={20} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-gray-900">Demografia da Audiência</h3>
-            <p className="text-xs text-gray-500">Distribuição por faixa etária, género e localização</p>
+            <h3 className="text-sm font-semibold text-ink">Demografia da Audiência</h3>
+            <p className="text-xs text-ink-muted">Distribuição por faixa etária, género e localização</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-0">
         
         {/* 1. Género */}
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
-              <PieChart size={14} className="text-pink-600" /> Género
+        <div className="flex min-w-0 flex-col justify-between space-y-3 md:pr-5">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+              <PieChart size={14} className="text-brand-plum" /> Género
             </span>
           </div>
           
           <div className="space-y-3">
             <div>
-              <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+              <div className="mb-1 flex justify-between text-xs font-medium text-ink">
                 <span>Feminino ({femalePercent}%)</span>
                 <span>Masculino ({malePercent}%)</span>
               </div>
-              <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden flex">
-                <div style={{ width: `${femalePercent}%` }} className="bg-pink-500 h-full transition-all duration-500" />
-                <div style={{ width: `${malePercent}%` }} className="bg-blue-600 h-full transition-all duration-500" />
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-muted">
+                <div style={{ width: `${femalePercent}%` }} className="h-full bg-brand-plum" />
+                <div style={{ width: `${malePercent}%` }} className="h-full bg-chart-secondary" />
               </div>
             </div>
-            <div className="flex justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-200">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500"></span> Mulheres</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600"></span> Homens</span>
+            <div className="flex justify-between border-t border-border pt-2 text-[11px] text-ink-muted">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-brand-plum"></span> Mulheres</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-chart-secondary"></span> Homens</span>
             </div>
           </div>
         </div>
 
         {/* 2. Faixa Etária */}
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-500 block">
+        <div className="min-w-0 space-y-3 border-t border-border pt-5 md:border-l md:border-t-0 md:pl-5 md:pr-5 md:pt-0">
+          <span className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
             Faixa Etária Principal
           </span>
           <div className="space-y-2">
             {(safeData.ageGroups || []).map((group, idx) => (
               <div key={idx} className="space-y-1">
-                <div className="flex justify-between text-xs font-medium text-gray-700">
+                <div className="flex justify-between text-xs font-medium text-ink">
                   <span>{group.range} anos</span>
-                  <span className="font-bold">{group.percentage}%</span>
+                  <span className="font-semibold tabular-nums">{group.percentage}%</span>
                 </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div style={{ width: `${group.percentage}%` }} className="bg-[#231b2d] h-full rounded-full" />
+                <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
+                  <div style={{ width: `${group.percentage}%` }} className="h-full rounded-full bg-brand-plum" />
                 </div>
               </div>
             ))}
@@ -83,15 +83,15 @@ export function AudienceDemographics({ data }: Props) {
         </div>
 
         {/* 3. Principais Cidades */}
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
-            <MapPin size={14} className="text-pink-600" /> Top Cidades
+        <div className="min-w-0 space-y-3 border-t border-border pt-5 md:border-l md:pl-5">
+          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            <MapPin size={14} className="text-brand-plum" /> Top Cidades
           </span>
           <div className="space-y-2.5">
             {(safeData.topCities || []).map((city, index) => (
               <div key={index} className="flex items-center justify-between text-xs">
-                <span className="text-gray-700 font-medium">{city.name}</span>
-                <span className="bg-white px-2 py-0.5 rounded border border-gray-200 font-bold text-gray-900 shadow-2xs">
+                <span className="font-medium text-ink">{city.name}</span>
+                <span className="font-semibold tabular-nums text-ink">
                   {city.percentage}%
                 </span>
               </div>
@@ -101,6 +101,6 @@ export function AudienceDemographics({ data }: Props) {
 
       </div>
 
-    </div>
+    </section>
   );
 }

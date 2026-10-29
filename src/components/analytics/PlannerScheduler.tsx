@@ -225,7 +225,7 @@ export function PlannerScheduler() {
         <button 
           type="button"
           onClick={() => setIsCreateOpen(true)} 
-          className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+          className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
         >
           <Plus size={16} /> Criar publicação
         </button>
@@ -287,12 +287,22 @@ export function PlannerScheduler() {
       </div>
 
       {activeTab === 'calendar' ? (
-        <div className="overflow-x-auto rounded-panel border border-border bg-surface">
+        <div className="space-y-2">
+          <p className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-ink-muted xl:hidden">
+            Deslize para ver os outros dias
+            <ChevronRight aria-hidden="true" size={14} />
+          </p>
+          <div
+            role="region"
+            aria-label="Calendário semanal. Deslize horizontalmente para ver todos os dias."
+            tabIndex={0}
+            className="overflow-x-auto overscroll-x-contain rounded-panel border border-border bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+          >
           <div className="min-w-[900px]">
             <div className="grid grid-cols-8 border-b border-border bg-canvas text-xs font-semibold text-ink">
-              <div className="border-r border-border p-3 text-center text-ink-muted">Horário</div>
+              <div className="sticky left-0 z-20 border-r border-border bg-canvas p-3 text-center text-ink-muted">Horário</div>
               {currentWeekDays.map((day, idx) => (
-                <div key={idx} className={`border-r border-border p-3 text-center ${day.isToday ? 'border-b-2 border-b-brand-plum bg-[#f3f0e9] text-brand-plum' : ''}`}>
+                <div key={idx} className={`border-r border-border p-3 text-center ${day.isToday ? 'border-b-2 border-b-brand-plum bg-surface-muted text-brand-plum' : ''}`}>
                   <span>{day.name}</span>, <span className="font-normal">{day.dayNumber} {day.monthName}</span>
                 </div>
               ))}
@@ -301,7 +311,7 @@ export function PlannerScheduler() {
             <div className="divide-y divide-border">
               {hours.map((hour) => (
                 <div key={hour} className="grid grid-cols-8 min-h-[70px]">
-                  <div className="flex items-center justify-center border-r border-border bg-canvas/60 p-2 text-center text-xs font-medium text-ink-muted">
+                  <div className="sticky left-0 z-10 flex items-center justify-center border-r border-border bg-canvas p-2 text-center text-xs font-medium text-ink-muted">
                     {hour}:00
                   </div>
                   {currentWeekDays.map((dayObj, dayIndex) => {
@@ -311,7 +321,7 @@ export function PlannerScheduler() {
                         key={dayIndex} 
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => handleDropOnSlot(dayIndex, hour, dayObj.fullDateStr)}
-                        className={`relative border-r border-border p-1 transition-colors hover:bg-canvas ${dayObj.isToday ? 'bg-[#f3f0e9]/45' : ''}`}
+                        className={`relative border-r border-border p-1 transition-colors hover:bg-canvas ${dayObj.isToday ? 'bg-surface-muted/45' : ''}`}
                       >
                         {matchedPost && (
                           <button
@@ -360,6 +370,7 @@ export function PlannerScheduler() {
               ))}
             </div>
           </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-6">
@@ -388,7 +399,7 @@ export function PlannerScheduler() {
                     </div>
                     <span className="min-w-0">
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-[#f3f0e9] px-1.5 py-0.5 text-[10px] font-semibold text-brand-plum">{post.postType}</span>
+                        <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold text-brand-plum">{post.postType}</span>
                         <span className="truncate text-xs font-semibold text-ink">{post.title}</span>
                       </span>
                       <span className="mt-1 block text-[11px] text-ink-muted">Data: <span className="font-semibold text-ink">{post.dateStr}</span> às <span className="font-semibold text-ink">{post.hour}:00</span> ({post.timeString})</span>
@@ -398,7 +409,7 @@ export function PlannerScheduler() {
                     type="button"
                     onClick={() => handleDeletePost(post.id)}
                     aria-label={`Excluir agendamento de ${post.title}`}
-                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                     title="Excluir agendamento"
                   >
                     <Trash2 size={16} />
@@ -452,7 +463,7 @@ export function PlannerScheduler() {
               <button 
                 type="button"
                 onClick={() => handleDeletePost(selectedPost.id)}
-                className="flex min-h-11 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="flex min-h-11 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 <Trash2 size={15} />
                 <span>Excluir publicação</span>
@@ -461,7 +472,7 @@ export function PlannerScheduler() {
               <button 
                 type="button"
                 onClick={() => setSelectedPost(null)}
-                className="min-h-11 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="min-h-11 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 Fechar
               </button>

@@ -81,8 +81,7 @@ interface DemoUser {
 
 type DashboardTab = 'comunidade' | 'demografia' | 'conta' | 'inbox' | 'approval' | 'planner';
 
-const sectionEntranceClass =
-  'transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] starting:translate-y-2 starting:opacity-0 motion-reduce:transition-none';
+const sectionEntranceClass = 'section-enter';
 
 const overviewMetrics = [
   { label: 'Seguidores', value: '1.250', context: 'base atual' },
@@ -195,10 +194,10 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-dvh min-h-0 overflow-hidden overscroll-none bg-[#f7f5f0] font-sans text-[#302d34] antialiased [-webkit-tap-highlight-color:transparent] [&_button]:touch-manipulation [&_button]:select-none [&_button]:[-webkit-touch-callout:none] [&_button:active]:scale-[0.98] motion-reduce:[&_button:active]:scale-100">
-      <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-[#e8e4dc] bg-[#fffefa] xl:flex">
-        <div className="flex h-16 items-center border-b border-[#eee9e0] px-6">
-          <span className="flex items-center gap-2.5 text-sm font-semibold tracking-tight text-[#302d34]">
+    <div className="press-feedback flex h-dvh min-h-0 overflow-hidden overscroll-none bg-canvas font-sans text-ink antialiased">
+      <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-border bg-surface xl:flex">
+        <div className="flex h-16 items-center border-b border-border px-6">
+          <span className="flex items-center gap-2.5 text-sm font-semibold tracking-tight text-ink">
             <Image
               src="/bahia-homes-logo.png"
               alt="Bahia Homes"
@@ -206,12 +205,12 @@ export default function Home() {
               height={276}
               className="h-auto w-28"
             />
-            <span className="font-normal text-[#89847f]">Analytics</span>
+            <span className="font-normal text-ink-muted">Analytics</span>
           </span>
         </div>
         <nav className="flex-1 space-y-8 px-3 py-7">
           <div>
-            <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#948e85]">Plataformas</p>
+            <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Plataformas</p>
           <ul className="space-y-1">
             {platforms.map((p) => {
               const Icon = p.icon;
@@ -222,10 +221,10 @@ export default function Home() {
                     type="button"
                     aria-pressed={isActive}
                     onClick={() => setPlatform(p.id)}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-xs font-semibold transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-xs font-semibold transition-[background-color,color,transform] duration-150 ease-out ${
                       isActive 
                         ? 'bg-brand-plum text-white'
-                        : 'text-[#69645f] hover:bg-[#f3f0e9] hover:text-brand-plum'
+                        : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
                     }`}
                   >
                     <Icon className="h-4 w-4 opacity-80" />
@@ -243,7 +242,7 @@ export default function Home() {
         ref={mobileMenuRef}
         id="mobile-navigation-dialog"
         aria-labelledby="mobile-menu-title"
-        className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none translate-x-0 scale-100 bg-transparent p-0 opacity-100 transition-[opacity,transform,display,overlay] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] [transition-behavior:allow-discrete] starting:open:-translate-x-3 starting:open:opacity-0 starting:open:scale-[0.98] motion-reduce:transition-none backdrop:bg-[#25212a]/35 xl:hidden"
+        className="mobile-nav-drawer fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none translate-x-0 scale-100 bg-transparent p-0 opacity-100 transition-[opacity,transform,display,overlay] duration-200 ease-drawer [transition-behavior:allow-discrete] starting:open:-translate-x-3 starting:open:opacity-0 starting:open:scale-[0.98] backdrop:bg-brand-plum/35 xl:hidden"
         onCancel={(event) => {
           event.preventDefault();
           closeMobileMenu();
@@ -259,8 +258,8 @@ export default function Home() {
           if (event.target === event.currentTarget) closeMobileMenu();
         }}
       >
-          <aside className="flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-[#e8e4dc] bg-[#fffefa] pb-[env(safe-area-inset-bottom)] shadow-xl">
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-[#eee9e0] px-5 pt-[env(safe-area-inset-top)]">
+          <aside className="flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-border bg-surface pb-[env(safe-area-inset-bottom)] shadow-xl">
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5 pt-[env(safe-area-inset-top)]">
               <span id="mobile-menu-title" className="flex items-center gap-2.5 text-sm font-bold tracking-tight text-ink">
                 <Image
                   src="/bahia-homes-logo.png"
@@ -269,13 +268,13 @@ export default function Home() {
                   height={276}
                   className="h-auto w-32"
                 />
-                <span className="font-normal text-[#89847f]">Analytics</span>
+                <span className="font-normal text-ink-muted">Analytics</span>
               </span>
               <button
                 type="button"
                 aria-label="Fechar menu de navegação"
                 onClick={closeMobileMenu}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[#77716a] transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 <X size={18} />
               </button>
@@ -283,7 +282,7 @@ export default function Home() {
 
             <nav className="space-y-8 p-4">
               <div>
-                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#948e85]">Plataformas</p>
+                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Plataformas</p>
                 <ul className="space-y-1">
                   {platforms.map((item) => {
                     const Icon = item.icon;
@@ -298,8 +297,8 @@ export default function Home() {
                             setPlatform(item.id);
                             closeMobileMenu();
                           }}
-                          className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                            isActive ? 'bg-brand-plum text-white' : 'text-[#69645f] hover:bg-[#f3f0e9] hover:text-brand-plum'
+                          className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
+                            isActive ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
@@ -312,7 +311,7 @@ export default function Home() {
               </div>
 
               <div>
-                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#948e85]">Workspace</p>
+                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Workspace</p>
                 <ul className="space-y-1">
                   {[
                     { label: 'Analytics', icon: BarChart2, tab: 'comunidade' as const },
@@ -335,8 +334,8 @@ export default function Home() {
                             setActiveTab(item.tab);
                             closeMobileMenu();
                           }}
-                          className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-                            isActive ? 'bg-brand-plum text-white' : 'text-[#69645f] hover:bg-[#f3f0e9] hover:text-brand-plum'
+                          className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
+                            isActive ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
                           }`}
                         >
                           <Icon size={16} />
@@ -352,7 +351,7 @@ export default function Home() {
                         setIsCatalogOpen(true);
                         closeMobileMenu();
                       }}
-                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-[#69645f] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] hover:text-brand-plum"
+                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-ink-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum"
                     >
                       <FolderPlus size={16} />
                       Grade do feed
@@ -365,7 +364,7 @@ export default function Home() {
       </dialog>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#e8e4dc] bg-[#fffefa] px-4 pt-[env(safe-area-inset-top)] text-[#302d34] sm:px-6 xl:h-16 xl:flex-nowrap xl:px-8">
+        <header className="relative z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 pt-[env(safe-area-inset-top)] text-ink sm:px-6 xl:h-16 xl:flex-nowrap xl:px-8">
           <div className="flex min-w-0 items-center gap-3 xl:hidden">
             <button
               type="button"
@@ -374,7 +373,7 @@ export default function Home() {
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-dialog"
               onClick={openMobileMenu}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[#49444d] transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
             >
               <Menu size={20} />
             </button>
@@ -391,10 +390,10 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('comunidade')} 
               aria-current={['comunidade', 'demografia', 'conta'].includes(activeTab) ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${
                 activeTab === 'comunidade' || activeTab === 'demografia' || activeTab === 'conta' 
-                  ? 'bg-[#f3f0e9] font-semibold text-brand-plum'
-                  : 'text-[#6e6964] hover:bg-[#f7f5f0] hover:text-brand-plum'
+                  ? 'bg-surface-muted font-semibold text-brand-plum'
+                  : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'
               }`}
             >
               <BarChart2 size={15} /> Analytics
@@ -403,7 +402,7 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('inbox')} 
               aria-current={activeTab === 'inbox' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'inbox' ? 'bg-[#f3f0e9] font-semibold text-brand-plum' : 'text-[#6e6964] hover:bg-[#f7f5f0] hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'inbox' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
             >
               <Inbox size={15} /> Inbox
             </button>
@@ -412,7 +411,7 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('approval')} 
               aria-current={activeTab === 'approval' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'approval' ? 'bg-[#f3f0e9] font-semibold text-brand-plum' : 'text-[#6e6964] hover:bg-[#f7f5f0] hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'approval' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
             >
               <CheckCircle2 size={15} /> Aprovação
             </button>
@@ -420,31 +419,31 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('planner')} 
               aria-current={activeTab === 'planner' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'planner' ? 'bg-[#f3f0e9] font-semibold text-brand-plum' : 'text-[#6e6964] hover:bg-[#f7f5f0] hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'planner' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
             >
               <CalendarDays size={15} /> Programar Post
             </button>
             
-            <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f3f0e9] hover:text-[#352a42]">
+            <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum-hover">
               <FolderPlus size={15} /> Grade do feed
             </button>
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
-            <button onClick={() => alert('A aceder ao painel de subscrição...')} className="hidden min-h-11 items-center gap-2 rounded-xl bg-brand-plum px-4 text-xs font-semibold text-white transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:flex">
+            <button onClick={() => alert('A aceder ao painel de subscrição...')} className="hidden min-h-11 items-center gap-2 rounded-xl bg-brand-plum px-4 text-xs font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:flex">
               Atualizar Plano
             </button>
             
-            <div className="flex items-center gap-2 border-l border-[#e8e4dc] pl-3 text-xs sm:ml-2 sm:gap-3 sm:pl-4">
+            <div className="flex items-center gap-2 border-l border-border pl-3 text-xs sm:ml-2 sm:gap-3 sm:pl-4">
               <div className="flex items-center gap-2">
-                <div className="rounded-full bg-[#f3f0e9] p-1.5"><User size={13} className="text-[#68615b]" /></div>
-                <span className="hidden font-semibold capitalize text-[#49444d] sm:inline">{currentUser.name}</span>
+                <div className="rounded-full bg-surface-muted p-1.5"><User size={13} className="text-ink-muted" /></div>
+                <span className="hidden font-semibold capitalize text-ink sm:inline">{currentUser.name}</span>
               </div>
               <button 
                 onClick={() => setCurrentUser(null)} 
                 title="Sair da demonstração"
                 aria-label="Sair da demonstração"
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-[#89847f] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#f9ecea] hover:text-[#a84439] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 <LogOut size={15} />
               </button>
@@ -453,22 +452,22 @@ export default function Home() {
           
         </header>
 
-        <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain bg-[#f7f5f0] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-7 xl:px-8">
+        <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-7 xl:px-8">
           <div className="mx-auto max-w-[1600px] space-y-5">
-            <div role="note" className="flex flex-col gap-1 border-l-2 border-[#b39b60] bg-[#f1eee5] px-4 py-3 text-xs leading-relaxed text-[#5f5849] sm:flex-row sm:items-center sm:gap-2">
-              <span className="font-semibold text-[#494233]">Modo demonstração</span>
+            <div role="note" className="flex flex-col gap-1 rounded-control border border-status-warning-border bg-status-warning-soft px-4 py-3 text-xs leading-relaxed text-status-warning sm:flex-row sm:items-center sm:gap-2">
+              <span className="font-semibold">Modo demonstração</span>
               <span>O painel não protege dados. Não use informações reais ou confidenciais.</span>
             </div>
             
             {(activeTab === 'comunidade' || activeTab === 'demografia' || activeTab === 'conta') && (
               <>
-                <div className="flex flex-col gap-5 border-b border-[#e5e0d7] pb-5 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8e877d]">Bahia Homes <span className="px-1 text-[#b4ada2]">/</span> Instagram</p>
-                    <h1 className="text-2xl font-semibold tracking-[-0.035em] text-[#302d34] sm:text-[1.75rem]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">Bahia Homes <span className="px-1 opacity-60">/</span> Instagram</p>
+                    <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">
                       {activeTab === 'comunidade' ? 'Desempenho' : activeTab === 'demografia' ? 'Audiência' : 'Conta'}
                     </h1>
-                    <p className="max-w-xl text-sm leading-relaxed text-[#746e68]">
+                    <p className="max-w-xl text-sm leading-relaxed text-ink-muted">
                       {activeTab === 'comunidade'
                         ? 'Acompanhe o crescimento e o impacto das publicações.'
                         : activeTab === 'demografia'
@@ -477,9 +476,9 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="flex flex-col items-start sm:items-end">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#928b82]">Período principal</span>
-                    <div className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#e7e2d9] bg-[#fffefa] px-3.5 text-xs font-medium text-[#514c48]">
-                      <CalendarIcon size={14} className="text-[#817a72]" />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-muted">Período principal</span>
+                    <div className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-xs font-medium text-ink">
+                      <CalendarIcon size={14} className="text-ink-muted" />
                       <span>
                         {new Intl.DateTimeFormat('pt-BR').format(new Date(`${mockAnalyticsData.period?.startDate}T00:00:00`))}
                         {' – '}
@@ -489,14 +488,14 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex max-w-full gap-6 overflow-x-auto border-b border-[#e5e0d7] text-xs font-semibold tracking-wide text-[#746e68] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <button type="button" aria-current={activeTab === 'comunidade' ? 'page' : undefined} onClick={() => setActiveTab('comunidade')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'comunidade' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-[#302d34]'}`}>
+                <div className="flex max-w-full gap-6 overflow-x-auto border-b border-border text-xs font-semibold tracking-wide text-ink-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <button type="button" aria-current={activeTab === 'comunidade' ? 'page' : undefined} onClick={() => setActiveTab('comunidade')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-out ${activeTab === 'comunidade' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-ink'}`}>
                     Comunidade
                   </button>
-                  <button type="button" aria-current={activeTab === 'demografia' ? 'page' : undefined} onClick={() => setActiveTab('demografia')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'demografia' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-[#302d34]'}`}>
+                  <button type="button" aria-current={activeTab === 'demografia' ? 'page' : undefined} onClick={() => setActiveTab('demografia')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-out ${activeTab === 'demografia' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-ink'}`}>
                     Demografia
                   </button>
-                  <button type="button" aria-current={activeTab === 'conta' ? 'page' : undefined} onClick={() => setActiveTab('conta')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] ${activeTab === 'conta' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-[#302d34]'}`}>
+                  <button type="button" aria-current={activeTab === 'conta' ? 'page' : undefined} onClick={() => setActiveTab('conta')} className={`min-h-12 shrink-0 border-b-2 px-1 transition-colors duration-150 ease-out ${activeTab === 'conta' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-ink'}`}>
                     Conta
                   </button>
                 </div>
@@ -561,7 +560,7 @@ export default function Home() {
       </div>
 
       {isCatalogOpen && (
-        <div className="transition-opacity duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] starting:opacity-0 motion-reduce:transition-none">
+        <div className="modal-backdrop-enter">
           <CatalogModal isOpen onClose={() => setIsCatalogOpen(false)} />
         </div>
       )}

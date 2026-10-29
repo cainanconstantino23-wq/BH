@@ -4,109 +4,109 @@ import { Users, Briefcase, CalendarClock, Plus, CheckCircle2, MoreVertical, Cloc
 
 export function AccountManagement() {
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="section-enter space-y-6">
       
       {/* Banner de Status do Plano */}
-      <div className="bg-[#f4f7f4] border border-[#ccf600] rounded-lg p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 rounded-panel border border-status-success-border bg-status-success-soft p-5 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
-          <div className="bg-[#ccf600] p-2 rounded-full text-black">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-status-success text-white">
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-lg">Plano Premium Ativo</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-lg font-semibold text-ink">Plano Premium Ativo</h3>
+            <p className="text-sm leading-relaxed text-ink-muted">
               Gerencie publicações agendadas, contas de usuário e espaços de trabalho ilimitados.
             </p>
           </div>
         </div>
-        <button className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded font-semibold text-sm transition shadow-sm">
+        <button className="min-h-11 rounded-control border border-border bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-canvas">
           Ver Faturas
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         
         {/* Módulo 1: Espaços de Trabalho (Workspaces) */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="font-bold text-gray-800 flex items-center gap-2">
-              <Briefcase className="text-blue-500" size={20} /> Espaços de Trabalho
+        <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h4 className="flex items-center gap-2 font-semibold text-ink">
+              <Briefcase className="text-brand-plum" size={20} /> Espaços de Trabalho
             </h4>
-            <button className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center gap-1">
+            <button className="flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-plum transition-colors hover:text-brand-plum-hover">
               <Plus size={16} /> Novo Espaço
             </button>
           </div>
           
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {[
               { name: 'Bahia Homes', role: 'Proprietário', users: 4 },
               { name: 'Daime Filmes', role: 'Proprietário', users: 3 },
               { name: 'Move Porto', role: 'Agência', users: 2 }
             ].map((workspace, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 hover:bg-gray-50 border border-gray-100 rounded-lg transition group cursor-pointer">
+              <div key={idx} className="group flex cursor-pointer items-center justify-between gap-3 py-3 transition-colors hover:bg-canvas">
                 <div>
-                  <h5 className="font-semibold text-gray-900 text-sm">{workspace.name}</h5>
-                  <p className="text-xs text-gray-500">{workspace.users} usuários • Nível: {workspace.role}</p>
+                  <h5 className="text-sm font-semibold text-ink">{workspace.name}</h5>
+                  <p className="text-xs text-ink-muted">{workspace.users} usuários • Nível: {workspace.role}</p>
                 </div>
-                <button className="text-gray-400 hover:text-gray-900">
+                <button aria-label={`Opções de ${workspace.name}`} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink">
                   <MoreVertical size={16} />
                 </button>
               </div>
             ))}
           </div>
-        </div>
+      </section>
 
         {/* Módulo 2: Contas de Usuário (Equipe) */}
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h4 className="font-bold text-gray-800 flex items-center gap-2">
-              <Users className="text-amber-500" size={20} /> Contas de Usuário
+        <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h4 className="flex items-center gap-2 font-semibold text-ink">
+              <Users className="text-brand-plum" size={20} /> Contas de Usuário
             </h4>
-            <button className="text-amber-600 hover:text-amber-800 text-sm font-semibold flex items-center gap-1">
+            <button className="flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-plum transition-colors hover:text-brand-plum-hover">
               <Plus size={16} /> Convidar
             </button>
           </div>
           
-          <div className="space-y-3">
+          <div className="divide-y divide-border">
             {[
               { name: 'Cainan', email: 'cainan@daimefilmes.com', role: 'Admin' },
               { name: 'Yasmin', email: 'yasmin@daimefilmes.com', role: 'Editor' },
               { name: 'Laura', email: 'laura@bahiahomes.com', role: 'Visualizador' }
             ].map((user, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 hover:bg-gray-50 border border-gray-100 rounded-lg transition">
+              <div key={idx} className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-canvas">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-xs">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-muted text-xs font-semibold text-brand-plum">
                     {user.name.charAt(0)}
                   </div>
                   <div>
-                    <h5 className="font-semibold text-gray-900 text-sm">{user.name}</h5>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                    <h5 className="text-sm font-semibold text-ink">{user.name}</h5>
+                    <p className="text-xs text-ink-muted">{user.email}</p>
                   </div>
                 </div>
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium">
+                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-muted">
                   {user.role}
                 </span>
               </div>
             ))}
           </div>
-        </div>
+      </section>
 
       </div>
 
       {/* Módulo 3: Publicações Agendadas (Planner) */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h4 className="font-bold text-gray-800 flex items-center gap-2">
-            <CalendarClock className="text-emerald-500" size={20} /> Publicações Agendadas
+      <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h4 className="flex items-center gap-2 font-semibold text-ink">
+            <CalendarClock className="text-brand-plum" size={20} /> Publicações Agendadas
           </h4>
-          <button className="text-emerald-600 hover:text-emerald-800 text-sm font-semibold flex items-center gap-1">
+          <button className="flex min-h-11 items-center text-sm font-semibold text-brand-plum transition-colors hover:text-brand-plum-hover">
             Abrir Planner
           </button>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-gray-500 border-b border-gray-200 uppercase text-xs">
+            <thead className="border-b border-border text-xs uppercase text-ink-muted">
               <tr>
                 <th className="pb-3 font-semibold">Postagem</th>
                 <th className="pb-3 font-semibold">Espaço</th>
@@ -114,31 +114,35 @@ export function AccountManagement() {
                 <th className="pb-3 font-semibold">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              <tr className="hover:bg-gray-50">
-                <td className="py-3 font-medium text-gray-900">Tour Casa Alto Padrão Trancoso (Reels)</td>
-                <td className="py-3 text-gray-600">Bahia Homes</td>
-                <td className="py-3 text-gray-600 flex items-center gap-1">
-                  <Clock size={14} className="text-gray-400" /> Amanhã, 18:00
+            <tbody className="divide-y divide-border">
+              <tr className="transition-colors hover:bg-canvas">
+                <td className="py-3 font-medium text-ink">Tour Casa Alto Padrão Trancoso (Reels)</td>
+                <td className="py-3 text-ink-muted">Bahia Homes</td>
+                <td className="py-3 text-ink-muted">
+                  <div className="flex items-center gap-1">
+                    <Clock size={14} aria-hidden="true" /> Amanhã, 18:00
+                  </div>
                 </td>
                 <td className="py-3">
-                  <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">Agendado</span>
+                  <span className="rounded-full border border-status-success-border bg-status-success-soft px-2.5 py-1 text-xs font-semibold text-status-success">Agendado</span>
                 </td>
               </tr>
-              <tr className="hover:bg-gray-50">
-                <td className="py-3 font-medium text-gray-900">Institucional Move Porto (Vídeo)</td>
-                <td className="py-3 text-gray-600">Move Porto</td>
-                <td className="py-3 text-gray-600 flex items-center gap-1">
-                  <Clock size={14} className="text-gray-400" /> 25 Out, 12:30
+              <tr className="transition-colors hover:bg-canvas">
+                <td className="py-3 font-medium text-ink">Institucional Move Porto (Vídeo)</td>
+                <td className="py-3 text-ink-muted">Move Porto</td>
+                <td className="py-3 text-ink-muted">
+                  <div className="flex items-center gap-1">
+                    <Clock size={14} aria-hidden="true" /> 25 Out, 12:30
+                  </div>
                 </td>
                 <td className="py-3">
-                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">Em Revisão</span>
+                  <span className="rounded-full border border-status-warning-border bg-status-warning-soft px-2.5 py-1 text-xs font-semibold text-status-warning">Em Revisão</span>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
     </div>
   );

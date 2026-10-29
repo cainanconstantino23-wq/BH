@@ -221,7 +221,7 @@ export default function ApprovalSectionOrange() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="section-enter space-y-6">
       
       <div className="flex flex-col justify-between gap-4 rounded-panel border border-border bg-surface p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="flex items-center gap-3">
@@ -234,7 +234,7 @@ export default function ApprovalSectionOrange() {
         <button
           type="button"
           onClick={() => { setFeedbackMessage(''); setIsModalOpen(true); }}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
         >
           <Plus size={16} /> Novo post para aprovação
         </button>
@@ -247,13 +247,13 @@ export default function ApprovalSectionOrange() {
         <div className="overflow-hidden rounded-panel border border-border bg-surface">
           <div className="flex items-center justify-between border-b border-border bg-canvas p-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">
             <span>Fila de Aprovação</span>
-            <span className="rounded-full bg-[#f3f0e9] px-2.5 py-1 text-[10px] font-semibold text-brand-plum">{posts.length}</span>
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold text-brand-plum">{posts.length}</span>
           </div>
           <div className="max-h-[600px] divide-y divide-border overflow-y-auto">
             {loading ? (
-              <div className="p-8 text-center text-xs text-gray-400">A carregar...</div>
+              <div className="p-8 text-center text-xs text-ink-muted">A carregar...</div>
             ) : posts.length === 0 ? (
-              <div className="p-8 text-center text-xs text-gray-400">Nenhum conteúdo em aprovação.</div>
+              <div className="p-8 text-center text-xs text-ink-muted">Nenhum conteúdo em aprovação.</div>
             ) : (
               posts.map((p) => (
                 <button
@@ -262,7 +262,7 @@ export default function ApprovalSectionOrange() {
                   aria-pressed={selectedPost?.id === p.id}
                   onClick={() => setSelectedPost(p)}
                   className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand-plum ${
-                    selectedPost?.id === p.id ? 'border-l-4 border-brand-plum bg-[#f3f0e9]/70' : 'hover:bg-canvas/70'
+                    selectedPost?.id === p.id ? 'border-l-4 border-brand-plum bg-surface-muted/70' : 'hover:bg-canvas/70'
                   }`}
                 >
                   <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
@@ -281,9 +281,9 @@ export default function ApprovalSectionOrange() {
                     <div className="flex items-center justify-between">
                       <span className="max-w-[90px] truncate text-[10px] font-semibold uppercase text-ink">{p.house_name || 'Casa'}</span>
                       <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        p.approval_status === 'approved' ? 'bg-emerald-50 text-emerald-800' :
-                        p.approval_status === 'changes_requested' ? 'bg-amber-50 text-amber-800' :
-                        p.approval_status === 'rejected' ? 'bg-rose-50 text-rose-800' :
+                        p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
+                        p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
+                        p.approval_status === 'rejected' ? 'border border-status-danger-border bg-status-danger-soft text-status-danger' :
                         'bg-canvas text-brand-plum'
                       }`}>
                         {p.approval_status === 'approved' ? <CheckCircle2 size={11} /> :
@@ -307,7 +307,7 @@ export default function ApprovalSectionOrange() {
             <div className="space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
                 <div>
-                  <span className="inline-flex rounded-full bg-[#f3f0e9] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
+                  <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
                     {selectedPost.house_name || 'Casa'}
                   </span>
                   <h3 className="mt-2 text-sm font-semibold text-ink">Link de aprovação e resposta do cliente</h3>
@@ -325,7 +325,7 @@ export default function ApprovalSectionOrange() {
                     type="button"
                     aria-label={`Excluir publicação de ${selectedPost.house_name}`}
                     onClick={() => deletePost(selectedPost.id)}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                     title="Excluir publicação"
                   >
                     <Trash2 size={15} />
@@ -348,7 +348,7 @@ export default function ApprovalSectionOrange() {
                   <button
                     type="button"
                     onClick={() => copyApprovalLink(selectedPost.approval_token, selectedPost.id)}
-                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                   >
                     <Copy size={13} />
                     {copiedId === String(selectedPost.id) ? 'Copiado!' : 'Copiar link'}
@@ -361,7 +361,7 @@ export default function ApprovalSectionOrange() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Enviar link de aprovação por WhatsApp"
-                    className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-[#f3f0e9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                   >
                     Enviar por WhatsApp
                   </a>
@@ -389,8 +389,8 @@ export default function ApprovalSectionOrange() {
 
                     {selectedPost.client_feedback && (
                       <div className="mt-4">
-                        <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">Feedback do cliente</h4>
-                        <div className="rounded-control border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900">
+                        <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">Feedback do cliente</h4>
+                        <div className="rounded-control border border-status-warning-border bg-status-warning-soft p-3 text-xs font-medium text-status-warning">
                           {selectedPost.client_feedback}
                         </div>
                       </div>
@@ -507,7 +507,7 @@ export default function ApprovalSectionOrange() {
                   type="button"
                   onClick={handleSendForApproval}
                   disabled={submitting}
-                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-[#352a42] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
                 >
                   <Send size={14} />
                   {submitting ? 'Enviando...' : 'Enviar para aprovação'}

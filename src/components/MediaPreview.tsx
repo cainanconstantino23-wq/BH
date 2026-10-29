@@ -32,7 +32,7 @@ export function MediaPreview({
 
   if (!src || hasLoadError) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#e8e4de] p-2 text-center text-[#625d63]">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-surface-muted p-2 text-center text-ink-muted">
         {isVideo ? <Video size={18} aria-hidden="true" /> : <ImageOff size={18} aria-hidden="true" />}
         <span className="text-[10px] font-medium">
           {hasLoadError ? 'Não foi possível carregar a mídia' : 'Sem mídia'}

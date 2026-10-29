@@ -119,54 +119,54 @@ export function MessagesInbox() {
   };
 
   return (
-    <div className="flex h-[calc(100dvh-6rem)] min-h-96 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm animate-in fade-in duration-300 md:h-[calc(100vh-140px)]">
+    <div className="section-enter flex h-[calc(100dvh-6rem)] min-h-0 overflow-hidden rounded-panel border border-border bg-surface md:h-[calc(100dvh-8.75rem)]">
       
       {/* LATERAL ESQUERDA */}
-      <div className={`${isChatOpen ? 'hidden' : 'flex'} w-full shrink-0 flex-col border-gray-200 bg-white md:flex md:w-96 md:border-r`}>
-        <div className="p-4 border-b border-gray-200 space-y-3">
+      <div className={`${isChatOpen ? 'hidden' : 'flex'} w-full shrink-0 flex-col border-border bg-surface md:flex md:w-96 md:border-r`}>
+        <div className="space-y-3 border-b border-border p-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full">
-              <InstagramIcon className="w-4 h-4 text-pink-600" />
-              <span className="text-xs font-semibold text-gray-700">Instagram DM</span>
+            <div className="flex items-center gap-2 rounded-full bg-surface-muted px-3 py-1.5">
+              <InstagramIcon className="h-4 w-4 text-platform-instagram" />
+              <span className="text-xs font-semibold text-ink">Instagram DM</span>
             </div>
           </div>
 
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
+            <Search size={16} className="absolute left-3 top-3 text-ink-muted" />
             <input
               type="text"
               placeholder="Digite pelo menos 3 caracteres"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 focus:outline-none focus:border-gray-400"
+              className="min-h-11 w-full rounded-control border border-border bg-canvas py-2 pl-9 pr-8 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
             />
-            <Filter size={14} className="absolute right-3 top-3 text-gray-400 cursor-pointer" />
+            <Filter size={14} className="absolute right-3 top-3 cursor-pointer text-ink-muted" />
           </div>
 
-          <div className="flex items-center justify-between text-xs font-medium text-gray-500 pt-1">
+          <div className="flex items-center justify-between pt-1 text-xs font-medium text-ink-muted">
             <button
               onClick={() => setFilter('unresolved')}
-              className={`pb-1 ${filter === 'unresolved' ? 'text-gray-900 border-b-2 border-gray-900 font-bold' : 'hover:text-gray-700'}`}
+              className={`min-h-11 px-1 transition-colors ${filter === 'unresolved' ? 'border-b-2 border-brand-plum font-semibold text-brand-plum' : 'hover:text-ink'}`}
             >
               Não resolvido
             </button>
             <button
               onClick={() => setFilter('unread')}
-              className={`pb-1 ${filter === 'unread' ? 'text-gray-900 border-b-2 border-gray-900 font-bold' : 'hover:text-gray-700'}`}
+              className={`min-h-11 px-1 transition-colors ${filter === 'unread' ? 'border-b-2 border-brand-plum font-semibold text-brand-plum' : 'hover:text-ink'}`}
             >
               Não lido
             </button>
             <button
               onClick={() => setFilter('all')}
-              className={`pb-1 ${filter === 'all' ? 'text-gray-900 border-b-2 border-gray-900 font-bold' : 'hover:text-gray-700'}`}
+              className={`min-h-11 px-1 transition-colors ${filter === 'all' ? 'border-b-2 border-brand-plum font-semibold text-brand-plum' : 'hover:text-ink'}`}
             >
               Todas
             </button>
-            <MoreVertical size={14} className="cursor-pointer text-gray-400" />
+            <MoreVertical size={14} className="cursor-pointer text-ink-muted" />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+        <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
           {filteredConversations.length > 0 ? (
             filteredConversations.map((chat) => (
               <div
@@ -179,39 +179,39 @@ export function MessagesInbox() {
                   setIsChatOpen(true);
                 }}
                 className={`p-4 flex items-start gap-3 cursor-pointer transition ${
-                  activeChat.id === chat.id ? 'bg-gray-50 border-l-4 border-pink-500' : 'hover:bg-gray-50/50'
+                  activeChat.id === chat.id ? 'border-l-4 border-brand-plum bg-surface-muted' : 'hover:bg-canvas/70'
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-0.5 flex items-center justify-center text-white font-bold text-xs">
-                    <div className="w-full h-full bg-gray-800 rounded-full flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-plum text-xs font-semibold text-white">
+                    <div className="flex h-full w-full items-center justify-center rounded-full">
                       {chat.avatar}
                     </div>
                   </div>
-                  <InstagramIcon className="w-3 h-3 absolute -bottom-1 -right-1 bg-white text-pink-600 rounded-full p-0.5 shadow" />
+                  <InstagramIcon className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-surface p-0.5 text-platform-instagram" />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline mb-0.5">
-                    <h4 className="font-semibold text-xs text-gray-900 truncate">{chat.sender}</h4>
-                    <span className="text-[10px] text-gray-400 shrink-0">{chat.time.split(',')[1] || chat.time}</span>
+                    <h4 className="truncate text-xs font-semibold text-ink">{chat.sender}</h4>
+                    <span className="shrink-0 text-[10px] text-ink-muted">{chat.time.split(',')[1] || chat.time}</span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{chat.preview}</p>
+                  <p className="truncate text-xs text-ink-muted">{chat.preview}</p>
                 </div>
 
                 <div className="flex flex-col items-end justify-between self-center">
                   {chat.status === 'unresolved' && (
-                    <span className="w-2 h-2 rounded-full bg-amber-500 mb-2"></span>
+                    <span className="mb-2 h-2 w-2 rounded-full bg-status-warning"></span>
                   )}
                   {chat.status === 'unread' && (
-                    <span className="w-2 h-2 rounded-full bg-pink-500 mb-2"></span>
+                    <span className="mb-2 h-2 w-2 rounded-full bg-platform-instagram"></span>
                   )}
-                  <CheckCheck size={14} className="text-gray-400" />
+                  <CheckCheck size={14} className="text-ink-muted" />
                 </div>
               </div>
             ))
           ) : (
-            <div className="p-8 text-center text-xs text-gray-400">
+            <div className="p-8 text-center text-xs text-ink-muted">
               Nenhuma conversa encontrada neste filtro.
             </div>
           )}
@@ -219,28 +219,28 @@ export function MessagesInbox() {
       </div>
 
       {/* PAINEL DIREITO */}
-      <div className={`${isChatOpen ? 'flex' : 'hidden'} min-w-0 flex-1 flex-col bg-[#fafafa] md:flex`}>
+      <div className={`${isChatOpen ? 'flex' : 'hidden'} min-h-0 min-w-0 flex-1 flex-col bg-canvas md:flex`}>
         {activeChat ? (
           <>
-            <div className="p-4 bg-white border-b border-gray-200 flex items-center justify-between shadow-xs">
+            <div className="flex items-center justify-between border-b border-border bg-surface p-4">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   aria-label="Voltar para conversas"
                   onClick={() => setIsChatOpen(false)}
-                  className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 md:hidden"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface-muted md:hidden"
                 >
                   <ArrowLeft size={18} />
                 </button>
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-0.5 flex items-center justify-center text-white font-bold text-xs">
-                  <div className="w-full h-full bg-gray-800 rounded-full flex items-center justify-center">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-plum text-xs font-semibold text-white">
+                  <div className="flex h-full w-full items-center justify-center rounded-full">
                     {activeChat.avatar}
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-gray-900">{activeChat.sender}</h3>
-                  <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                    ● Ativo no Instagram
+                  <h3 className="text-sm font-semibold text-ink">{activeChat.sender}</h3>
+                  <span className="flex items-center gap-1 text-[10px] font-medium text-status-success">
+                    <span aria-hidden="true">●</span> Ativo no Instagram
                   </span>
                 </div>
               </div>
@@ -249,7 +249,7 @@ export function MessagesInbox() {
                   setConversations(conversations.map(c => c.id === activeChat.id ? { ...c, status: 'read' } : c));
                   alert('Conversa marcada como resolvida!');
                 }}
-                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-3 py-1.5 rounded-lg transition"
+                className="min-h-11 rounded-control bg-surface-muted px-3 text-xs font-semibold text-ink transition-colors hover:bg-border"
               >
                 Marcar como resolvido
               </button>
@@ -257,7 +257,7 @@ export function MessagesInbox() {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               <div className="text-center">
-                <span className="text-[10px] bg-gray-200 text-gray-600 px-2.5 py-1 rounded-full font-medium">
+                <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-medium text-ink-muted">
                   Histórico de Mensagens do Instagram
                 </span>
               </div>
@@ -267,10 +267,10 @@ export function MessagesInbox() {
                 return (
                   <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
-                      isMe ? 'bg-[#231b2d] text-white rounded-br-none' : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                      isMe ? 'rounded-br-none bg-brand-plum text-white' : 'rounded-bl-none border border-border bg-surface text-ink'
                     }`}>
                       <p>{msg.text}</p>
-                      <span className={`block text-[9px] mt-1 text-right ${isMe ? 'text-gray-300' : 'text-gray-400'}`}>
+                      <span className={`mt-1 block text-right text-[9px] ${isMe ? 'text-white/65' : 'text-ink-muted'}`}>
                         {msg.time}
                       </span>
                     </div>
@@ -279,28 +279,28 @@ export function MessagesInbox() {
               })}
             </div>
 
-            <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-200 flex items-center gap-3">
+            <form onSubmit={handleSendMessage} className="flex items-center gap-3 border-t border-border bg-surface p-4">
               <input
                 type="text"
                 placeholder="Escreva uma mensagem..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-xs text-gray-800 focus:outline-none focus:border-pink-500"
+                className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-4 py-2.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               />
               <button
                 type="submit"
-                className="bg-pink-600 hover:bg-pink-700 text-white p-2.5 rounded-xl transition flex items-center justify-center shadow-sm"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-control bg-brand-plum text-white transition-colors hover:bg-brand-plum-hover"
               >
                 <Send size={16} />
               </button>
             </form>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 space-y-3">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+          <div className="flex flex-1 flex-col items-center justify-center space-y-3 p-8 text-ink-muted">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-muted text-ink-muted">
               <MessageSquare size={32} />
             </div>
-            <p className="text-sm font-medium text-gray-600">Selecione uma conversa à esquerda para começar</p>
+            <p className="text-sm font-medium text-ink-muted">Selecione uma conversa à esquerda para começar</p>
           </div>
         )}
       </div>
