@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
 import * as tus from 'tus-js-client';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
 
 interface ApprovalPost {
   id: string | number;
@@ -15,6 +15,7 @@ interface ApprovalPost {
   media_type: 'image' | 'video';
   approval_status: string;
   approval_token: string;
+  views_count?: number;
   client_feedback?: string;
   scheduled_date?: string;
   scheduled_time?: string;
@@ -33,6 +34,7 @@ export default function ApprovalSectionOrange() {
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<ApprovalPost | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [activeViewers, setActiveViewers] = useState<number>(0);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [houseName, setHouseName] = useState('');
@@ -80,6 +82,7 @@ export default function ApprovalSectionOrange() {
         house_name: houseNameValue,
         approval_status: stringValue(item.approval_status) || 'pending',
         approval_token: stringValue(item.approval_token) || String(id),
+        views_count: typeof item.views_count === 'number' ? item.views_count : 0,
         client_feedback: stringValue(item.client_feedback),
         scheduled_date: stringValue(item.scheduled_date),
         scheduled_time: stringValue(item.scheduled_time) || stringValue(item.time_string),
@@ -110,11 +113,38 @@ export default function ApprovalSectionOrange() {
     };
   }, [fetchPosts]);
 
+  // Monitor de Presença em Tempo Real do Cliente
+  useEffect(() => {
+    if (!selectedPost?.approval_token) {
+      setActiveViewers(0);
+      return;
+    }
+
+    const cleanToken = selectedPost.approval_token.replace(/[()]/g, '').trim();
+    const channel = supabase.channel(`approval_${cleanToken}`);
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        setActiveViewers(Object.keys(state).length);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedPost?.approval_token]);
+
   const refreshPosts = async () => {
     try {
       const formatted = await fetchPosts();
       setPosts(formatted);
-      setSelectedPost(formatted[0] ?? null);
+      if (selectedPost) {
+        const updated = formatted.find(p => p.id === selectedPost.id);
+        setSelectedPost(updated || formatted[0] || null);
+      } else {
+        setSelectedPost(formatted[0] ?? null);
+      }
     } catch (error) {
       console.error('Erro ao atualizar a fila de aprovação:', error);
       setFeedbackMessage(`Não foi possível atualizar a fila: ${getErrorMessage(error)}`);
@@ -151,7 +181,6 @@ export default function ApprovalSectionOrange() {
       const filePath = `uploads/${fileName}`;
       const isVideoFile = file.type.startsWith('video/') || Boolean(file.name.match(/\.(mp4|mov|webm)$/i));
 
-      // Upload TUS para ficheiros > 6MB
       if (file.size > 6 * 1024 * 1024) {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -224,6 +253,7 @@ export default function ApprovalSectionOrange() {
           scheduled_date: scheduledDate,
           time_string: scheduledTime,
           hour: parseInt(scheduledTime.split(':')[0]) || 19,
+          views_count: 0
         },
       ]);
 
@@ -237,7 +267,6 @@ export default function ApprovalSectionOrange() {
       setFeedbackMessage('');
       
       await refreshPosts();
-      
       setFeedbackMessage('Conteúdo enviado e adicionado à fila de aprovação.');
     } catch (error) {
       console.error('Erro ao enviar conteúdo para aprovação:', error);
@@ -276,7 +305,6 @@ export default function ApprovalSectionOrange() {
 
   return (
     <div className="section-enter space-y-6">
-      
       <div className="flex flex-col justify-between gap-4 rounded-panel border border-border bg-surface p-4 sm:flex-row sm:items-center sm:p-5">
         <div className="flex items-center gap-3">
           <div className="h-9 w-1 shrink-0 rounded-full bg-brand-plum"></div>
@@ -361,9 +389,26 @@ export default function ApprovalSectionOrange() {
             <div className="space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
                 <div>
-                  <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
-                    {selectedPost.house_name || 'Casa'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
+                      {selectedPost.house_name || 'Casa'}
+                    </span>
+
+                    {/* Badge Realtime: Cliente Online */}
+                    {activeViewers > 0 && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 animate-pulse">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                        {activeViewers} visualizando agora
+                      </span>
+                    )}
+
+                    {/* Contador de Visualizações Totais */}
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-canvas px-2.5 py-0.5 text-[10px] font-medium text-ink-muted">
+                      <Eye size={12} />
+                      {selectedPost.views_count || 0} acessos
+                    </span>
+                  </div>
+
                   <h3 className="mt-2 text-sm font-semibold text-ink">Link de aprovação e resposta do cliente</h3>
                   {(selectedPost.scheduled_date || selectedPost.scheduled_time) && (
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">

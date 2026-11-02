@@ -19,13 +19,14 @@ interface Post {
   media_type: 'image' | 'video';
   approval_status: 'pending' | 'approved' | 'changes_requested' | 'rejected';
   client_feedback?: string;
+  views_count?: number;
 }
 
 export default function ClientApprovalPage() {
   const params = useParams();
   const rawToken = params?.token as string;
   
-  // Limpeza do token: remove parênteses, %29 ou espaços acidentais da URL
+  // Limpeza automática do token: remove parênteses, %29 ou espaços acidentais da URL
   const token = rawToken 
     ? decodeURIComponent(rawToken).replace(/[()]/g, '').trim() 
     : '';
@@ -67,6 +68,13 @@ export default function ClientApprovalPage() {
       }
 
       if (data) {
+        // Incrementa o número total de visualizações no Supabase
+        const currentViews = typeof data.views_count === 'number' ? data.views_count : 0;
+        void supabasePublic
+          .from('posts')
+          .update({ views_count: currentViews + 1 })
+          .eq('id', data.id);
+
         const rawMediaUrl = 
           data.media_url || 
           data.video_url || 
@@ -111,6 +119,25 @@ export default function ClientApprovalPage() {
   useEffect(() => {
     void fetchPostByToken();
   }, [fetchPostByToken]);
+
+  // Registra presença em tempo real quando o cliente entra na página
+  useEffect(() => {
+    if (!token || !post) return;
+
+    const channel = supabasePublic.channel(`approval_${token}`);
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await channel.track({
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    return () => {
+      void supabasePublic.removeChannel(channel);
+    };
+  }, [token, post]);
 
   const handleResponse = async (status: 'approved' | 'changes_requested' | 'rejected') => {
     if (!post) return;
@@ -219,7 +246,7 @@ export default function ClientApprovalPage() {
 
         <div className="space-y-5 p-4 sm:p-6">
           
-          {/* Aviso Importante de Prazo */}
+          {/* Aviso Importante de Prazo de 7 Dias */}
           <div className="flex items-center gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3 text-amber-900">
             <Clock size={16} className="shrink-0 text-amber-600" />
             <p className="text-xs font-medium leading-tight">
