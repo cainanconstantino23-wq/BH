@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MediaPreview } from '@/components/MediaPreview';
+import * as tus from 'tus-js-client';
 import { 
   X, Camera, Smile, Hash, AtSign, MapPin, Link as LinkIcon, Percent, Bookmark,
   Smartphone, Monitor, Grid, Calendar, Plus, Video, Loader2, FolderOpen,
@@ -314,7 +315,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     e.target.value = '';
   };
 
-  // Envio ao Supabase e banco de dados
+  // Envio ao Supabase com Suporte a Arquivos Grandes (>6MB via TUS)
   const handleSavePost = async () => {
     setLoading(true);
     setUploadStatus('Processando...');
@@ -328,16 +329,56 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
         const filePath = `uploads/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(filePath, selectedFile, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: selectedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg')
-          });
+        // Se o arquivo for maior que 6MB, envia via TUS (Resumable Upload)
+        if (selectedFile.size > 6 * 1024 * 1024) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-        if (uploadError) {
-          throw new Error(`Erro no storage: ${uploadError.message}`);
+          await new Promise((resolve, reject) => {
+            const upload = new tus.Upload(selectedFile, {
+              endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,
+              retryDelays: [0, 3000, 5000, 10000, 20000],
+              headers: {
+                authorization: `Bearer ${token}`,
+                'x-upsert': 'true',
+              },
+              uploadDataDuringCreation: true,
+              removeFingerprintOnSuccess: true,
+              metadata: {
+                bucketName: 'posts',
+                objectName: filePath,
+                contentType: selectedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+                cacheControl: '3600',
+              },
+              chunkSize: 6 * 1024 * 1024,
+              onError: (error) => {
+                console.error('Erro no upload TUS:', error);
+                reject(error);
+              },
+              onProgress: (bytesUploaded, bytesTotal) => {
+                const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(0);
+                setUploadStatus(`Enviando mídia (${percentage}%)...`);
+              },
+              onSuccess: () => {
+                resolve(true);
+              },
+            });
+
+            upload.start();
+          });
+        } else {
+          // Arquivos pequenos continuam pelo upload padrão
+          const { error: uploadError } = await supabase.storage
+            .from('posts')
+            .upload(filePath, selectedFile, {
+              cacheControl: '3600',
+              upsert: false,
+              contentType: selectedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+            });
+
+          if (uploadError) {
+            throw new Error(`Erro no storage: ${uploadError.message}`);
+          }
         }
 
         const { data: publicUrlData } = supabase.storage
