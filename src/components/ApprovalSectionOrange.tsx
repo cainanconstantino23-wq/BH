@@ -113,7 +113,7 @@ export default function ApprovalSectionOrange() {
     };
   }, [fetchPosts]);
 
-  // Monitor de Presença em Tempo Real do Cliente
+  // Monitor de Presença em Tempo Real + Atualização Instantânea de Views no Painel
   useEffect(() => {
     if (!selectedPost?.approval_token) {
       setActiveViewers(0);
@@ -121,19 +121,45 @@ export default function ApprovalSectionOrange() {
     }
 
     const cleanToken = selectedPost.approval_token.replace(/[()]/g, '').trim();
-    const channel = supabase.channel(`approval_${cleanToken}`);
-
-    channel
+    
+    // 1. Escuta quem está com a página aberta em tempo real (Presence)
+    const presenceChannel = supabase.channel(`approval_${cleanToken}`);
+    presenceChannel
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
+        const state = presenceChannel.presenceState();
         setActiveViewers(Object.keys(state).length);
       })
       .subscribe();
 
+    // 2. Escuta alterações na tabela no Supabase para atualizar o número de acessos sem dar F5
+    const dbChannel = supabase
+      .channel('db_post_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'posts',
+          filter: `id=eq.${selectedPost.id}`,
+        },
+        (payload) => {
+          if (payload.new && typeof payload.new.views_count === 'number') {
+            setSelectedPost((prev) => prev ? { ...prev, views_count: payload.new.views_count } : null);
+            setPosts((prevPosts) =>
+              prevPosts.map((p) =>
+                p.id === selectedPost.id ? { ...p, views_count: payload.new.views_count } : p
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(dbChannel);
     };
-  }, [selectedPost?.approval_token]);
+  }, [selectedPost?.id, selectedPost?.approval_token]);
 
   const refreshPosts = async () => {
     try {

@@ -68,12 +68,17 @@ export default function ClientApprovalPage() {
       }
 
       if (data) {
-        // Incrementa o número total de visualizações no Supabase
-        const currentViews = typeof data.views_count === 'number' ? data.views_count : 0;
-        void supabasePublic
+        // Incrementa e salva a contagem de visualizações de forma aguardada (await)
+        const newViewsCount = (typeof data.views_count === 'number' ? data.views_count : 0) + 1;
+        
+        const { error: updateError } = await supabasePublic
           .from('posts')
-          .update({ views_count: currentViews + 1 })
+          .update({ views_count: newViewsCount })
           .eq('id', data.id);
+
+        if (updateError) {
+          console.warn('Não foi possível incrementar o contador de acessos (RLS):', updateError);
+        }
 
         const rawMediaUrl = 
           data.media_url || 
@@ -94,6 +99,7 @@ export default function ClientApprovalPage() {
 
         const formattedPost: Post = {
           ...data,
+          views_count: newViewsCount,
           media_url: rawMediaUrl,
           media_type: isVideo ? 'video' : 'image',
           caption: data.caption || data.content || data.notes || '',
@@ -120,7 +126,7 @@ export default function ClientApprovalPage() {
     void fetchPostByToken();
   }, [fetchPostByToken]);
 
-  // Registra presença em tempo real quando o cliente entra na página
+  // Regista presença em tempo real quando o cliente entra na página
   useEffect(() => {
     if (!token || !post) return;
 
