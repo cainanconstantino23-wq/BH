@@ -1,10 +1,16 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Home, LoaderCircle } from 'lucide-react';
+
+// Instância anônima garantida para acesso público
+const supabasePublic = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 interface Post {
   id: string;
@@ -26,8 +32,6 @@ export default function ClientApprovalPage() {
   const [feedback, setFeedback] = useState('');
   const [actionDone, setActionDone] = useState(false);
 
-  const supabase = createClient();
-
   const fetchPostByToken = useCallback(async () => {
     if (!token) {
       setLoading(false);
@@ -37,8 +41,8 @@ export default function ClientApprovalPage() {
     try {
       setLoading(true);
 
-      // Busca flexível: aceita tanto o approval_token quanto o ID do post
-      const { data, error } = await supabase
+      // Busca por approval_token ou id usando o cliente público
+      const { data, error } = await supabasePublic
         .from('posts')
         .select('*')
         .or(`approval_token.eq.${token},id.eq.${token}`)
@@ -50,7 +54,6 @@ export default function ClientApprovalPage() {
       }
 
       if (data) {
-        // 1. Procura a URL do arquivo em todas as colunas possíveis
         const rawMediaUrl = 
           data.media_url || 
           data.video_url || 
@@ -59,7 +62,6 @@ export default function ClientApprovalPage() {
           data.file_url || 
           '';
 
-        // 2. Identifica se é vídeo pela extensão (.mp4, .mov, etc.) ou tipo registrado
         const rawType = (data.media_type || data.type || '').toString().toLowerCase();
         const isVideoUrl = rawMediaUrl.match(/\.(mp4|mov|webm|m3u8)($|\?)/i);
         
@@ -91,7 +93,7 @@ export default function ClientApprovalPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, supabase]);
+  }, [token]);
 
   useEffect(() => {
     void fetchPostByToken();
@@ -100,7 +102,7 @@ export default function ClientApprovalPage() {
   const handleResponse = async (status: 'approved' | 'changes_requested' | 'rejected') => {
     if (!post) return;
     try {
-      const { error } = await supabase
+      const { error } = await supabasePublic
         .from('posts')
         .update({
           approval_status: status,
