@@ -4,7 +4,7 @@ import Image from 'next/image';
 import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Home, LoaderCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Home, LoaderCircle, Clock } from 'lucide-react';
 
 const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -44,14 +44,12 @@ export default function ClientApprovalPage() {
     try {
       setLoading(true);
 
-      // Busca estrita pela coluna approval_token
       let { data, error } = await supabasePublic
         .from('posts')
         .select('*')
         .eq('approval_token', token)
         .maybeSingle();
 
-      // Fallback: se não encontrar por token e o token for apenas um ID numérico puro
       if (!data && !error && /^\d+$/.test(token)) {
         const fallback = await supabasePublic
           .from('posts')
@@ -196,6 +194,7 @@ export default function ClientApprovalPage() {
           </span>
         </header>
 
+        {/* Mídia: Vídeo com Player HTML5 ou Imagem */}
         <div className="flex min-h-[280px] w-full items-center justify-center overflow-hidden bg-ink">
           {post.media_url ? (
             post.media_type === 'video' ? (
@@ -219,6 +218,15 @@ export default function ClientApprovalPage() {
         </div>
 
         <div className="space-y-5 p-4 sm:p-6">
+          
+          {/* Aviso Importante de Prazo */}
+          <div className="flex items-center gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3 text-amber-900">
+            <Clock size={16} className="shrink-0 text-amber-600" />
+            <p className="text-xs font-medium leading-tight">
+              <strong>Atenção:</strong> O prazo limite para validação e aprovação deste material é de <strong>7 dias</strong>.
+            </p>
+          </div>
+
           <section>
             <h2 className="text-xs font-semibold text-ink">Observações da produtora</h2>
             <div className="mt-2 rounded-control border border-border bg-canvas p-4 text-sm leading-relaxed text-ink">
