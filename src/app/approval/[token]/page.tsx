@@ -6,7 +6,6 @@ import { createClient } from '@supabase/supabase-js';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Home, LoaderCircle } from 'lucide-react';
 
-// Instância anônima garantida para acesso público
 const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -25,7 +24,11 @@ interface Post {
 export default function ClientApprovalPage() {
   const params = useParams();
   const rawToken = params?.token as string;
-  const token = rawToken ? decodeURIComponent(rawToken) : '';
+  
+  // Limpeza do token: remove parênteses, %29 ou espaços acidentais da URL
+  const token = rawToken 
+    ? decodeURIComponent(rawToken).replace(/[()]/g, '').trim() 
+    : '';
 
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,15 +44,27 @@ export default function ClientApprovalPage() {
     try {
       setLoading(true);
 
-      // Busca por approval_token ou id usando o cliente público
-      const { data, error } = await supabasePublic
+      // Busca estrita pela coluna approval_token
+      let { data, error } = await supabasePublic
         .from('posts')
         .select('*')
-        .or(`approval_token.eq.${token},id.eq.${token}`)
+        .eq('approval_token', token)
         .maybeSingle();
 
+      // Fallback: se não encontrar por token e o token for apenas um ID numérico puro
+      if (!data && !error && /^\d+$/.test(token)) {
+        const fallback = await supabasePublic
+          .from('posts')
+          .select('*')
+          .eq('id', token)
+          .maybeSingle();
+
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (error) {
-        console.error('Erro na consulta do Supabase:', error);
+        console.error('Erro na consulta do Supabase:', JSON.stringify(error, null, 2), error);
         throw error;
       }
 
@@ -114,7 +129,7 @@ export default function ClientApprovalPage() {
       setPost({ ...post, approval_status: status, client_feedback: feedback });
       setActionDone(true);
     } catch (err: any) {
-      alert(`Erro ao enviar resposta: ${err.message}`);
+      alert(`Erro ao enviar resposta: ${err.message || 'Erro de conexão'}`);
     }
   };
 
@@ -181,7 +196,6 @@ export default function ClientApprovalPage() {
           </span>
         </header>
 
-        {/* Mídia: Vídeo com Player HTML5 ou Imagem */}
         <div className="flex min-h-[280px] w-full items-center justify-center overflow-hidden bg-ink">
           {post.media_url ? (
             post.media_type === 'video' ? (
