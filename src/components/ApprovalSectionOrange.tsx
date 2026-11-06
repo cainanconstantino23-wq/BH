@@ -214,7 +214,7 @@ export default function ApprovalSectionOrange() {
 
       const { uploadUrl, publicUrl } = await res.json();
 
-      // 2. Transfere a mídia diretamente do navegador para o Cloudflare R2 (sem passar pelo Supabase)
+      // 2. Transfere a mídia diretamente do navegador para o Cloudflare R2
       setFeedbackMessage('A enviar mídia para o Cloudflare R2 (sem limite de 50MB)...');
       const uploadRes = await fetch(uploadUrl, {
         method: 'PUT',
@@ -237,7 +237,7 @@ export default function ApprovalSectionOrange() {
           house_name: houseName,
           content: caption,
           caption: caption,
-          image_url: publicUrl, // Link gerado no R2
+          image_url: publicUrl, // Link gerado no Cloudflare R2
           media_type: isVideoFile ? 'video' : 'image',
           approval_status: 'pending',
           approval_token: token,

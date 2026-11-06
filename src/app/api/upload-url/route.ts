@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       ContentType: fileType,
     });
 
+    // Gera a URL pré-assinada com validade de 15 minutos
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 
