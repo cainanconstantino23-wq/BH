@@ -11,6 +11,12 @@ const s3Client = new S3Client({
   },
 });
 
+// Responde se aceder via navegador (GET)
+export async function GET() {
+  return NextResponse.json({ message: 'Rota de upload R2 ativa e pronta para chamadas POST.' });
+}
+
+// Processa a geração da URL de upload (POST)
 export async function POST(request: Request) {
   try {
     const { fileName, fileType } = await request.json();
@@ -25,7 +31,6 @@ export async function POST(request: Request) {
       ContentType: fileType,
     });
 
-    // Gera a URL pré-assinada com validade de 15 minutos
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 
