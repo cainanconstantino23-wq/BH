@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
-import * as tus from 'tus-js-client';
 import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
 
 interface ApprovalPost {
@@ -131,7 +130,7 @@ export default function ApprovalSectionOrange() {
       })
       .subscribe();
 
-    // 2. Escuta alterações na tabela no Supabase para atualizar o número de acessos sem dar F5
+    // 2. Escuta alterações no Supabase para atualizar a contagem de acessos sem dar F5
     const dbChannel = supabase
       .channel('db_post_changes')
       .on(
@@ -200,78 +199,45 @@ export default function ApprovalSectionOrange() {
 
     try {
       setSubmitting(true);
-      setFeedbackMessage('A preparar envio da mídia...');
+      setFeedbackMessage('A obter autorização para upload no Cloudflare R2...');
 
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'mp4';
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `uploads/${fileName}`;
-      const isVideoFile = file.type.startsWith('video/') || Boolean(file.name.match(/\.(mp4|mov|webm)$/i));
+      // 1. Pede a URL pré-assinada para a API Route (/api/upload-url)
+      const res = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+      });
 
-      if (file.size > 6 * 1024 * 1024) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-        if (!supabaseUrl) {
-          throw new Error('A variável NEXT_PUBLIC_SUPABASE_URL não está configurada.');
-        }
-
-        await new Promise((resolve, reject) => {
-          const upload = new tus.Upload(file, {
-            endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
-            retryDelays: [0, 3000, 5000, 10000],
-            headers: {
-              authorization: `Bearer ${token}`,
-              'x-upsert': 'true',
-            },
-            uploadDataDuringCreation: false,
-            removeFingerprintOnSuccess: true,
-            metadata: {
-              bucketName: 'posts',
-              objectName: filePath,
-              contentType: file.type || (isVideoFile ? 'video/mp4' : 'image/jpeg'),
-              cacheControl: '3600',
-            },
-            chunkSize: 2 * 1024 * 1024,
-            onError: (error) => {
-              console.error('Erro no upload TUS:', error);
-              reject(error);
-            },
-            onProgress: (bytesUploaded, bytesTotal) => {
-              const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(0);
-              setFeedbackMessage(`A enviar mídia (${percentage}%)...`);
-            },
-            onSuccess: () => {
-              resolve(true);
-            },
-          });
-
-          upload.start();
-        });
-      } else {
-        setFeedbackMessage('A enviar mídia...');
-        const { error: uploadError } = await supabase.storage
-          .from('posts')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false,
-            contentType: file.type || (isVideoFile ? 'video/mp4' : 'image/jpeg'),
-          });
-
-        if (uploadError) throw uploadError;
+      if (!res.ok) {
+        throw new Error('Falha ao obter URL assinada para o Cloudflare R2.');
       }
 
-      const { data: urlData } = supabase.storage.from('posts').getPublicUrl(filePath);
-      const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const { uploadUrl, publicUrl } = await res.json();
 
-      setFeedbackMessage('A registar publicação...');
+      // 2. Transfere a mídia diretamente do navegador para o Cloudflare R2 (sem passar pelo Supabase)
+      setFeedbackMessage('A enviar mídia para o Cloudflare R2 (sem limite de 50MB)...');
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error('Falha ao transferir o ficheiro para o Cloudflare R2.');
+      }
+
+      // 3. Salva os metadados do post no Supabase utilizando a URL pública do R2
+      setFeedbackMessage('A registar publicação no banco de dados...');
+      const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const isVideoFile = file.type.startsWith('video/') || Boolean(file.name.match(/\.(mp4|mov|webm)$/i));
+
       const { error: dbError } = await supabase.from('posts').insert([
         {
           title: houseName,
           house_name: houseName,
           content: caption,
           caption: caption,
-          image_url: urlData.publicUrl,
+          image_url: publicUrl, // Link gerado no R2
           media_type: isVideoFile ? 'video' : 'image',
           approval_status: 'pending',
           approval_token: token,
@@ -293,7 +259,7 @@ export default function ApprovalSectionOrange() {
       setFeedbackMessage('');
       
       await refreshPosts();
-      setFeedbackMessage('Conteúdo enviado e adicionado à fila de aprovação.');
+      setFeedbackMessage('Conteúdo enviado com sucesso para o Cloudflare R2 e adicionado à fila!');
     } catch (error) {
       console.error('Erro ao enviar conteúdo para aprovação:', error);
       setFeedbackMessage(`Não foi possível enviar o conteúdo: ${getErrorMessage(error)}`);
