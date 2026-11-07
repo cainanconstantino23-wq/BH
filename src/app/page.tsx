@@ -652,15 +652,11 @@ export default function Home() {
                          <h3 className="text-sm font-semibold text-ink">
                            Instagram conectado{instagramStatus.username ? `: @${instagramStatus.username}` : ''}
                          </h3>
-                         <p className="text-xs text-ink-muted">As métricas do perfil e dos posts entram aqui na próxima etapa.</p>
+                         <p className="text-xs text-ink-muted">
+                           Conexão ativa, sem prazo de validade. As métricas do perfil e dos posts entram aqui na próxima etapa.
+                         </p>
                        </div>
                      </div>
-                     <a
-                       href="/api/auth/instagram/login"
-                       className="inline-flex min-h-10 items-center justify-center rounded-control border border-border px-4 text-xs font-semibold text-ink transition-colors duration-150 ease-out hover:bg-surface-muted"
-                     >
-                       Reconectar
-                     </a>
                    </section>
                  ) : (
                    <section aria-label="Conectar Instagram" className="flex flex-col items-start justify-between gap-4 rounded-control border border-dashed border-border bg-surface p-5 sm:flex-row sm:items-center">
