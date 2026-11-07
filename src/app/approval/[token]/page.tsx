@@ -1,328 +1,129 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Home, LoaderCircle, Clock } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
+import {
+  ClientApprovalView,
+  type ApprovalDecision,
+  type ClientApprovalPost,
+} from '@/components/approval/ClientApprovalView';
 
+// Usado só para a presença em tempo real (canal Realtime); os dados do post
+// vêm de /api/approval/[token], que roda no servidor.
 const supabasePublic = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-interface Post {
-  id: string;
-  house_name: string;
-  caption: string;
-  media_url: string;
-  media_type: 'image' | 'video';
-  approval_status: 'pending' | 'approved' | 'changes_requested' | 'rejected';
-  client_feedback?: string;
-  views_count?: number;
-}
+type LoadState = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; post: ClientApprovalPost };
+
+const responseErrors: Record<string, string> = {
+  already_answered: 'Este conteúdo já foi respondido.',
+  feedback_required: 'Descreva o que precisa mudar.',
+  feedback_too_long: 'O comentário passou de 2.000 caracteres.',
+  not_found: 'Este link não está mais disponível.',
+};
 
 export default function ClientApprovalPage() {
   const params = useParams();
-  const rawToken = params?.token as string;
-  
+  const rawToken = typeof params?.token === 'string' ? params.token : '';
   // Limpeza automática do token: remove parênteses, %29 ou espaços acidentais da URL
-  const token = rawToken 
-    ? decodeURIComponent(rawToken).replace(/[()]/g, '').trim() 
-    : '';
+  const token = rawToken ? decodeURIComponent(rawToken).replace(/[()]/g, '').trim() : '';
 
-  const [post, setPost] = useState<Post | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState('');
-  const [actionDone, setActionDone] = useState(false);
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
 
-  const fetchPostByToken = useCallback(async () => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+  useEffect(() => {
+    const controller = new AbortController();
 
-    try {
-      setLoading(true);
+    fetch(`/api/approval/${encodeURIComponent(token)}`, { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return setState({ status: 'missing' });
+        const { post } = (await response.json()) as { post: ClientApprovalPost };
+        setState({ status: 'ready', post });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error('Falha ao carregar conteúdo para aprovação:', error);
+        setState({ status: 'missing' });
+      });
 
-      let { data, error } = await supabasePublic
-        .from('posts')
-        .select('*')
-        .eq('approval_token', token)
-        .maybeSingle();
-
-      if (!data && !error && /^\d+$/.test(token)) {
-        const fallback = await supabasePublic
-          .from('posts')
-          .select('*')
-          .eq('id', token)
-          .maybeSingle();
-
-        data = fallback.data;
-        error = fallback.error;
-      }
-
-      if (error) {
-        console.error('Erro na consulta do Supabase:', JSON.stringify(error, null, 2), error);
-        throw error;
-      }
-
-      if (data) {
-        // Incrementa e salva a contagem de visualizações de forma aguardada (await)
-        const newViewsCount = (typeof data.views_count === 'number' ? data.views_count : 0) + 1;
-        
-        const { error: updateError } = await supabasePublic
-          .from('posts')
-          .update({ views_count: newViewsCount })
-          .eq('id', data.id);
-
-        if (updateError) {
-          console.warn('Não foi possível incrementar o contador de acessos (RLS):', updateError);
-        }
-
-        const rawMediaUrl = 
-          data.media_url || 
-          data.video_url || 
-          data.image_url || 
-          data.url || 
-          data.file_url || 
-          '';
-
-        const rawType = (data.media_type || data.type || '').toString().toLowerCase();
-        const isVideoUrl = rawMediaUrl.match(/\.(mp4|mov|webm|m3u8)($|\?)/i);
-        
-        const isVideo = 
-          rawType === 'video' || 
-          rawType === 'reel' || 
-          rawType === 'video_url' || 
-          Boolean(isVideoUrl);
-
-        const formattedPost: Post = {
-          ...data,
-          views_count: newViewsCount,
-          media_url: rawMediaUrl,
-          media_type: isVideo ? 'video' : 'image',
-          caption: data.caption || data.content || data.notes || '',
-          house_name: data.house_name || data.title || 'Casa'
-        };
-
-        setPost(formattedPost);
-        if (formattedPost.client_feedback) setFeedback(formattedPost.client_feedback);
-        if (formattedPost.approval_status && formattedPost.approval_status !== 'pending') {
-          setActionDone(true);
-        }
-      } else {
-        setPost(null);
-      }
-    } catch (err) {
-      console.error('Falha ao carregar conteúdo para aprovação:', err);
-      setPost(null);
-    } finally {
-      setLoading(false);
-    }
+    return () => controller.abort();
   }, [token]);
 
-  useEffect(() => {
-    void fetchPostByToken();
-  }, [fetchPostByToken]);
+  const isReady = state.status === 'ready';
 
-  // Regista presença em tempo real quando o cliente entra na página
+  // Registra presença em tempo real quando o cliente está com a página aberta
   useEffect(() => {
-    if (!token || !post) return;
+    if (!token || !isReady) return;
 
     const channel = supabasePublic.channel(`approval_${token}`);
-
     channel.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
-        await channel.track({
-          online_at: new Date().toISOString(),
-        });
+        await channel.track({ online_at: new Date().toISOString() });
       }
     });
 
     return () => {
       void supabasePublic.removeChannel(channel);
     };
-  }, [token, post]);
+  }, [token, isReady]);
 
-  const handleResponse = async (status: 'approved' | 'changes_requested' | 'rejected') => {
-    if (!post) return;
-    try {
-      const { error } = await supabasePublic
-        .from('posts')
-        .update({
-          approval_status: status,
-          client_feedback: feedback,
-        })
-        .eq('id', post.id);
+  const handleRespond = async (decision: ApprovalDecision, feedback: string) => {
+    const response = await fetch(`/api/approval/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, feedback }),
+    });
+    const result = (await response.json().catch(() => ({}))) as { post?: ClientApprovalPost; error?: string };
 
-      if (error) throw error;
-      setPost({ ...post, approval_status: status, client_feedback: feedback });
-      setActionDone(true);
-    } catch (err: any) {
-      alert(`Erro ao enviar resposta: ${err.message || 'Erro de conexão'}`);
+    if (result.post && (response.ok || result.error === 'already_answered')) {
+      setState({ status: 'ready', post: result.post });
+      if (response.ok) return;
     }
+    throw new Error(responseErrors[result.error ?? ''] ?? `erro ${response.status}`);
   };
 
-  if (loading) {
+  if (state.status === 'loading') {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-8 font-sans text-ink">
-        <div role="status" aria-live="polite" className="w-full max-w-sm rounded-panel border border-border bg-surface p-8 text-center shadow-sm">
-          <Image
-            src="/bahia-homes-logo.png"
-            alt="Bahia Homes"
-            width={1834}
-            height={276}
-            className="mx-auto mb-8 h-auto w-36"
-          />
-          <LoaderCircle aria-hidden="true" size={24} className="mx-auto mb-3 animate-spin text-brand-plum motion-reduce:animate-none" />
-          <p className="text-sm font-medium text-ink">A carregar conteúdo para aprovação…</p>
-        </div>
-      </main>
+      <StatusScreen>
+        <LoaderCircle aria-hidden="true" size={22} className="mx-auto animate-spin text-bh-mata motion-reduce:animate-none" />
+        <p role="status" className="mt-3 text-base text-bh-tinta">
+          Carregando conteúdo…
+        </p>
+      </StatusScreen>
     );
   }
 
-  if (!post) {
+  if (state.status === 'missing') {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-8 font-sans text-ink">
-        <div role="alert" className="w-full max-w-sm rounded-panel border border-border bg-surface p-6 text-center shadow-sm sm:p-8">
-          <Image
-            src="/bahia-homes-logo.png"
-            alt="Bahia Homes"
-            width={1834}
-            height={276}
-            className="mx-auto mb-8 h-auto w-36"
-          />
-          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-warning-soft text-status-warning">
-            <AlertTriangle aria-hidden="true" size={22} />
-          </span>
-          <h1 className="mt-4 text-lg font-semibold tracking-tight text-ink">Link indisponível</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-            Conteúdo não encontrado ou link inválido.
-          </p>
-        </div>
-      </main>
+      <StatusScreen>
+        <h1 className="text-[1.75rem] font-light leading-tight text-bh-tinta">Este link não está disponível</h1>
+        <p className="mt-3 text-base leading-relaxed text-bh-tinta-suave">
+          Ele pode ter sido copiado pela metade ou o conteúdo foi removido. Peça um novo link à equipe Bahia Homes.
+        </p>
+      </StatusScreen>
     );
   }
 
+  return <ClientApprovalView post={state.post} onRespond={handleRespond} />;
+}
+
+function StatusScreen({ children }: { children: React.ReactNode }) {
   return (
-    <main className="press-feedback flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-[calc(1.5rem+env(safe-area-inset-bottom))] font-sans text-ink sm:py-10">
-      <div className="w-full max-w-xl overflow-hidden rounded-panel border border-border bg-surface shadow-sm">
-        <header className="flex flex-col gap-3 bg-brand-plum px-4 py-4 text-white sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="rounded-control bg-white px-2.5 py-2">
-              <Image
-                src="/bahia-homes-logo.png"
-                alt="Bahia Homes"
-                width={1834}
-                height={276}
-                className="h-auto w-28"
-              />
-            </span>
-            <span className="text-xs font-semibold tracking-wide">Aprovação de conteúdo</span>
-          </div>
-          <span className="flex min-h-9 items-center gap-1.5 self-start rounded-full bg-white/10 px-3 text-xs font-medium text-white sm:self-auto">
-            <Home aria-hidden="true" size={13} />
-            {post.house_name}
-          </span>
-        </header>
-
-        {/* Mídia: Vídeo com Player HTML5 ou Imagem */}
-        <div className="flex min-h-[280px] w-full items-center justify-center overflow-hidden bg-ink">
-          {post.media_url ? (
-            post.media_type === 'video' ? (
-              <video
-                src={post.media_url}
-                controls
-                playsInline
-                preload="metadata"
-                className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
-              />
-            ) : (
-              <img
-                src={post.media_url}
-                alt="Mídia da publicação"
-                className="block h-auto max-h-[55dvh] w-full object-contain sm:max-h-[550px]"
-              />
-            )
-          ) : (
-            <p className="p-6 text-sm text-white/60">Nenhum ficheiro de mídia disponível.</p>
-          )}
-        </div>
-
-        <div className="space-y-5 p-4 sm:p-6">
-          
-          {/* Aviso Importante de Prazo de 7 Dias */}
-          <div className="flex items-center gap-2.5 rounded-control border border-amber-200 bg-amber-50 p-3 text-amber-900">
-            <Clock size={16} className="shrink-0 text-amber-600" />
-            <p className="text-xs font-medium leading-tight">
-              <strong>Atenção:</strong> O prazo limite para validação e aprovação deste material é de <strong>7 dias</strong>.
-            </p>
-          </div>
-
-          <section>
-            <h2 className="text-xs font-semibold text-ink">Observações da produtora</h2>
-            <div className="mt-2 rounded-control border border-border bg-canvas p-4 text-sm leading-relaxed text-ink">
-              {post.caption || 'Nenhum comentário adicionado.'}
-            </div>
-          </section>
-
-          {actionDone ? (
-            <div className={`rounded-control border p-4 text-center ${
-              post.approval_status === 'approved' ? 'border-status-success-border bg-status-success-soft text-status-success' :
-              post.approval_status === 'changes_requested' ? 'border-status-warning-border bg-status-warning-soft text-status-warning' :
-              'border-status-danger-border bg-status-danger-soft text-status-danger'
-            }`}>
-              <p className="flex items-center justify-center gap-1.5 text-sm font-semibold">
-                {post.approval_status === 'approved' && <CheckCircle2 size={17} />}
-                {post.approval_status === 'changes_requested' && <AlertTriangle size={17} />}
-                {post.approval_status === 'approved' ? 'Conteúdo aprovado com sucesso' :
-                 post.approval_status === 'changes_requested' ? 'Pedido de ajustes enviado' : 'Conteúdo reprovado'}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed opacity-80">A equipa da produtora foi notificada.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <label htmlFor="client-feedback" className="block text-xs font-semibold text-ink">
-                  Comentário ou pedido de ajuste <span className="font-normal text-ink-muted">(opcional)</span>
-                </label>
-                <textarea
-                  id="client-feedback"
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  placeholder="Ex.: ajustar a cor do vídeo ou trocar o take inicial…"
-                  rows={3}
-                  className="mt-2 w-full resize-y rounded-control border border-border bg-surface p-3 text-base text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleResponse('rejected')}
-                  className="min-h-12 rounded-control border border-status-danger-border bg-status-danger-soft px-2 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-status-danger"
-                >
-                  Reprovar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResponse('changes_requested')}
-                  className="min-h-12 rounded-control border border-status-warning-border bg-status-warning-soft px-2 text-xs font-semibold text-status-warning transition-colors hover:bg-status-warning-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-status-warning"
-                >
-                  Pedir ajustes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResponse('approved')}
-                  className="min-h-12 rounded-control bg-brand-plum px-2 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
-                >
-                  Aprovar
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+    <main className="flex min-h-dvh items-center justify-center bg-bh-cal px-5 py-10 font-display text-bh-tinta antialiased">
+      <div className="w-full max-w-sm text-center">
+        <Image
+          src="/bahia-homes-logo.png"
+          alt="Bahia Homes"
+          width={1834}
+          height={276}
+          priority
+          className="mx-auto mb-10 h-auto w-36 mix-blend-multiply"
+        />
+        {children}
       </div>
     </main>
   );
