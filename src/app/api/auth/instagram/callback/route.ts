@@ -65,8 +65,10 @@ export async function GET(request: NextRequest) {
           user_id: user.id,
           access_token: connection.accessToken,
           token_expires_at: connection.tokenExpiresAt,
-          instagram_account_id: connection.instagramAccountId,
-          instagram_username: connection.instagramUsername,
+          // Sem business_management o Meta não informa a conta: mantém a que já estava salva.
+          ...(connection.instagramAccountId
+            ? { instagram_account_id: connection.instagramAccountId, instagram_username: connection.instagramUsername }
+            : {}),
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id' },
@@ -77,8 +79,15 @@ export async function GET(request: NextRequest) {
       return finish('error', 'save_failed');
     }
 
-    // Token salvo, mas a conta ainda não foi identificada: o diagnóstico fica no log.
-    if (!connection.instagramAccountId) return finish('error', 'no_instagram_account');
+    // Token salvo, mas a conta não foi identificada agora: vale a que já estava salva, se houver.
+    if (!connection.instagramAccountId) {
+      const { data: saved } = await createAdminClient()
+        .from('user_meta_config')
+        .select('instagram_account_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!saved?.instagram_account_id) return finish('error', 'no_instagram_account');
+    }
 
     return finish('connected');
   } catch (error) {
