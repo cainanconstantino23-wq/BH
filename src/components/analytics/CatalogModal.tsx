@@ -55,6 +55,8 @@ interface Props {
 }
 
 const DRAG_THRESHOLD_PX = 6;
+const LONG_PRESS_MS = 350; // no celular: tocar e segurar para pegar o post
+const TOUCH_SLOP_PX = 10; // se o dedo andar antes disso, é rolagem
 
 const formatDay = (date: string) => {
   const [year, month, day] = date.split('-').map(Number);
@@ -107,12 +109,13 @@ function InstagramFeedPreview() {
   const [isLive, setIsLive] = useState(false);
   const [selectedId, setSelectedId] = useState<ScheduledTile['id'] | null>(null);
   const [notice, setNotice] = useState<{ text: string; undo?: [ScheduledTile['id'], ScheduledTile['id']] } | null>(null);
-  const [drag, setDrag] = useState<{ id: ScheduledTile['id']; x: number; y: number; overId: ScheduledTile['id'] | null } | null>(null);
+  const [drag, setDrag] = useState<{ id: ScheduledTile['id']; x: number; y: number; overId: ScheduledTile['id'] | null; touch: boolean } | null>(null);
 
   const dialogRef = useRef<HTMLDialogElement>(null);
   const scrollRef = useRef<HTMLElement>(null);
   const busyRef = useRef(false);
-  const pressRef = useRef<{ id: ScheduledTile['id']; x: number; y: number } | null>(null);
+  const pressRef = useRef<{ id: ScheduledTile['id']; x: number; y: number; touch: boolean; armed: boolean; timer?: number } | null>(null);
+  const dragActiveRef = useRef(false);
   const suppressClickRef = useRef(false);
   const postsRef = useRef<ScheduledTile[]>([]);
   useEffect(() => {
@@ -283,37 +286,80 @@ function InstagramFeedPreview() {
     }
   }, []);
 
-  /* ---------------- arrastar com o mouse ---------------- */
+  /* ---------------- arrastar (mouse: arrastar; celular: tocar e segurar) ---------------- */
 
   const onTilePointerDown = (event: ReactPointerEvent, id: ScheduledTile['id']) => {
-    if (!canReorder || event.button !== 0 || event.pointerType === 'touch') return;
-    pressRef.current = { id, x: event.clientX, y: event.clientY };
+    if (!canReorder || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const touch = event.pointerType === 'touch';
+    const press: NonNullable<typeof pressRef.current> = { id, x: event.clientX, y: event.clientY, touch, armed: !touch };
+    if (touch) {
+      press.timer = window.setTimeout(() => {
+        if (pressRef.current !== press) return;
+        press.armed = true;
+        navigator.vibrate?.(12);
+        setDrag({ id, x: press.x, y: press.y, overId: null, touch: true });
+      }, LONG_PRESS_MS);
+    }
+    pressRef.current = press;
   };
 
   useEffect(() => {
+    dragActiveRef.current = drag !== null;
+  }, [drag]);
+
+  // Durante o arraste com o dedo, impede que a página role.
+  useEffect(() => {
+    const blockScroll = (event: TouchEvent) => {
+      if (dragActiveRef.current || pressRef.current?.armed) event.preventDefault();
+    };
+    window.addEventListener('touchmove', blockScroll, { passive: false });
+    return () => window.removeEventListener('touchmove', blockScroll);
+  }, []);
+
+  useEffect(() => {
+    const cancel = () => {
+      const press = pressRef.current;
+      if (press?.timer) window.clearTimeout(press.timer);
+      pressRef.current = null;
+      if (drag) {
+        suppressClickRef.current = true;
+        setDrag(null);
+      }
+    };
+
     const onMove = (event: PointerEvent) => {
       const press = pressRef.current;
       if (!press) return;
       const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y);
-      if (!drag && moved < DRAG_THRESHOLD_PX) return;
+
+      if (press.touch && !press.armed) {
+        // O dedo andou antes de segurar: é rolagem, não arraste.
+        if (moved > TOUCH_SLOP_PX) {
+          window.clearTimeout(press.timer);
+          pressRef.current = null;
+        }
+        return;
+      }
+      if (!press.touch && !drag && moved < DRAG_THRESHOLD_PX) return;
 
       const target = (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)?.closest<HTMLElement>(
         '[data-feed-slot]',
       );
       const overRaw = target?.dataset.feedSlot ?? null;
       const over = overRaw === null ? null : (postsRef.current.find((post) => String(post.id) === overRaw)?.id ?? null);
-      setDrag({ id: press.id, x: event.clientX, y: event.clientY, overId: over === press.id ? null : over });
+      setDrag({ id: press.id, x: event.clientX, y: event.clientY, overId: over === press.id ? null : over, touch: press.touch });
 
-      // Rola a área quando o cursor chega perto das bordas.
+      // Rola a área quando o cursor ou o dedo chega perto das bordas.
       const area = scrollRef.current?.getBoundingClientRect();
       if (area) {
-        if (event.clientY < area.top + 56) scrollRef.current?.scrollBy({ top: -14 });
-        else if (event.clientY > area.bottom - 56) scrollRef.current?.scrollBy({ top: 14 });
+        if (event.clientY < area.top + 64) scrollRef.current?.scrollBy({ top: -14 });
+        else if (event.clientY > area.bottom - 64) scrollRef.current?.scrollBy({ top: 14 });
       }
     };
 
     const onUp = () => {
       const press = pressRef.current;
+      if (press?.timer) window.clearTimeout(press.timer);
       pressRef.current = null;
       if (!press || !drag) return;
       suppressClickRef.current = true;
@@ -322,25 +368,23 @@ function InstagramFeedPreview() {
     };
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && drag) {
-        pressRef.current = null;
-        suppressClickRef.current = true;
-        setDrag(null);
-      }
+      if (event.key === 'Escape' && drag) cancel();
     };
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', cancel);
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', cancel);
       window.removeEventListener('keydown', onKey);
     };
   }, [drag, swap]);
 
   useEffect(() => {
-    document.body.style.cursor = drag ? 'grabbing' : '';
+    document.body.style.cursor = drag && !drag.touch ? 'grabbing' : '';
     document.body.style.userSelect = drag ? 'none' : '';
   }, [drag]);
 
@@ -371,7 +415,7 @@ function InstagramFeedPreview() {
             </h3>
             <p className="mt-1 max-w-prose text-xs leading-relaxed text-ink-muted">
               {canReorder
-                ? 'Arraste uma publicação agendada sobre outra para trocar a data e o horário das duas. A mais recente aparece primeiro, como no perfil.'
+                ? 'Arraste uma publicação agendada sobre outra para trocar a data e o horário das duas (no celular, toque e segure antes de arrastar). A mais recente aparece primeiro, como no perfil.'
                 : 'Para reorganizar, volte ao filtro Todas.'}
             </p>
           </div>
@@ -484,6 +528,7 @@ function InstagramFeedPreview() {
                     aria-haspopup="dialog"
                     aria-label={`${post.title}, ${formatDay(post.scheduledDate)} às ${post.timeString}, ${approval.label}. Abrir prévia.`}
                     onPointerDown={(event) => onTilePointerDown(event, post.id)}
+                    onContextMenu={(event) => canReorder && event.preventDefault()}
                     onClick={() => {
                       if (suppressClickRef.current) {
                         suppressClickRef.current = false;
@@ -491,7 +536,7 @@ function InstagramFeedPreview() {
                       }
                       setSelectedId(post.id);
                     }}
-                    className={`group relative block aspect-[3/4] w-full overflow-hidden bg-surface-muted text-left transition-[opacity,filter] duration-150 ease-out focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                    className={`group relative block aspect-[3/4] w-full select-none overflow-hidden bg-surface-muted text-left transition-[opacity,filter] duration-150 ease-out [-webkit-touch-callout:none] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
                       canReorder ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${isDragged ? 'opacity-35' : ''}`}
                   >
@@ -562,7 +607,7 @@ function InstagramFeedPreview() {
         <div
           aria-hidden="true"
           className="pointer-events-none fixed z-[70] w-28 overflow-hidden rounded-md shadow-[0_12px_32px_-8px_rgb(35_27_45/0.45)]"
-          style={{ left: drag.x, top: drag.y, transform: 'translate(-50%, -60%) rotate(-2deg)' }}
+          style={{ left: drag.x, top: drag.y, transform: drag.touch ? 'translate(-50%, -115%) rotate(-2deg)' : 'translate(-50%, -60%) rotate(-2deg)' }}
         >
           <MediaPreview src={draggedPost.imageUrl} mediaType={draggedPost.mediaType} alt="" className="aspect-[3/4] w-full object-cover" />
         </div>,
