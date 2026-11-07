@@ -85,8 +85,10 @@ export interface InstagramConnection {
   accessToken: string;
   tokenExpiresAt: string | null;
   scopes: string[];
-  instagramAccountId: string;
+  /** null quando o login funcionou mas a conta ainda não foi identificada. */
+  instagramAccountId: string | null;
   instagramUsername: string;
+  businessId: string | null;
 }
 
 /**
@@ -164,12 +166,44 @@ export async function connectInstagram(code: string, redirectUri: string, app: M
     }
   }
 
+  // 4) Token de usuário do sistema: a conta vem da empresa (client_business_id).
+  let businessId: string | null = null;
+  try {
+    const me = await graphGet<{ id?: string; client_business_id?: string }>('/me', {
+      fields: 'id,client_business_id',
+      access_token: accessToken,
+    });
+    businessId = me.client_business_id ?? null;
+    attempts.client_business_id = businessId ? 'ok' : 'ausente';
+  } catch (error) {
+    attempts.client_business_id = error instanceof Error ? error.message : 'falhou';
+  }
+  if (!found && businessId) {
+    for (const edge of ['owned_instagram_accounts', 'instagram_business_accounts', 'instagram_accounts']) {
+      try {
+        const list = await graphGet<{ data?: { id?: string; username?: string }[] }>(`/${businessId}/${edge}`, {
+          fields: 'id,username',
+          access_token: accessToken,
+        });
+        const account = list.data?.find((item) => item.id);
+        attempts[edge] = `${list.data?.length ?? 0} contas`;
+        if (account?.id) {
+          found = { id: account.id, username: account.username, host: 'facebook' };
+          break;
+        }
+      } catch (error) {
+        attempts[edge] = error instanceof Error ? error.message : 'falhou';
+      }
+    }
+  }
+
   // Diagnóstico sem o token: tipo, permissões e o que cada tentativa encontrou.
   console.info(
     'Diagnóstico do login do Instagram:',
     JSON.stringify({
       type: debug.type,
       user_id: debug.user_id,
+      business_id: businessId,
       profile_id: debug.profile_id,
       expires_at: debug.expires_at,
       scopes,
@@ -179,15 +213,12 @@ export async function connectInstagram(code: string, redirectUri: string, app: M
     }),
   );
 
-  if (!found) {
-    throw new GraphError('Nenhuma conta do Instagram foi autorizada no login.', 422);
-  }
-
   return {
     accessToken,
     tokenExpiresAt: debug.expires_at ? new Date(debug.expires_at * 1000).toISOString() : null,
     scopes,
-    instagramAccountId: found.id,
-    instagramUsername: found.username ?? '',
+    instagramAccountId: found?.id ?? null,
+    instagramUsername: found?.username ?? '',
+    businessId,
   };
 }

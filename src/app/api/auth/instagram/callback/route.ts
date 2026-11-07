@@ -77,6 +77,9 @@ export async function GET(request: NextRequest) {
       return finish('error', 'save_failed');
     }
 
+    // Token salvo, mas a conta ainda não foi identificada: o diagnóstico fica no log.
+    if (!connection.instagramAccountId) return finish('error', 'no_instagram_account');
+
     return finish('connected');
   } catch (error) {
     console.error('Falha no login do Instagram:', error instanceof Error ? error.message : error);
