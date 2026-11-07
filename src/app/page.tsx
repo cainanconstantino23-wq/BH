@@ -8,7 +8,6 @@ import { mockAnalyticsData } from '@/data/mockAnalytics';
 import type { SocialPlatform } from '@/types/analytics';
 import { ContentPerformance } from '@/components/analytics/ContentPerformance';
 import { GrowthStats } from '@/components/analytics/GrowthStats';
-import { ConnectMetaButton } from '@/components/ConnectMetaButton';
 import { supabase } from '@/lib/supabase';
 import {
   BarChart2,
@@ -81,14 +80,15 @@ interface DashboardUser {
   email: string;
 }
 
-interface MetaStats {
-  spend: string;
-  impressions: string;
-  clicks: string;
-  cpc: string;
-  ctr: string;
-  reach: string;
-}
+type InstagramStatus = { connected: false } | { connected: true; username: string };
+
+const instagramErrorMessages: Record<string, string> = {
+  requires_production: 'A conexão com o Instagram só funciona no endereço publicado (bh-analytics-murex.vercel.app), não no localhost.',
+  authorization_denied: 'A autorização foi cancelada no Facebook. Tente de novo e confirme o acesso à conta do Instagram.',
+  no_instagram_account: 'Nenhuma conta do Instagram foi selecionada no login. Tente de novo e marque a conta da Daime Filmes.',
+  invalid_state: 'O login expirou ou foi aberto em outra aba. Clique em Conectar Instagram de novo.',
+  authentication_required: 'Sua sessão expirou durante a conexão. Entre de novo e repita.',
+};
 
 type DashboardTab = 'comunidade' | 'demografia' | 'conta' | 'inbox' | 'approval' | 'planner';
 
@@ -175,9 +175,8 @@ export default function Home() {
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTab>('comunidade');
-  const [metaStats, setMetaStats] = useState<MetaStats | null>(null);
-  const [loadingMeta, setLoadingMeta] = useState(false);
-  const [metaStatsError, setMetaStatsError] = useState<string | null>(null);
+  const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
+  const [instagramNotice, setInstagramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [isSupabaseAuthenticated, setIsSupabaseAuthenticated] = useState(false);
   const [isRestoringUser, setIsRestoringUser] = useState(true);
   const mobileMenuRef = useRef<HTMLDialogElement>(null);
@@ -217,6 +216,17 @@ export default function Home() {
             }
             router.replace(`${loginUrl.pathname}${loginUrl.search}`);
           } else {
+            const instagramResult = url.searchParams.get('instagram');
+            if (instagramResult === 'connected') {
+              setInstagramNotice({ tone: 'success', text: 'Instagram conectado.' });
+            } else if (instagramResult === 'error') {
+              const reason = url.searchParams.get('reason') ?? '';
+              setInstagramNotice({
+                tone: 'error',
+                text: instagramErrorMessages[reason] ?? 'Não foi possível conectar o Instagram. Tente de novo em alguns minutos.',
+              });
+            }
+            url.searchParams.delete('instagram');
             url.searchParams.delete('meta');
             url.searchParams.delete('error');
             url.searchParams.delete('reason');
@@ -251,33 +261,18 @@ export default function Home() {
     if (!currentUser || !isSupabaseAuthenticated) return;
 
     const controller = new AbortController();
-    const loadMetaStats = async () => {
-      setLoadingMeta(true);
-      setMetaStatsError(null);
-
-      try {
-        const response = await fetch('/api/meta/stats', {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        const result: { stats?: MetaStats | null; error?: string } = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || `Meta stats request failed with status ${response.status}.`);
-        }
-
-        setMetaStats(result.stats ?? null);
-      } catch (error) {
+    fetch('/api/instagram/status', { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`status ${response.status}`);
+        const result = (await response.json()) as InstagramStatus;
+        setInstagramStatus(result.connected ? { connected: true, username: result.username } : { connected: false });
+      })
+      .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        console.error('Erro ao carregar métricas do Meta Ads:', error);
-        setMetaStatsError('Não foi possível carregar as métricas do Meta Ads. Verifique a conexão e tente novamente.');
-        setMetaStats(null);
-      } finally {
-        if (!controller.signal.aborted) setLoadingMeta(false);
-      }
-    };
+        console.error('Erro ao verificar a conexão do Instagram:', error);
+        setInstagramStatus({ connected: false });
+      });
 
-    void loadMetaStats();
     return () => controller.abort();
   }, [currentUser, isSupabaseAuthenticated]);
 
@@ -630,62 +625,60 @@ export default function Home() {
             {activeTab === 'comunidade' && (
                <div key="community" className={`space-y-4 ${sectionEntranceClass}`}>
 
-                 {/* Bloco Dinâmico do Meta Ads ou Botão de Conexão */}
-                 {loadingMeta ? (
+                 {instagramNotice && (
+                   <p
+                     role={instagramNotice.tone === 'error' ? 'alert' : 'status'}
+                     className={`rounded-control border px-4 py-3 text-xs ${
+                       instagramNotice.tone === 'error'
+                         ? 'border-status-danger-border bg-status-danger-soft text-status-danger'
+                         : 'border-status-success-border bg-status-success-soft text-status-success'
+                     }`}
+                   >
+                     {instagramNotice.text}
+                   </p>
+                 )}
+
+                 {instagramStatus === null ? (
                    <div role="status" className="rounded-control border border-border bg-surface p-5 text-sm text-ink-muted">
-                     Carregando métricas do Meta Ads…
+                     Verificando a conexão com o Instagram…
                    </div>
-                 ) : !metaStats ? (
-                   <div className="flex flex-col items-center justify-between gap-4 rounded-control border border-dashed border-border bg-surface p-5 text-center sm:flex-row sm:text-left">
-                     <div>
-                       <h3 className="text-sm font-semibold text-ink">{metaStatsError ? 'Não foi possível carregar as métricas' : 'Conectar Meta Ads'}</h3>
-                       <p className="text-xs text-ink-muted">{metaStatsError || 'Ligue a sua conta para ver estatísticas de anúncios em tempo real.'}</p>
-                     </div>
-                     <ConnectMetaButton />
-                   </div>
-                 ) : metaStats ? (
-                   <section aria-label="Métricas Meta Ads" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
-                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">Investimento Total</p>
-                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
-                           R$ {parseFloat(metaStats.spend || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                         </span>
-                         <span className="text-[10px] text-ink-muted">últimos 30d</span>
+                 ) : instagramStatus.connected ? (
+                   <section aria-label="Conexão com o Instagram" className="flex flex-col gap-3 rounded-control border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+                     <div className="flex items-center gap-3">
+                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-platform-instagram">
+                         <InstagramIcon className="h-5 w-5" />
+                       </span>
+                       <div>
+                         <h3 className="text-sm font-semibold text-ink">
+                           Instagram conectado{instagramStatus.username ? `: @${instagramStatus.username}` : ''}
+                         </h3>
+                         <p className="text-xs text-ink-muted">As métricas do perfil e dos posts entram aqui na próxima etapa.</p>
                        </div>
                      </div>
-
-                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
-                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">Impressões / Alcance</p>
-                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
-                           {parseInt(metaStats.impressions || '0').toLocaleString('pt-BR')}
-                         </span>
-                         <span className="text-[10px] text-ink-muted">Alcance: {parseInt(metaStats.reach || '0').toLocaleString('pt-BR')}</span>
-                       </div>
-                     </div>
-
-                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
-                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Cliques no Anúncio</p>
-                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
-                           {parseInt(metaStats.clicks || '0').toLocaleString('pt-BR')}
-                         </span>
-                         <span className="text-[10px] text-ink-muted">CTR: {parseFloat(metaStats.ctr || '0').toFixed(2)}%</span>
-                       </div>
-                     </div>
-
-                     <div className="min-w-0 rounded-control border border-border bg-surface px-4 py-3">
-                       <p className="line-clamp-2 min-h-7 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">CPC Médio</p>
-                       <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                         <span className="text-xl font-semibold tracking-tight tabular-nums text-ink sm:text-2xl">
-                           R$ {parseFloat(metaStats.cpc || '0').toFixed(2)}
-                         </span>
-                         <span className="text-[10px] text-ink-muted">por clique</span>
-                       </div>
-                     </div>
+                     <a
+                       href="/api/auth/instagram/login"
+                       className="inline-flex min-h-10 items-center justify-center rounded-control border border-border px-4 text-xs font-semibold text-ink transition-colors duration-150 ease-out hover:bg-surface-muted"
+                     >
+                       Reconectar
+                     </a>
                    </section>
-                 ) : null}
+                 ) : (
+                   <section aria-label="Conectar Instagram" className="flex flex-col items-start justify-between gap-4 rounded-control border border-dashed border-border bg-surface p-5 sm:flex-row sm:items-center">
+                     <div>
+                       <h3 className="text-sm font-semibold text-ink">Conectar Instagram</h3>
+                       <p className="mt-0.5 text-xs text-ink-muted">
+                         Autorize o acesso à conta para ver curtidas, compartilhamentos, alcance e o desempenho de cada post.
+                       </p>
+                     </div>
+                     <a
+                       href="/api/auth/instagram/login"
+                       className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors duration-150 ease-out hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                     >
+                       <InstagramIcon className="h-4 w-4" />
+                       Conectar Instagram
+                     </a>
+                   </section>
+                 )}
 
                  {mockAnalyticsData.period && <GrowthStats period={mockAnalyticsData.period} />}
 
