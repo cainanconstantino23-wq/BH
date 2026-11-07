@@ -92,6 +92,10 @@ const APPROVAL = {
 const approvalOf = (status: string) =>
   APPROVAL[status as keyof typeof APPROVAL] ?? { label: 'Não enviado para aprovação', icon: Clock3, tone: 'text-ink-muted' };
 
+/** Para vídeos, aponta para o quadro de 0,1 s: o navegador exibe esse quadro como capa. */
+const coverSrc = (url: string, mediaType: string) =>
+  url && isVideoMedia(url, mediaType) && !url.includes('#') ? `${url}#t=0.1` : url;
+
 const slotOf = (post: ScheduledTile): Slot => ({ scheduledDate: post.scheduledDate, hour: post.hour, timeString: post.timeString });
 
 /** Mais recente primeiro, como no perfil do Instagram. */
@@ -540,7 +544,7 @@ function InstagramFeedPreview() {
                       canReorder ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${isDragged ? 'opacity-35' : ''}`}
                   >
-                    <MediaPreview key={post.imageUrl} src={post.imageUrl} mediaType={post.mediaType} alt="" muted loop className="pointer-events-none h-full w-full object-cover" />
+                    <MediaPreview key={post.imageUrl} src={coverSrc(post.imageUrl, post.mediaType)} mediaType={post.mediaType} alt="" muted preload="metadata" className="pointer-events-none h-full w-full object-cover" />
 
                     <span className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1">
                       {isVideoMedia(post.imageUrl, post.mediaType) && (
@@ -609,7 +613,7 @@ function InstagramFeedPreview() {
           className="pointer-events-none fixed z-[70] w-28 overflow-hidden rounded-md shadow-[0_12px_32px_-8px_rgb(35_27_45/0.45)]"
           style={{ left: drag.x, top: drag.y, transform: drag.touch ? 'translate(-50%, -115%) rotate(-2deg)' : 'translate(-50%, -60%) rotate(-2deg)' }}
         >
-          <MediaPreview src={draggedPost.imageUrl} mediaType={draggedPost.mediaType} alt="" className="aspect-[3/4] w-full object-cover" />
+          <MediaPreview src={coverSrc(draggedPost.imageUrl, draggedPost.mediaType)} mediaType={draggedPost.mediaType} alt="" muted className="aspect-[3/4] w-full object-cover" />
         </div>,
         document.body,
       )}
@@ -629,15 +633,15 @@ function InstagramFeedPreview() {
       >
         {selected && (
           <div className="flex max-h-[92dvh] flex-col md:flex-row">
-            <div className="flex min-h-0 items-center justify-center bg-surface-muted md:w-1/2">
+            <div className="flex min-h-0 shrink-0 items-center justify-center bg-ink md:w-1/2">
               <MediaPreview
                 key={selected.imageUrl}
-                src={selected.imageUrl}
+                src={isVideoMedia(selected.imageUrl, selected.mediaType) ? coverSrc(selected.imageUrl, selected.mediaType) : selected.imageUrl}
                 mediaType={selected.mediaType}
                 alt={selected.title}
                 controls={isVideoMedia(selected.imageUrl, selected.mediaType)}
                 muted={isVideoMedia(selected.imageUrl, selected.mediaType)}
-                className="aspect-[4/5] max-h-[50dvh] w-full object-cover md:max-h-[80dvh]"
+                className="block h-auto max-h-[55dvh] w-auto max-w-full object-contain md:max-h-[86dvh]"
               />
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
@@ -666,7 +670,10 @@ function InstagramFeedPreview() {
               </div>
 
               {selected.caption && (
-                <p className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-ink">{selected.caption}</p>
+                <p className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-ink">
+                  {username && <span className="mr-1.5 font-semibold">{username}</span>}
+                  {selected.caption}
+                </p>
               )}
 
               <div className="mt-auto space-y-2 border-t border-border px-4 py-3">
