@@ -4,7 +4,11 @@ import 'server-only';
 // e chamadas à Graph API. Só roda no servidor.
 
 export const GRAPH_VERSION = 'v23.0';
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const GRAPH_HOSTS = {
+  facebook: `https://graph.facebook.com/${GRAPH_VERSION}`,
+  instagram: `https://graph.instagram.com/${GRAPH_VERSION}`,
+} as const;
+export type GraphHost = keyof typeof GRAPH_HOSTS;
 
 export const INSTAGRAM_CALLBACK_PATH = '/api/auth/instagram/callback';
 export const INSTAGRAM_STATE_COOKIE = 'instagram_oauth_state';
@@ -43,8 +47,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function graphGet<T = Record<string, unknown>>(
   path: string,
   params: Record<string, string>,
+  host: GraphHost = 'facebook',
 ): Promise<T> {
-  const url = new URL(`${GRAPH_BASE}${path}`);
+  const url = new URL(`${GRAPH_HOSTS[host]}${path}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
 
   const response = await fetch(url, { cache: 'no-store' });
@@ -66,6 +71,10 @@ export async function graphGet<T = Record<string, unknown>>(
 }
 
 interface DebugTokenData {
+  type?: string;
+  app_id?: string;
+  user_id?: string;
+  profile_id?: string;
   is_valid?: boolean;
   expires_at?: number;
   scopes?: string[];
@@ -102,36 +111,83 @@ export async function connectInstagram(code: string, redirectUri: string, app: M
 
   const scopes = debug.scopes ?? [];
   const granular = debug.granular_scopes ?? [];
-  const targetIds =
-    granular.find((item) => item.scope === 'instagram_basic')?.target_ids ??
-    granular.find((item) => item.scope === 'instagram_manage_insights')?.target_ids ??
-    [];
+  const attempts: Record<string, string> = {};
+  let found: { id: string; username?: string; host: GraphHost } | null = null;
 
-  let instagramAccountId: string | undefined = targetIds[0];
-
-  // Alternativa: conta do Instagram ligada a uma Página do Facebook.
-  if (!instagramAccountId) {
-    const pages = await graphGet<{ data?: { instagram_business_account?: { id?: string } }[] }>('/me/accounts', {
-      fields: 'instagram_business_account',
-      access_token: accessToken,
-    }).catch(() => ({ data: [] }));
-    instagramAccountId = pages.data?.find((page) => page.instagram_business_account?.id)?.instagram_business_account?.id;
+  // 1) IDs liberados por permissão (granular_scopes) ou o perfil do token.
+  const candidateIds = [
+    ...granular.filter((item) => item.scope.startsWith('instagram')).flatMap((item) => item.target_ids ?? []),
+    ...(debug.profile_id ? [debug.profile_id] : []),
+  ];
+  for (const id of [...new Set(candidateIds)]) {
+    try {
+      const profile = await graphGet<{ id: string; username?: string }>(`/${id}`, { fields: 'id,username', access_token: accessToken });
+      if (profile.username) {
+        found = { id: profile.id, username: profile.username, host: 'facebook' };
+        attempts[`id_${id}`] = 'ok';
+        break;
+      }
+      attempts[`id_${id}`] = 'sem username (não é conta do Instagram)';
+    } catch (error) {
+      attempts[`id_${id}`] = error instanceof Error ? error.message : 'falhou';
+    }
   }
 
-  if (!instagramAccountId) {
+  // 2) Conta do Instagram ligada a uma Página do Facebook.
+  if (!found) {
+    try {
+      const pages = await graphGet<{ data?: { instagram_business_account?: { id?: string; username?: string } }[] }>(
+        '/me/accounts',
+        { fields: 'instagram_business_account{id,username}', access_token: accessToken },
+      );
+      const account = pages.data?.find((page) => page.instagram_business_account?.id)?.instagram_business_account;
+      attempts.me_accounts = `${pages.data?.length ?? 0} páginas`;
+      if (account?.id) found = { id: account.id, username: account.username, host: 'facebook' };
+    } catch (error) {
+      attempts.me_accounts = error instanceof Error ? error.message : 'falhou';
+    }
+  }
+
+  // 3) Token emitido pelo login do Instagram (graph.instagram.com).
+  if (!found) {
+    try {
+      const me = await graphGet<{ user_id?: string; id?: string; username?: string }>(
+        '/me',
+        { fields: 'user_id,username', access_token: accessToken },
+        'instagram',
+      );
+      attempts.instagram_me = me.username ? 'ok' : 'sem username';
+      const id = me.user_id ?? me.id;
+      if (id && me.username) found = { id, username: me.username, host: 'instagram' };
+    } catch (error) {
+      attempts.instagram_me = error instanceof Error ? error.message : 'falhou';
+    }
+  }
+
+  // Diagnóstico sem o token: tipo, permissões e o que cada tentativa encontrou.
+  console.info(
+    'Diagnóstico do login do Instagram:',
+    JSON.stringify({
+      type: debug.type,
+      user_id: debug.user_id,
+      profile_id: debug.profile_id,
+      expires_at: debug.expires_at,
+      scopes,
+      granular_scopes: granular,
+      attempts,
+      found: found ? { id: found.id, username: found.username, host: found.host } : null,
+    }),
+  );
+
+  if (!found) {
     throw new GraphError('Nenhuma conta do Instagram foi autorizada no login.', 422);
   }
-
-  const profile = await graphGet<{ id: string; username?: string }>(`/${instagramAccountId}`, {
-    fields: 'id,username',
-    access_token: accessToken,
-  });
 
   return {
     accessToken,
     tokenExpiresAt: debug.expires_at ? new Date(debug.expires_at * 1000).toISOString() : null,
     scopes,
-    instagramAccountId: profile.id,
-    instagramUsername: profile.username ?? '',
+    instagramAccountId: found.id,
+    instagramUsername: found.username ?? '',
   };
 }
