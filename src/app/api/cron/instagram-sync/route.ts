@@ -5,7 +5,7 @@ import { syncInstagramAccount, type InstagramConnectionRow } from '@/lib/meta/in
 
 // Rotina diária (Vercel Cron) e execução manual protegida.
 // Exige o cabeçalho Authorization: Bearer <CRON_SECRET>.
-// ?days=30 busca 30 dias de métricas da conta (padrão: 3, suficiente para a rotina diária).
+// ?days=60 busca até 90 dias de métricas da conta (padrão: 3, suficiente para a rotina diária).
 
 export const maxDuration = 300;
 
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const daysParam = Number(request.nextUrl.searchParams.get('days') ?? 3);
-  const days = Number.isFinite(daysParam) ? Math.min(Math.max(Math.trunc(daysParam), 1), 30) : 3;
+  const days = Number.isFinite(daysParam) ? Math.min(Math.max(Math.trunc(daysParam), 1), 90) : 3;
 
   const db = createAdminClient();
   const { data: connections, error } = await db

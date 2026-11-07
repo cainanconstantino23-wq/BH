@@ -8,11 +8,11 @@ import { mockAnalyticsData } from '@/data/mockAnalytics';
 import type { SocialPlatform } from '@/types/analytics';
 import { ContentPerformance } from '@/components/analytics/ContentPerformance';
 import { GrowthStats } from '@/components/analytics/GrowthStats';
+import { InstagramDashboard } from '@/components/analytics/InstagramDashboard';
 import { supabase } from '@/lib/supabase';
 import {
   BarChart2,
   Inbox,
-  Calendar as CalendarIcon,
   FolderPlus,
   User,
   LogOut,
@@ -595,17 +595,6 @@ export default function Home() {
                           : 'Gerencie os canais conectados à sua operação.'}
                     </p>
                   </div>
-                  <div className="flex flex-col items-start sm:items-end">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-muted">Período principal</span>
-                    <div className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-surface px-3.5 text-xs font-medium text-ink">
-                      <CalendarIcon size={14} className="text-ink-muted" />
-                      <span>
-                        {new Intl.DateTimeFormat('pt-BR').format(new Date(`${mockAnalyticsData.period?.startDate}T00:00:00`))}
-                        {' – '}
-                        {new Intl.DateTimeFormat('pt-BR').format(new Date(`${mockAnalyticsData.period?.endDate}T00:00:00`))}
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="flex max-w-full gap-6 overflow-x-auto border-b border-border text-xs font-semibold tracking-wide text-ink-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -643,21 +632,7 @@ export default function Home() {
                      Verificando a conexão com o Instagram…
                    </div>
                  ) : instagramStatus.connected ? (
-                   <section aria-label="Conexão com o Instagram" className="flex flex-col gap-3 rounded-control border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
-                     <div className="flex items-center gap-3">
-                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-platform-instagram">
-                         <InstagramIcon className="h-5 w-5" />
-                       </span>
-                       <div>
-                         <h3 className="text-sm font-semibold text-ink">
-                           Instagram conectado{instagramStatus.username ? `: @${instagramStatus.username}` : ''}
-                         </h3>
-                         <p className="text-xs text-ink-muted">
-                           Conexão ativa, sem prazo de validade. As métricas do perfil e dos posts entram aqui na próxima etapa.
-                         </p>
-                       </div>
-                     </div>
-                   </section>
+                   <InstagramDashboard />
                  ) : (
                    <section aria-label="Conectar Instagram" className="flex flex-col items-start justify-between gap-4 rounded-control border border-dashed border-border bg-surface p-5 sm:flex-row sm:items-center">
                      <div>
@@ -676,12 +651,17 @@ export default function Home() {
                    </section>
                  )}
 
-                 {mockAnalyticsData.period && <GrowthStats period={mockAnalyticsData.period} />}
+                 {instagramStatus?.connected === false && (
+                   <>
+                     <p className="text-xs text-ink-muted">Exemplo ilustrativo. Conecte o Instagram para ver os números reais da conta.</p>
+                     {mockAnalyticsData.period && <GrowthStats period={mockAnalyticsData.period} />}
 
-                 <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]">
-                   <ContentPerformance />
-                   <AudienceSnapshot />
-                 </div>
+                     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]">
+                       <ContentPerformance />
+                       <AudienceSnapshot />
+                     </div>
+                   </>
+                 )}
                </div>
             )}
 
