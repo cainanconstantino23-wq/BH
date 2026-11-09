@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 
 import CreatePostModal from '@/components/CreatePostModal';
+import { useTeam } from '@/lib/team';
+import { useDismiss } from '@/lib/useDismiss';
 
 interface ScheduledPost {
   id: string;
@@ -37,8 +39,12 @@ const toLocalDateString = (date: Date) => {
 };
 
 export function PlannerScheduler() {
+  const team = useTeam();
+  const canSchedule = team.can('reagendar_publicacoes');
   const [posts, setPosts] = useState<ScheduledPost[]>([]);
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null);
+  const closeDetails = () => setSelectedPost(null);
+  const detailsDismiss = useDismiss(selectedPost !== null, closeDetails);
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [draggedPostId, setDraggedPostId] = useState<string | null>(null);
@@ -222,13 +228,13 @@ export function PlannerScheduler() {
           </button>
         </div>
         
-        <button 
+        {team.can('criar_publicacoes') && <button 
           type="button"
           onClick={() => setIsCreateOpen(true)} 
           className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
         >
           <Plus size={16} /> Criar publicação
-        </button>
+        </button>}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-border bg-surface p-3">
@@ -320,15 +326,15 @@ export function PlannerScheduler() {
                       <div 
                         key={dayIndex} 
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={() => handleDropOnSlot(dayIndex, hour, dayObj.fullDateStr)}
+                        onDrop={() => canSchedule && handleDropOnSlot(dayIndex, hour, dayObj.fullDateStr)}
                         className={`relative border-r border-border p-1 transition-colors hover:bg-canvas ${dayObj.isToday ? 'bg-surface-muted/45' : ''}`}
                       >
                         {matchedPost && (
                           <button
                             type="button"
                             aria-label={`Abrir ${matchedPost.title}, ${dayObj.name} às ${matchedPost.timeString}`}
-                            draggable 
-                            onDragStart={() => setDraggedPostId(matchedPost.id)} 
+                            draggable={canSchedule}
+                            onDragStart={() => canSchedule && setDraggedPostId(matchedPost.id)} 
                             onClick={() => setSelectedPost(matchedPost)}
                             className="group w-full rounded-control border border-brand-plum/25 bg-surface p-2 text-left transition-colors hover:border-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                           >
@@ -405,7 +411,7 @@ export function PlannerScheduler() {
                       <span className="mt-1 block text-[11px] text-ink-muted">Data: <span className="font-semibold text-ink">{post.dateStr}</span> às <span className="font-semibold text-ink">{post.hour}:00</span> ({post.timeString})</span>
                     </span>
                   </button>
-                  <button 
+                  {team.can('apagar_publicacoes') && <button 
                     type="button"
                     onClick={() => handleDeletePost(post.id)}
                     aria-label={`Excluir agendamento de ${post.title}`}
@@ -413,7 +419,7 @@ export function PlannerScheduler() {
                     title="Excluir agendamento"
                   >
                     <Trash2 size={16} />
-                  </button>
+                  </button>}
                 </div>
               ))
             )}
@@ -428,7 +434,7 @@ export function PlannerScheduler() {
       />
 
       {selectedPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-4 backdrop-blur-xs">
+        <div {...detailsDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-4 backdrop-blur-xs">
           <div role="dialog" aria-modal="true" aria-labelledby="scheduled-post-title" className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-panel border border-border bg-surface">
             <div className="flex items-center justify-between border-b border-border bg-canvas p-4">
               <div>
@@ -460,14 +466,14 @@ export function PlannerScheduler() {
             </div>
 
             <div className="flex items-center justify-between border-t border-border bg-canvas p-4">
-              <button 
+              {team.can('apagar_publicacoes') ? <button 
                 type="button"
                 onClick={() => handleDeletePost(selectedPost.id)}
                 className="flex min-h-11 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
               >
                 <Trash2 size={15} />
                 <span>Excluir publicação</span>
-              </button>
+              </button> : <span />}
 
               <button 
                 type="button"

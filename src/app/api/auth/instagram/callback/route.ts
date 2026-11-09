@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
-import { createClient } from '@/utils/supabase/server';
+import { getActiveMember } from '@/lib/team-server';
 import {
   GraphError,
   INSTAGRAM_CALLBACK_PATH,
@@ -45,11 +45,10 @@ export async function GET(request: NextRequest) {
   const app = getMetaAppConfig();
   if (!app) return finish('error', 'not_configured');
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return finish('error', 'authentication_required');
+  const member = await getActiveMember();
+  if (!member) return finish('error', 'authentication_required');
+  if (!member.can('conectar_instagram')) return finish('error', 'admin_only');
+  const { user } = member;
 
   try {
     const connection = await connectInstagram(code, new URL(INSTAGRAM_CALLBACK_PATH, origin).toString(), app);

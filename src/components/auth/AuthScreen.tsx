@@ -32,6 +32,7 @@ function getAuthErrorMessage(message: string, mode: AuthMode) {
 export function AuthScreen({ callbackNotice: initialCallbackNotice }: { callbackNotice?: string | null }) {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('signin');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -86,11 +87,16 @@ export function AuthScreen({ callbackNotice: initialCallbackNotice }: { callback
     try {
       const normalizedEmail = email.trim().toLowerCase();
       if (mode === 'signup') {
+        if (fullName.trim().length < 3) {
+          setFormError('Informe seu nome completo.');
+          return;
+        }
         const { data, error } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
           options: {
             emailRedirectTo: new URL('/', window.location.origin).toString(),
+            data: { full_name: fullName.trim() },
           },
         });
 
@@ -106,7 +112,7 @@ export function AuthScreen({ callbackNotice: initialCallbackNotice }: { callback
           return;
         }
 
-        setSuccessNotice('Conta criada. Verifique seu e-mail para confirmar o cadastro antes de entrar.');
+        setSuccessNotice('Cadastro enviado. Entre com seu e-mail e senha: o acesso é liberado depois que um administrador da Bahia Homes aprovar.');
         setMode('signin');
         setPassword('');
         return;
@@ -186,11 +192,28 @@ export function AuthScreen({ callbackNotice: initialCallbackNotice }: { callback
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             {mode === 'signin'
-              ? 'Entre para acessar o painel e conectar sua conta do Meta Ads.'
-              : 'Cadastre seu e-mail para começar a usar o Bahia Homes Analytics.'}
+              ? 'Entre para acessar o painel da Bahia Homes.'
+              : 'Faça seu cadastro. Um administrador da Bahia Homes aprova o acesso e define o que você pode fazer.'}
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            {mode === 'signup' && (
+              <div className="space-y-1.5">
+                <label htmlFor="auth-name" className="block text-sm font-medium text-ink">
+                  Nome completo
+                </label>
+                <input
+                  id="auth-name"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="min-h-12 w-full rounded-control border border-border bg-white px-3 text-base text-ink outline-none transition-colors duration-150 placeholder:text-ink-muted/70 focus:border-brand-plum focus:ring-2 focus:ring-brand-plum/20"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label htmlFor="auth-email" className="block text-sm font-medium text-ink">
                 E-mail

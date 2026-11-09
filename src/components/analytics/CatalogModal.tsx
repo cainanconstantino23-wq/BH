@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { MediaPreview } from '@/components/MediaPreview';
 import { isVideoMedia } from '@/lib/media';
+import { useTeam } from '@/lib/team';
 
 type FeedStatusFilter = 'all' | 'pending' | 'approved';
 
@@ -103,6 +104,7 @@ const byNewest = (a: ScheduledTile, b: ScheduledTile) =>
   b.scheduledDate.localeCompare(a.scheduledDate) || b.timeString.localeCompare(a.timeString);
 
 function InstagramFeedPreview() {
+  const team = useTeam();
   const [posts, setPosts] = useState<ScheduledTile[]>([]);
   const [published, setPublished] = useState<PublishedTile[]>([]);
   const [username, setUsername] = useState('');
@@ -239,7 +241,7 @@ function InstagramFeedPreview() {
       ),
     [ordered, filter],
   );
-  const canReorder = filter === 'all';
+  const canReorder = filter === 'all' && team.can('reagendar_publicacoes');
   const selected = selectedId === null ? null : ordered.find((post) => post.id === selectedId) ?? null;
 
   // Troca data e horário entre duas publicações (as datas do calendário continuam as mesmas).
@@ -418,7 +420,9 @@ function InstagramFeedPreview() {
               {username ? `@${username}` : 'Prévia do perfil'}
             </h3>
             <p className="mt-1 max-w-prose text-xs leading-relaxed text-ink-muted">
-              {canReorder
+              {!team.can('reagendar_publicacoes')
+                ? 'Prévia do perfil: a publicação mais recente aparece primeiro, como no Instagram.'
+                : canReorder
                 ? 'Arraste uma publicação agendada sobre outra para trocar a data e o horário das duas (no celular, toque e segure antes de arrastar). A mais recente aparece primeiro, como no perfil.'
                 : 'Para reorganizar, volte ao filtro Todas.'}
             </p>
@@ -720,7 +724,12 @@ export function CatalogModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop-enter fixed inset-0 z-50 flex items-stretch justify-center bg-ink/60 sm:items-center sm:p-4">
+    <div
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget && !document.querySelector('dialog[open]') && !document.body.style.cursor) onClose();
+      }}
+      className="modal-backdrop-enter fixed inset-0 z-50 flex items-stretch justify-center bg-ink/60 sm:items-center sm:p-4"
+    >
       <div
         role="dialog"
         aria-modal="true"

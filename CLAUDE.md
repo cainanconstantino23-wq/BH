@@ -18,6 +18,8 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
 - Central de aprovação: src/components/ApprovalSectionOrange.tsx gera link público /approval/[token]; a página do cliente lê e responde por /api/approval/[token] (chave de serviço no servidor); prazo de 7 dias ainda não é aplicado.
 - Agendamento: src/components/CreatePostModal.tsx com editor de imagem nas medidas do Instagram (src/components/media/InstagramImageEditor.tsx, medidas em src/lib/instagramFormats.ts); salva na tabela posts.
 - Grade do feed: src/components/analytics/CatalogModal.tsx (prévia 3:4, agendados + publicados, arrastar para trocar datas).
+- Tela inicial após o login: src/components/home/HomeHub.tsx (fotos das casas em public/inicio, avisos do dia, dock com motion). O logo do painel volta para ela.
+- Equipe: cadastro aberto, admin aprova no app e escolhe entre 13 permissões (src/lib/team.tsx, src/lib/team-server.ts, src/components/team/). Histórico em activity_log (triggers no banco), sininho de notificações, menu da conta no canto superior direito.
 
 ## Segurança
 - posts: RLS "só o dono" (user_id = auth.uid()); anon bloqueado. Inserções pelo servidor precisam informar user_id.
@@ -26,8 +28,8 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
 
 ## Situação atual
 - Publicação automática no Instagram NÃO existe ainda (agendamento só salva no banco).
-- Próximo passo planejado: modelo de empresa/equipe (organizations + membros com convite por e-mail) para todos da Bahia Homes verem os mesmos dados; hoje os dados são por usuário e o cadastro está aberto.
-- /api/upload-url ainda não exige login.
+- Equipe única da Bahia Homes (sem organizations): todos os membros ativos veem os mesmos dados; permissões aplicadas no banco (has_permission + RLS + trigger guard_post_update).
+- /api/upload-url exige login e permissão de criar/editar publicações.
 
 ## Regras
 - Nunca escrever chaves ou segredos em arquivos versionados; usar .env.local

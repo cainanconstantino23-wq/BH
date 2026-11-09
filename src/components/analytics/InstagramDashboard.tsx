@@ -19,6 +19,7 @@ import {
   type PeriodDays,
   type SummaryMetric,
 } from '@/lib/instagramMetrics';
+import { useTeam } from '@/lib/team';
 
 const number = new Intl.NumberFormat('pt-BR');
 const compact = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 });
@@ -125,6 +126,7 @@ const SUMMARY_TILES: { key: SummaryMetric; label: string; hint: string }[] = [
 ];
 
 export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: ViewProps) {
+  const team = useTeam();
   const [days, setDays] = useState<PeriodDays>(30);
   const summary = useMemo(() => summarize(data, days), [data, days]);
   const hasData = data.daily.length > 0 || data.media.length > 0;
@@ -165,7 +167,7 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
               </button>
             ))}
           </div>
-          <button
+          {team.can('atualizar_metricas') && <button
             type="button"
             onClick={onSync}
             disabled={syncing}
@@ -173,7 +175,7 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
           >
             <RefreshCw aria-hidden="true" size={14} className={syncing ? 'animate-spin motion-reduce:animate-none' : ''} />
             {syncing ? 'Atualizando…' : 'Atualizar agora'}
-          </button>
+          </button>}
         </div>
       </div>
 

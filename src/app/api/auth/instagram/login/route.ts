@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getActiveMember } from '@/lib/team-server';
 import {
   GRAPH_VERSION,
   INSTAGRAM_CALLBACK_PATH,
@@ -22,11 +22,9 @@ export async function GET(request: NextRequest) {
   // O Meta só aceita retorno em endereço público com HTTPS.
   if (['localhost', '127.0.0.1'].includes(request.nextUrl.hostname)) return back('requires_production');
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL('/login?reason=authentication_required', origin));
+  const member = await getActiveMember();
+  if (!member) return NextResponse.redirect(new URL('/login?reason=authentication_required', origin));
+  if (!member.can('conectar_instagram')) return back('admin_only');
 
   const state = randomBytes(32).toString('base64url');
   const authUrl = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);

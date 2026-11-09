@@ -1,24 +1,28 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
-import { createClient } from '@/utils/supabase/server';
+import { getActiveMember, getTeamConnection } from '@/lib/team-server';
 import type { MetricsResponse } from '@/lib/instagramMetrics';
 
 const noStore = { 'Cache-Control': 'private, no-store' };
 
 // Métricas guardadas no Supabase para o painel. Não chama o Meta.
-// Lê as tabelas de métricas com a sessão do usuário (RLS: só o dono vê).
+// Lê as tabelas de métricas com a sessão do usuário (RLS: só a equipe ativa vê).
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'authentication_required' }, { status: 401, headers: noStore });
+  const member = await getActiveMember();
+  if (!member) return NextResponse.json({ error: 'authentication_required' }, { status: 401, headers: noStore });
+  if (!member.can('ver_estatisticas')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
+  const { supabase } = member;
 
-  const { data: connection } = await createAdminClient()
-    .from('user_meta_config')
-    .select('instagram_account_id, instagram_username, last_synced_at, last_sync_error')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const { data: row } = await getTeamConnection(
+    createAdminClient(),
+    'instagram_account_id, instagram_username, last_synced_at, last_sync_error',
+  );
+  const connection = row as {
+    instagram_account_id: string;
+    instagram_username: string | null;
+    last_synced_at: string | null;
+    last_sync_error: string | null;
+  } | null;
 
   if (!connection?.instagram_account_id) {
     return NextResponse.json({ error: 'not_connected' }, { status: 404, headers: noStore });

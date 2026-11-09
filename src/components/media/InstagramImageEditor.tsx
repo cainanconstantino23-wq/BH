@@ -298,7 +298,10 @@ export function InstagramImageEditor({
       : null;
 
   return (
-    <div className="fixed inset-0 z-60 flex items-stretch justify-center bg-ink/70 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+    <div
+      onPointerDown={(event) => !exporting && event.target === event.currentTarget && onCancel()}
+      className="fixed inset-0 z-60 flex items-stretch justify-center bg-ink/70 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+    >
       <div
         role="dialog"
         aria-modal="true"

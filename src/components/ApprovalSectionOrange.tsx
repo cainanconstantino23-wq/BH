@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye } from 'lucide-react';
+import { useTeam } from '@/lib/team';
+import { useDismiss } from '@/lib/useDismiss';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle } from 'lucide-react';
 
 interface ApprovalPost {
   id: string | number;
@@ -29,6 +31,9 @@ const getErrorMessage = (error: unknown) => {
 };
 
 export default function ApprovalSectionOrange() {
+  const team = useTeam();
+  const [decisionComment, setDecisionComment] = useState('');
+  const [deciding, setDeciding] = useState(false);
   const [posts, setPosts] = useState<ApprovalPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<ApprovalPost | null>(null);
@@ -46,6 +51,8 @@ export default function ApprovalSectionOrange() {
   });
   const [scheduledTime, setScheduledTime] = useState('19:00');
   const [submitting, setSubmitting] = useState(false);
+  const closeCreateModal = useCallback(() => setIsModalOpen(false), []);
+  const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting);
   const [feedbackMessage, setFeedbackMessage] = useState('');
 
   useEffect(() => {
@@ -268,6 +275,28 @@ export default function ApprovalSectionOrange() {
     }
   };
 
+  const decide = async (postId: string | number, status: 'approved' | 'changes_requested' | 'rejected') => {
+    if (status === 'changes_requested' && !decisionComment.trim()) {
+      setFeedbackMessage('Escreva o que precisa mudar antes de pedir ajustes.');
+      return;
+    }
+    setDeciding(true);
+    const { error } = await supabase
+      .from('posts')
+      .update({ approval_status: status, client_feedback: decisionComment.trim() || null })
+      .eq('id', postId);
+    setDeciding(false);
+    if (error) {
+      setFeedbackMessage(`Não foi possível registrar a decisão: ${getErrorMessage(error)}`);
+      return;
+    }
+    setDecisionComment('');
+    await refreshPosts();
+    setFeedbackMessage(
+      status === 'approved' ? 'Publicação aprovada.' : status === 'changes_requested' ? 'Pedido de ajustes registrado.' : 'Publicação reprovada.',
+    );
+  };
+
   const copyApprovalLink = async (rawToken: string, postId: string | number) => {
     const cleanToken = rawToken.trim().replace(/[()]/g, '');
     const link = `${window.location.origin}/approval/${cleanToken}`;
@@ -305,13 +334,13 @@ export default function ApprovalSectionOrange() {
             <p className="mt-1 text-xs leading-relaxed text-ink-muted">Revise conteúdos, acompanhe as respostas e compartilhe links de aprovação.</p>
           </div>
         </div>
-        <button
+        {team.can('criar_publicacoes') && <button
           type="button"
           onClick={() => { setFeedbackMessage(''); setIsModalOpen(true); }}
           className="flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
         >
           <Plus size={16} /> Novo post para aprovação
-        </button>
+        </button>}
       </div>
 
       {feedbackMessage && !isModalOpen && <p role="status" className="rounded-control border border-border bg-surface px-4 py-3 text-xs text-ink">{feedbackMessage}</p>}
@@ -412,7 +441,7 @@ export default function ApprovalSectionOrange() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
+                  {team.can('apagar_publicacoes') && <button
                     type="button"
                     aria-label={`Excluir publicação de ${selectedPost.house_name}`}
                     onClick={() => deletePost(selectedPost.id)}
@@ -420,11 +449,45 @@ export default function ApprovalSectionOrange() {
                     title="Excluir publicação"
                   >
                     <Trash2 size={15} />
-                  </button>
+                  </button>}
                 </div>
               </div>
 
-              <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
+              {team.can('aprovar_publicacoes') && (
+                <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-ink">Sua decisão</h4>
+                    {selectedPost.approval_status !== 'pending' && (
+                      <span className="text-xs text-ink-muted">
+                        Situação atual:{' '}
+                        {selectedPost.approval_status === 'approved' ? 'aprovado' : selectedPost.approval_status === 'changes_requested' ? 'ajustes pedidos' : selectedPost.approval_status === 'rejected' ? 'reprovado' : 'pendente'}
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    value={decisionComment}
+                    onChange={(event) => setDecisionComment(event.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    aria-label="Comentário da decisão"
+                    placeholder="Comentário (obrigatório para pedir ajustes)"
+                    className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  />
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'approved')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control bg-brand-plum px-3 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50">
+                      <CheckCircle2 size={14} aria-hidden="true" /> Aprovar
+                    </button>
+                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'changes_requested')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-status-warning-border bg-status-warning-soft px-3 text-xs font-semibold text-status-warning hover:bg-status-warning-border disabled:opacity-50">
+                      <MessageSquareWarning size={14} aria-hidden="true" /> Pedir ajustes
+                    </button>
+                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'rejected')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-status-danger-border bg-status-danger-soft px-3 text-xs font-semibold text-status-danger hover:bg-status-danger-border disabled:opacity-50">
+                      <XCircle size={14} aria-hidden="true" /> Reprovar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {team.can('enviar_link_aprovacao') && <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
                 <label htmlFor="approval-link" className="block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                   Link exclusivo de aprovação para o cliente
                 </label>
@@ -457,7 +520,7 @@ export default function ApprovalSectionOrange() {
                     Enviar por WhatsApp
                   </a>
                 </div>
-              </div>
+              </div>}
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
                 <div className="flex max-h-[360px] min-h-[240px] items-center justify-center overflow-hidden rounded-panel bg-brand-plum">
@@ -500,7 +563,7 @@ export default function ApprovalSectionOrange() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
+        <div {...createDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
             
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">

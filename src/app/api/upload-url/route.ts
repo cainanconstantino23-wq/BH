@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getActiveMember } from '@/lib/team-server';
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -11,19 +12,24 @@ const s3Client = new S3Client({
   },
 });
 
-// Responde se aceder via navegador (GET)
-export async function GET() {
-  return NextResponse.json({ message: 'Rota de upload R2 ativa e pronta para chamadas POST.' });
-}
+const ALLOWED_TYPES = /^(image\/(jpeg|png|webp|heic|heif)|video\/(mp4|quicktime|webm))$/;
 
-// Processa a geração da URL de upload (POST)
+// Gera uma URL assinada para enviar mídia ao R2. Só para quem cria ou edita publicações.
 export async function POST(request: Request) {
-  try {
-    const { fileName, fileType } = await request.json();
+  const member = await getActiveMember();
+  if (!member) return NextResponse.json({ error: 'authentication_required' }, { status: 401 });
+  if (!member.can('criar_publicacoes') && !member.can('editar_publicacoes')) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
-    const fileExt = fileName.split('.').pop() || 'mp4';
-    const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const key = `uploads/${cleanFileName}`;
+  try {
+    const { fileName, fileType } = (await request.json()) as { fileName?: unknown; fileType?: unknown };
+    if (typeof fileName !== 'string' || typeof fileType !== 'string' || !ALLOWED_TYPES.test(fileType)) {
+      return NextResponse.json({ error: 'Tipo de arquivo não permitido.' }, { status: 400 });
+    }
+
+    const fileExt = (fileName.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+    const key = `uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
 
     const command = new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,

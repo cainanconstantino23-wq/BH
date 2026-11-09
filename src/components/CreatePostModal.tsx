@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MediaPreview } from '@/components/MediaPreview';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
+import { useDismiss } from '@/lib/useDismiss';
 import { findClosestFormat, findExactFormat, type InstagramFormat } from '@/lib/instagramFormats';
 import * as tus from 'tus-js-client';
 import { 
@@ -293,6 +294,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     }
   };
 
+  const dismiss = useDismiss(isOpen, onClose, loading || isImageEditorOpen);
+
   if (!isOpen) return null;
 
   const isReelError = contentType === 'REEL' && mediaPreviewUrl && !isVideo;
@@ -305,7 +308,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 backdrop-blur-xs">
+    <div {...dismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 backdrop-blur-xs">
       <div className="flex h-[96vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#f8f9fa] text-gray-900 shadow-2xl">
         
         {/* Topbar Superior */}
