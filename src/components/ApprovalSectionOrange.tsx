@@ -6,7 +6,7 @@ import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2 } from 'lucide-react';
 
 interface ApprovalPost {
   id: string | number;
@@ -54,6 +54,9 @@ export default function ApprovalSectionOrange() {
   const closeCreateModal = useCallback(() => setIsModalOpen(false), []);
   const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting);
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [generatingCopy, setGeneratingCopy] = useState(false);
+  // Tela de envio no centro: progresso real, depois sucesso ou erro em linguagem simples.
+  const [sendState, setSendState] = useState<SendState | null>(null);
 
   useEffect(() => {
     return () => {
@@ -204,47 +207,48 @@ export default function ApprovalSectionOrange() {
       return;
     }
 
+    const isVideoFile = file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
+    const kind = isVideoFile ? 'video' : 'foto';
+
     try {
       setSubmitting(true);
-      setFeedbackMessage('A obter autorização para upload no Cloudflare R2...');
+      setFeedbackMessage('');
+      setSendState({ phase: 'sending', percent: 0, kind });
 
-      // 1. Pede a URL pré-assinada para a API Route (/api/upload-url)
+      // 1. autorização de envio (URL assinada)
       const res = await fetch('/api/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: file.name, fileType: file.type }),
       });
-
-      if (!res.ok) {
-        throw new Error('Falha ao obter URL assinada para o Cloudflare R2.');
-      }
-
+      if (!res.ok) throw new Error(`upload-url respondeu ${res.status}`);
       const { uploadUrl, publicUrl } = await res.json();
 
-      // 2. Transfere a mídia diretamente do navegador para o Cloudflare R2
-      setFeedbackMessage('A enviar mídia para o Cloudflare R2 (sem limite de 50MB)...');
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
+      // 2. envio direto do navegador, com progresso real
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setSendState({ phase: 'sending', percent: Math.round((event.loaded / event.total) * 100), kind });
+          }
+        };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`envio respondeu ${xhr.status}`)));
+        xhr.onerror = () => reject(new Error('falha de rede no envio'));
+        xhr.send(file);
       });
 
-      if (!uploadRes.ok) {
-        throw new Error('Falha ao transferir o ficheiro para o Cloudflare R2.');
-      }
-
-      // 3. Salva os metadados do post no Supabase utilizando a URL pública do R2
-      setFeedbackMessage('A registar publicação no banco de dados...');
+      // 3. registra a publicação na fila
+      setSendState({ phase: 'saving', kind });
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      const isVideoFile = file.type.startsWith('video/') || Boolean(file.name.match(/\.(mp4|mov|webm)$/i));
-
       const { error: dbError } = await supabase.from('posts').insert([
         {
           title: houseName,
           house_name: houseName,
           content: caption,
           caption: caption,
-          image_url: publicUrl, // Link gerado no Cloudflare R2
+          image_url: publicUrl,
           media_type: isVideoFile ? 'video' : 'image',
           approval_status: 'pending',
           approval_token: token,
@@ -255,7 +259,6 @@ export default function ApprovalSectionOrange() {
           views_count: 0
         },
       ]);
-
       if (dbError) throw dbError;
 
       setIsModalOpen(false);
@@ -263,15 +266,42 @@ export default function ApprovalSectionOrange() {
       setCaption('');
       setFile(null);
       setMediaPreview(null);
-      setFeedbackMessage('');
-      
+      setSendState({ phase: 'done', kind });
       await refreshPosts();
-      setFeedbackMessage('Conteúdo enviado com sucesso para o Cloudflare R2 e adicionado à fila!');
     } catch (error) {
-      console.error('Erro ao enviar conteúdo para aprovação:', error);
-      setFeedbackMessage(`Não foi possível enviar o conteúdo: ${getErrorMessage(error)}`);
+      // detalhe técnico só no console; o usuário vê uma mensagem simples
+      console.error('Erro ao enviar conteúdo para aprovação:', getErrorMessage(error), error);
+      setSendState({ phase: 'error', kind });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Botão "Gerar legenda": a IA escreve (ou melhora) a legenda do Reels a partir da casa e do rascunho.
+  const generateCopy = async () => {
+    if (!houseName.trim() && !caption.trim()) {
+      setFeedbackMessage('Preencha o nome da casa ou escreva umas palavras sobre ela para gerar a legenda.');
+      return;
+    }
+    setGeneratingCopy(true);
+    setFeedbackMessage('');
+    try {
+      const response = await fetch('/api/copy/reels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ houseName, notes: caption, currentCaption: caption, format: 'REEL' }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { caption?: string; error?: string };
+      if (!response.ok || !result.caption) {
+        setFeedbackMessage(result.error ?? 'Não foi possível gerar a legenda.');
+        return;
+      }
+      setCaption(result.caption);
+      setFeedbackMessage('Legenda gerada. Revise antes de enviar para aprovação.');
+    } catch {
+      setFeedbackMessage('Sem conexão para gerar a legenda. Tente de novo.');
+    } finally {
+      setGeneratingCopy(false);
     }
   };
 
@@ -619,7 +649,19 @@ export default function ApprovalSectionOrange() {
                     <span>{file ? 'Substituir mídia' : 'Selecionar mídia'}</span>
                     <input type="file" accept="video/*,image/*" onChange={handleFileChange} className="sr-only" aria-label="Selecionar imagem ou vídeo" />
                   </label>
-                  <span className="text-[10px]">{caption.length}/2200 caracteres</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px]">{caption.length}/2200 caracteres</span>
+                    <button
+                      type="button"
+                      onClick={() => void generateCopy()}
+                      disabled={generatingCopy || submitting}
+                      title="Gerar legenda de Reels com IA a partir da casa e do que você escreveu"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-brand-plum px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-60"
+                    >
+                      {generatingCopy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
+                      {generatingCopy ? 'Gerando…' : 'Gerar legenda'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -673,6 +715,102 @@ export default function ApprovalSectionOrange() {
         </div>
       )}
 
+      {sendState && (
+        <SendProgress
+          state={sendState}
+          onClose={() => setSendState(null)}
+          onRetry={() => { setSendState(null); void handleSendForApproval(); }}
+        />
+      )}
+
+    </div>
+  );
+}
+
+type SendState =
+  | { phase: 'sending'; percent: number; kind: 'video' | 'foto' }
+  | { phase: 'saving'; kind: 'video' | 'foto' }
+  | { phase: 'done'; kind: 'video' | 'foto' }
+  | { phase: 'error'; kind: 'video' | 'foto' };
+
+// Carregamento no centro da tela, com mensagens para quem usa (sem termos técnicos).
+function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: () => void; onRetry: () => void }) {
+  const what = state.kind === 'video' ? 'seu vídeo' : 'sua foto';
+  const What = state.kind === 'video' ? 'Seu vídeo' : 'Sua foto';
+  const finished = state.phase === 'done' || state.phase === 'error';
+
+  // o sucesso se fecha sozinho depois de alguns segundos
+  useEffect(() => {
+    if (state.phase !== 'done') return;
+    const timer = window.setTimeout(onClose, 3500);
+    return () => window.clearTimeout(timer);
+  }, [state.phase, onClose]);
+
+  const percent = state.phase === 'sending' ? state.percent : state.phase === 'saving' ? 100 : 0;
+  const R = 34, C = 2 * Math.PI * R;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-brand-plum/45 p-4 backdrop-blur-sm" onPointerDown={(e) => { if (finished && e.target === e.currentTarget) onClose(); }}>
+      <div
+        role={finished ? 'alertdialog' : 'status'}
+        aria-live="polite"
+        aria-label={finished ? undefined : `Enviando ${what}`}
+        className="w-[min(22rem,100%)] rounded-panel border border-border bg-surface p-6 text-center shadow-[0_24px_60px_-24px_rgb(35_27_45/0.55)]"
+      >
+        {(state.phase === 'sending' || state.phase === 'saving') && (
+          <>
+            <div className="relative mx-auto h-24 w-24">
+              <svg viewBox="0 0 80 80" className={`h-full w-full -rotate-90 ${state.phase === 'saving' ? 'motion-safe:animate-pulse' : ''}`} aria-hidden="true">
+                <circle cx="40" cy="40" r={R} fill="none" strokeWidth="6" className="stroke-surface-muted" />
+                <circle
+                  cx="40" cy="40" r={R} fill="none" strokeWidth="6" strokeLinecap="round"
+                  className="stroke-brand-plum transition-[stroke-dashoffset] duration-300 ease-out"
+                  strokeDasharray={C}
+                  strokeDashoffset={C * (1 - percent / 100)}
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-lg font-semibold tabular-nums text-ink">
+                {state.phase === 'saving' ? <Loader2 size={22} className="motion-safe:animate-spin text-brand-plum" aria-hidden="true" /> : `${percent}%`}
+              </span>
+            </div>
+            <p className="mt-4 text-base font-semibold text-ink">{state.phase === 'saving' ? 'Quase lá…' : `Enviando ${what}…`}</p>
+            <p className="mt-1 text-sm text-ink-muted">
+              {state.phase === 'saving' ? 'Colocando na fila de aprovação.' : 'Não feche esta página até terminar.'}
+            </p>
+          </>
+        )}
+
+        {state.phase === 'done' && (
+          <>
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-status-success-soft text-status-success">
+              <CheckCircle2 size={34} aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-base font-semibold text-ink">{What} foi {state.kind === 'video' ? 'enviado' : 'enviada'} com sucesso!</p>
+            <p className="mt-1 text-sm text-ink-muted">Já está na fila de aprovação.</p>
+            <button type="button" onClick={onClose} autoFocus className="mt-5 min-h-11 w-full rounded-control bg-brand-plum px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+              Ok
+            </button>
+          </>
+        )}
+
+        {state.phase === 'error' && (
+          <>
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-status-danger-soft text-status-danger">
+              <AlertCircle size={34} aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-base font-semibold text-ink">Não foi possível enviar {what}</p>
+            <p className="mt-1 text-sm text-ink-muted">Verifique sua conexão com a internet e tente de novo.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" onClick={onClose} className="min-h-11 rounded-control border border-border px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted">
+                Fechar
+              </button>
+              <button type="button" onClick={onRetry} autoFocus className="min-h-11 rounded-control bg-brand-plum px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+                Tentar de novo
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

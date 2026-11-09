@@ -10,9 +10,9 @@ import * as tus from 'tus-js-client';
 import { 
   X, Camera, Smile, Hash, AtSign, MapPin, Bookmark,
   Smartphone, Monitor, Grid, Calendar, Plus, Video, Loader2, FolderOpen,
-  MoreVertical, Crop, Check, ChevronDown,
+  Crop, Check, ChevronDown,
   Heart, MessageCircle, Send, Music, AlertTriangle, ChevronUp, UserPlus, Disc, Image, History,
-  Film
+  Film, ChevronLeft, ChevronRight, Ellipsis, Repeat2, Trash2, Sparkles
 } from 'lucide-react';
 
 interface CreatePostModalProps {
@@ -33,6 +33,20 @@ interface SavedPostDraft {
 }
 
 const draftStorageKey = 'bahia-homes-post-draft';
+
+// O Instagram aceita até 20 fotos ou vídeos num carrossel; os outros formatos levam uma mídia só.
+const CAROUSEL_LIMIT = 20;
+
+interface MediaItem {
+  id: string;
+  file: File;
+  url: string; // objectURL local para a prévia
+  isVideo: boolean;
+  dims: { width: number; height: number } | null;
+}
+
+const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
+const newMediaId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const getLocalDate = () => {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -72,9 +86,11 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
   const [showInFeed, setShowInFeed] = useState(true);
   const [isAIContent, setIsAIContent] = useState(false);
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [mediaPreviewUrl, setMediaPreviewUrl] = useState('');
-  const [isVideo, setIsVideo] = useState(false);
+  // Mídias do post (uma, ou várias no carrossel), na ordem de publicação.
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [previewSlide, setPreviewSlide] = useState(0);
   
   // Data e Horário
   const [scheduledDate, setScheduledDate] = useState(getLocalDate);
@@ -84,7 +100,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
   // Editor de imagem (recorte nas medidas do Instagram)
   const [isImageEditorOpen, setIsImageEditorOpen] = useState(false);
-  const [mediaDimensions, setMediaDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [generatingCaption, setGeneratingCaption] = useState(false);
 
   const captionRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,46 +151,126 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     }
   };
 
+  // libera as prévias locais quando o modal é desmontado
+  const mediaRef = useRef<MediaItem[]>([]);
   useEffect(() => {
-    return () => {
-      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
-    };
-  }, [mediaPreviewUrl]);
+    mediaRef.current = media;
+  }, [media]);
+  useEffect(() => () => mediaRef.current.forEach((item) => URL.revokeObjectURL(item.url)), []);
 
-  const readImageDimensions = (file: File) => {
+  const readImageDimensions = (id: string, file: File) => {
     const url = URL.createObjectURL(file);
     const img = new window.Image();
     img.onload = () => {
-      setMediaDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      setMedia((items) => items.map((item) => (item.id === id ? { ...item, dims: { width: img.naturalWidth, height: img.naturalHeight } } : item)));
       URL.revokeObjectURL(url);
     };
     img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
   };
 
+  const toMediaItem = (file: File): MediaItem => {
+    const item: MediaItem = { id: newMediaId(), file, url: URL.createObjectURL(file), isVideo: isVideoFile(file), dims: null };
+    if (!item.isVideo) readImageDimensions(item.id, file);
+    return item;
+  };
+
+  const activeMedia = media.find((item) => item.id === activeMediaId) ?? media[0] ?? null;
+
   const handleEditorApply = ({ file, format }: { file: File; format: InstagramFormat }) => {
-    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
-    setSelectedFile(file);
-    setMediaPreviewUrl(URL.createObjectURL(file));
-    setMediaDimensions({ width: format.width, height: format.height });
+    if (!activeMedia) return;
+    URL.revokeObjectURL(activeMedia.url);
+    const url = URL.createObjectURL(file);
+    setMedia((items) => items.map((item) => (item.id === activeMedia.id ? { ...item, file, url, dims: { width: format.width, height: format.height } } : item)));
     setIsImageEditorOpen(false);
     setEditorFeedback(`Imagem ajustada para ${format.width} × ${format.height} px (${format.ratioLabel}).`);
   };
 
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const isVideoFile = file.type.startsWith('video/') || Boolean(file.name.match(/\.(mp4|mov|webm)$/i));
-
-      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
-      setSelectedFile(file);
-      setIsVideo(isVideoFile);
-      setMediaPreviewUrl(URL.createObjectURL(file));
-      setMediaDimensions(null);
-      if (!isVideoFile) readImageDimensions(file);
-      setEditorFeedback(`Mídia selecionada: ${file.name}`);
-    }
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    if (files.length === 0) return;
+
+    if (contentType === 'CARROSSEL') {
+      const room = CAROUSEL_LIMIT - media.length;
+      const accepted = files.slice(0, Math.max(room, 0));
+      if (accepted.length === 0) {
+        setEditorFeedback(`O carrossel já tem ${CAROUSEL_LIMIT} mídias, o máximo do Instagram.`);
+        return;
+      }
+      const added = accepted.map(toMediaItem);
+      setMedia((items) => [...items, ...added]);
+      setActiveMediaId(added[0].id);
+      setEditorFeedback(
+        files.length > accepted.length
+          ? `Adicionadas ${accepted.length} mídias. O carrossel aceita no máximo ${CAROUSEL_LIMIT}.`
+          : `${accepted.length === 1 ? '1 mídia adicionada' : `${accepted.length} mídias adicionadas`} ao carrossel.`,
+      );
+      return;
+    }
+
+    // Reel, post e Story levam uma mídia: a nova substitui a anterior.
+    media.forEach((item) => URL.revokeObjectURL(item.url));
+    const item = toMediaItem(files[0]);
+    setMedia([item]);
+    setActiveMediaId(item.id);
+    setPreviewSlide(0);
+    setEditorFeedback(`Mídia selecionada: ${files[0].name}`);
+  };
+
+  const removeMedia = (id: string) => {
+    const index = media.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    URL.revokeObjectURL(media[index].url);
+    const rest = media.filter((item) => item.id !== id);
+    setMedia(rest);
+    if (activeMediaId === id) setActiveMediaId(rest[Math.min(index, rest.length - 1)]?.id ?? null);
+    setLightboxIndex((current) => (current === null || rest.length === 0 ? null : Math.min(current, rest.length - 1)));
+    setPreviewSlide((slide) => Math.min(slide, Math.max(rest.length - 1, 0)));
+    setEditorFeedback(rest.length ? 'Mídia removida.' : 'Mídia removida. Selecione outra para continuar.');
+  };
+
+  const changeContentType = (next: ContentType) => {
+    setContentType(next);
+    setDraftSaved(false);
+    // fora do carrossel só cabe uma mídia: mantém a primeira
+    if (next !== 'CARROSSEL' && media.length > 1) {
+      media.slice(1).forEach((item) => URL.revokeObjectURL(item.url));
+      setMedia(media.slice(0, 1));
+      setActiveMediaId(media[0].id);
+      setPreviewSlide(0);
+      setEditorFeedback('Este formato leva uma mídia só; mantivemos a primeira do carrossel.');
+    }
+  };
+
+  // "Gerar legenda": a IA escreve (ou melhora) a legenda a partir do que já foi escrito e do formato.
+  const generateCaption = async () => {
+    if (!caption.trim()) {
+      setEditorFeedback('Escreva algumas palavras sobre o post (casa, destaque, clima) e clique em Gerar legenda.');
+      captionRef.current?.focus();
+      return;
+    }
+    setGeneratingCaption(true);
+    setEditorFeedback('');
+    try {
+      const response = await fetch('/api/copy/reels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: caption, currentCaption: caption, format: contentType }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { caption?: string; error?: string };
+      if (!response.ok || !result.caption) {
+        setEditorFeedback(result.error ?? 'Não foi possível gerar a legenda.');
+        return;
+      }
+      setCaption(result.caption);
+      setDraftSaved(false);
+      setEditorFeedback('Legenda gerada. Revise antes de agendar.');
+    } catch {
+      setEditorFeedback('Sem conexão para gerar a legenda. Tente de novo.');
+    } finally {
+      setGeneratingCaption(false);
+    }
   };
 
   // Envio ao Supabase com Suporte a Arquivos Grandes (>6MB via TUS)
@@ -183,70 +279,53 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     setUploadStatus('Processando...');
 
     try {
-      let finalMediaUrl = 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
+      const uploadOne = async (item: MediaItem, label: string) => {
+        const file = item.file;
+        const fileExt = file.name.split('.').pop()?.toLowerCase() || (item.isVideo ? 'mp4' : 'jpg');
+        const filePath = `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+        const contentTypeHeader = file.type || (item.isVideo ? 'video/mp4' : 'image/jpeg');
 
-      if (selectedFile) {
-        setUploadStatus('Enviando mídia...');
-        const fileExt = selectedFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const filePath = `uploads/${fileName}`;
-
-        if (selectedFile.size > 6 * 1024 * 1024) {
+        if (file.size > 6 * 1024 * 1024) {
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData?.session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
           await new Promise((resolve, reject) => {
-            const upload = new tus.Upload(selectedFile, {
+            const upload = new tus.Upload(file, {
               endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,
               retryDelays: [0, 3000, 5000, 10000, 20000],
-              headers: {
-                authorization: `Bearer ${token}`,
-                'x-upsert': 'true',
-              },
+              headers: { authorization: `Bearer ${token}`, 'x-upsert': 'true' },
               uploadDataDuringCreation: true,
               removeFingerprintOnSuccess: true,
-              metadata: {
-                bucketName: 'posts',
-                objectName: filePath,
-                contentType: selectedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
-                cacheControl: '3600',
-              },
+              metadata: { bucketName: 'posts', objectName: filePath, contentType: contentTypeHeader, cacheControl: '3600' },
               chunkSize: 6 * 1024 * 1024,
               onError: (error) => {
                 console.error('Erro no upload TUS:', error);
                 reject(error);
               },
               onProgress: (bytesUploaded, bytesTotal) => {
-                const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(0);
-                setUploadStatus(`Enviando mídia (${percentage}%)...`);
+                setUploadStatus(`${label} (${((bytesUploaded / bytesTotal) * 100).toFixed(0)}%)...`);
               },
-              onSuccess: () => {
-                resolve(true);
-              },
+              onSuccess: () => resolve(true),
             });
-
             upload.start();
           });
         } else {
           const { error: uploadError } = await supabase.storage
             .from('posts')
-            .upload(filePath, selectedFile, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: selectedFile.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
-            });
-
-          if (uploadError) {
-            throw new Error(`Erro no storage: ${uploadError.message}`);
-          }
+            .upload(filePath, file, { cacheControl: '3600', upsert: false, contentType: contentTypeHeader });
+          if (uploadError) throw new Error(`Erro no storage: ${uploadError.message}`);
         }
+        return supabase.storage.from('posts').getPublicUrl(filePath).data.publicUrl;
+      };
 
-        const { data: publicUrlData } = supabase.storage
-          .from('posts')
-          .getPublicUrl(filePath);
-
-        finalMediaUrl = publicUrlData.publicUrl;
+      // envia na ordem do carrossel
+      const uploaded: { url: string; type: 'image' | 'video' }[] = [];
+      for (const [i, item] of media.entries()) {
+        const label = media.length > 1 ? `Enviando mídia ${i + 1} de ${media.length}` : 'Enviando mídia';
+        setUploadStatus(`${label}...`);
+        uploaded.push({ url: await uploadOne(item, label), type: item.isVideo ? 'video' : 'image' });
       }
+      const finalMediaUrl = uploaded[0]?.url
+        ?? 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
 
       setUploadStatus('Agendando...');
       const titleVal = caption.slice(0, 25) || `${contentType} Novo`;
@@ -265,8 +344,10 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         hour: scheduledHour,
         time_string: timeStrVal,
         image_url: finalMediaUrl,
-        media_type: isVideo ? 'video' : 'image',
-        scheduled_date: scheduledDate
+        media_type: uploaded[0]?.type ?? 'image',
+        scheduled_date: scheduledDate,
+        // a lista completa só vai quando há mais de uma mídia (carrossel)
+        ...(uploaded.length > 1 ? { media_items: uploaded } : {}),
       }]);
 
       if (dbError) throw dbError;
@@ -276,9 +357,10 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
       setCaption('');
       setNotes('');
-      setSelectedFile(null);
-      setMediaPreviewUrl('');
-      setIsVideo(false);
+      media.forEach((item) => URL.revokeObjectURL(item.url));
+      setMedia([]);
+      setActiveMediaId(null);
+      setPreviewSlide(0);
       try {
         localStorage.removeItem(draftStorageKey);
       } catch (error) {
@@ -294,16 +376,20 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     }
   };
 
-  const dismiss = useDismiss(isOpen, onClose, loading || isImageEditorOpen);
+  const dismiss = useDismiss(isOpen, onClose, loading || isImageEditorOpen || lightboxIndex !== null);
 
   if (!isOpen) return null;
 
-  const isReelError = contentType === 'REEL' && mediaPreviewUrl && !isVideo;
+  const coverMedia = media[0] ?? null;
+  const slideIndex = Math.min(previewSlide, Math.max(media.length - 1, 0));
+  const shownMedia = contentType === 'CARROSSEL' ? media[slideIndex] ?? null : coverMedia;
+  const isReelError = contentType === 'REEL' && coverMedia && !coverMedia.isVideo;
+  const mediaDimensions = activeMedia && !activeMedia.isVideo ? activeMedia.dims : null;
   const contentTypeLabel = { REEL: 'Reel', POST: 'post no feed', STORY: 'Story', CARROSSEL: 'carrossel' }[contentType];
-  const exactFormat = mediaDimensions && !isVideo
+  const exactFormat = mediaDimensions
     ? findExactFormat(contentType, mediaDimensions.width, mediaDimensions.height)
     : null;
-  const suggestedFormat = mediaDimensions && !isVideo
+  const suggestedFormat = mediaDimensions
     ? findClosestFormat(contentType, mediaDimensions.width, mediaDimensions.height)
     : null;
 
@@ -339,7 +425,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                   <InstagramIcon className="h-4 w-4 text-pink-600" />
                   <select 
                     value={contentType} 
-                    onChange={(e) => { setContentType(e.target.value as ContentType); setDraftSaved(false); }}
+                    onChange={(e) => changeContentType(e.target.value as ContentType)}
                     className="bg-transparent font-semibold focus:outline-none"
                   >
                     <option value="REEL">REEL</option>
@@ -374,28 +460,69 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                 className="w-full resize-none bg-transparent p-4 text-sm focus:outline-none"
               />
 
-              {/* Thumbnail e Botão de Editar Mídia */}
-              {mediaPreviewUrl && (
-                <div className="flex items-center gap-3 ml-4 mb-4">
-                  <div 
-                    onClick={() => !isVideo && setIsImageEditorOpen(true)}
-                    className="relative h-20 w-20 cursor-pointer overflow-hidden rounded-lg border border-gray-200 group"
-                  >
-                    {!isVideo ? (
-                      <img src={mediaPreviewUrl} alt="Thumbnail" className="h-full w-full object-cover" />
-                    ) : (
-                      <video src={mediaPreviewUrl} className="h-full w-full object-cover" />
+              {/* Miniaturas: clicar abre em tamanho grande; o X remove */}
+              {media.length > 0 && (
+                <div className="mx-4 mb-4 space-y-3">
+                  <ul className="flex flex-wrap gap-3" aria-label="Mídias do post">
+                    {media.map((item, i) => (
+                      <li key={item.id} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => { setActiveMediaId(item.id); setLightboxIndex(i); }}
+                          aria-label={`Ver mídia ${i + 1} em tamanho grande`}
+                          className={`group relative block h-20 w-20 overflow-hidden rounded-lg border bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                            activeMedia?.id === item.id && media.length > 1 ? 'border-brand-plum ring-2 ring-brand-plum/25' : 'border-gray-200'
+                          }`}
+                        >
+                          {item.isVideo ? (
+                            <video src={item.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) antes do envio
+                            <img src={item.url} alt="" className="h-full w-full object-cover" />
+                          )}
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                            Ver
+                          </span>
+                          {item.isVideo && (
+                            <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/60 p-0.5 text-white"><Video size={11} aria-hidden="true" /></span>
+                          )}
+                          {media.length > 1 && (
+                            <span className="pointer-events-none absolute left-1 bottom-1 min-w-4 rounded bg-black/60 px-1 text-center text-[10px] font-semibold text-white">{i + 1}</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeMedia(item.id)}
+                          aria-label={`Remover mídia ${i + 1}`}
+                          title="Remover"
+                          className="absolute -right-2.5 -top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white shadow-md transition-colors duration-150 hover:bg-status-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum"
+                        >
+                          <X size={13} strokeWidth={2.5} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                    {contentType === 'CARROSSEL' && media.length < CAROUSEL_LIMIT && (
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 text-[11px] font-medium text-gray-500 transition-colors hover:border-gray-400 hover:bg-gray-50 hover:text-gray-800"
+                        >
+                          <Plus size={18} aria-hidden="true" /> Adicionar
+                        </button>
+                      </li>
                     )}
+                  </ul>
 
-                    {!isVideo && (
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                        <Crop size={18} />
-                      </div>
-                    )}
-                  </div>
+                  {contentType === 'CARROSSEL' && (
+                    <p className="text-[11px] text-gray-500">
+                      {media.length} de {CAROUSEL_LIMIT} mídias. A ordem dos números é a ordem do carrossel.
+                    </p>
+                  )}
 
-                  {!isVideo && (
-                    <div className="min-w-0 space-y-2 pr-4">
+                  {activeMedia && !activeMedia.isVideo && (
+                    <div className="min-w-0 space-y-2">
+                      {media.length > 1 && <p className="text-[11px] font-semibold text-gray-600">Mídia {media.indexOf(activeMedia) + 1}</p>}
                       {mediaDimensions && exactFormat ? (
                         <p className="flex items-center gap-1.5 text-xs font-medium text-status-success">
                           <Check size={14} aria-hidden="true" />
@@ -427,11 +554,11 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
               {/* Toolbar Inferior */}
               <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 px-4 py-2 text-gray-500">
-                <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={handleMediaChange} className="sr-only" />
+                <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple={contentType === 'CARROSSEL'} onChange={handleMediaChange} className="sr-only" />
                 
                 <div className="flex items-center gap-2">
                   <button onClick={() => fileInputRef.current?.click()} className="hover:text-gray-900" title="Selecionar mídia"><Camera size={16} /></button>
-                  {!isVideo && mediaPreviewUrl && (
+                  {activeMedia && !activeMedia.isVideo && (
                     <button onClick={() => setIsImageEditorOpen(true)} className="text-purple-900 hover:text-purple-700" title="Editar / Cortar Mídia"><Crop size={16} /></button>
                   )}
                   <button onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)} className="hover:text-gray-900" title="Emoji"><Smile size={16} /></button>
@@ -440,9 +567,21 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                   <button onClick={handleSaveDraft} className={`hover:text-gray-900 ${draftSaved ? 'text-purple-900' : ''}`} title="Salvar rascunho"><Bookmark size={16} fill={draftSaved ? 'currentColor' : 'none'} /></button>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-                  <span>{(caption.match(/#[\p{L}\p{N}_]+/gu) ?? []).length}/30#</span>
-                  <span>{caption.length}/2200</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
+                    <span>{(caption.match(/#[\p{L}\p{N}_]+/gu) ?? []).length}/30#</span>
+                    <span>{caption.length}/2200</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void generateCaption()}
+                    disabled={generatingCaption || loading}
+                    title="Gerar legenda com IA a partir do que você escreveu"
+                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-brand-plum px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-60"
+                  >
+                    {generatingCaption ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
+                    {generatingCaption ? 'Gerando…' : 'Gerar legenda'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -579,8 +718,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                   </div>
 
                   <div className="absolute inset-0 z-0 flex items-center justify-center bg-slate-900">
-                    {mediaPreviewUrl ? (
-                      <MediaPreview src={mediaPreviewUrl} mediaType={selectedFile?.type} alt="Prévia da mídia selecionada" className="h-full w-full object-cover" />
+                    {coverMedia ? (
+                      <MediaPreview src={coverMedia.url} mediaType={coverMedia.file.type} alt="Prévia da mídia selecionada" className="h-full w-full object-cover" />
                     ) : (
                       <div className="text-center text-xs text-gray-500 flex flex-col items-center">
                         <Film size={36} className="mb-2 text-purple-400" />
@@ -600,10 +739,14 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                       <span className="text-[10px]">0</span>
                     </div>
                     <div className="flex flex-col items-center gap-0.5">
+                      <Repeat2 size={20} />
+                      <span className="text-[10px]">0</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-0.5">
                       <Send size={18} />
                       <span className="text-[10px]">0</span>
                     </div>
-                    <MoreVertical size={18} />
+                    <Ellipsis size={18} />
                     <div className="mt-1 flex h-6 w-6 items-center justify-center rounded-md border border-white/40 bg-black/60 overflow-hidden">
                       <Disc size={14} className="animate-spin text-white" />
                     </div>
@@ -633,29 +776,52 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">D</div>
                       <span className="text-xs font-semibold">daimefilmes</span>
                     </div>
-                    <MoreVertical size={16} className="text-slate-400" />
+                    <Ellipsis size={16} className="text-slate-300" />
                   </div>
 
-                  {/* Área Mídia */}
-                  <div className="w-full h-72 bg-slate-950 flex items-center justify-center overflow-hidden">
-                    {mediaPreviewUrl ? (
-                      <MediaPreview src={mediaPreviewUrl} mediaType={selectedFile?.type} alt="Prévia da mídia selecionada" className="w-full h-full object-cover" />
+                  {/* Área Mídia (4:5, como o feed do Instagram) */}
+                  <div className="relative aspect-[4/5] w-full shrink-0 bg-slate-950 flex items-center justify-center overflow-hidden">
+                    {shownMedia ? (
+                      <MediaPreview key={shownMedia.id} src={shownMedia.url} mediaType={shownMedia.file.type} alt="Prévia da mídia selecionada" className="w-full h-full object-cover" />
                     ) : (
                       <div className="flex flex-col items-center text-slate-600">
                         <Image className="w-10 h-10 mb-1" />
-                        <span className="text-xs">Preview do Feed</span>
+                        <span className="text-xs">{contentType === 'CARROSSEL' ? 'Preview do carrossel' : 'Preview do Feed'}</span>
                       </div>
+                    )}
+                    {contentType === 'CARROSSEL' && media.length > 1 && (
+                      <>
+                        <span className="absolute right-2.5 top-2.5 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold tabular-nums">{slideIndex + 1}/{media.length}</span>
+                        {slideIndex > 0 && (
+                          <button type="button" onClick={() => setPreviewSlide(slideIndex - 1)} aria-label="Mídia anterior" className="absolute left-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-gray-900 shadow">
+                            <ChevronLeft size={14} aria-hidden="true" />
+                          </button>
+                        )}
+                        {slideIndex < media.length - 1 && (
+                          <button type="button" onClick={() => setPreviewSlide(slideIndex + 1)} aria-label="Próxima mídia" className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/85 text-gray-900 shadow">
+                            <ChevronRight size={14} aria-hidden="true" />
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
 
                   {/* Ícones de Engajamento */}
                   <div className="p-3 space-y-2">
-                    <div className="flex justify-between items-center">
+                    <div className="relative flex justify-between items-center">
                       <div className="flex items-center gap-3">
                         <Heart className="w-5 h-5 text-slate-200" />
                         <MessageCircle className="w-5 h-5 text-slate-200" />
+                        <Repeat2 className="w-5 h-5 text-slate-200" />
                         <Send className="w-5 h-5 text-slate-200" />
                       </div>
+                      {contentType === 'CARROSSEL' && media.length > 1 && (
+                        <div className="absolute left-1/2 flex -translate-x-1/2 gap-1" aria-hidden="true">
+                          {media.map((item, i) => (
+                            <span key={item.id} className={`h-1.5 w-1.5 rounded-full ${i === slideIndex ? 'bg-sky-400' : 'bg-white/35'}`} />
+                          ))}
+                        </div>
+                      )}
                       <Bookmark className="w-5 h-5 text-slate-200" />
                     </div>
 
@@ -669,25 +835,12 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                 </div>
               )}
 
-              {/* 3. PREVIEW DE STORY */}
+              {/* 3. PREVIEW DE STORY: progresso e perfil no topo, mensagem embaixo (como no Instagram) */}
               {contentType === 'STORY' && (
-                <div className="relative h-full w-full bg-slate-950 flex flex-col justify-between p-3 pt-8">
-                  {/* Barra de Progresso */}
-                  <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden z-20">
-                    <div className="w-1/3 h-full bg-white"></div>
-                  </div>
-
-                  {/* Header Story */}
-                  <div className="flex items-center gap-2 z-20 mt-2">
-                    <div className="w-7 h-7 rounded-full bg-emerald-700 flex items-center justify-center text-xs font-bold text-white">D</div>
-                    <span className="text-xs font-semibold text-white">daimefilmes</span>
-                    <span className="text-[10px] text-white/60">1m</span>
-                  </div>
-
-                  {/* Conteúdo de Mídia */}
+                <div className="relative h-full w-full bg-slate-950">
                   <div className="absolute inset-0 z-0">
-                    {mediaPreviewUrl ? (
-                      <MediaPreview src={mediaPreviewUrl} mediaType={selectedFile?.type} alt="Prévia da mídia selecionada" className="w-full h-full object-cover" />
+                    {coverMedia ? (
+                      <MediaPreview src={coverMedia.url} mediaType={coverMedia.file.type} alt="Prévia da mídia selecionada" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-600">
                         <History className="w-10 h-10 mb-2 text-purple-400" />
@@ -696,13 +849,25 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
                     )}
                   </div>
 
-                  {/* Footer Story */}
-                  <div className="z-20 flex items-center gap-2 mb-2">
-                    <div className="flex-1 border border-white/40 rounded-full px-3 py-1.5 text-xs text-white/80 bg-black/20 backdrop-blur-xs">
-                      Enviar mensagem...
+                  <div className="absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/55 via-black/20 to-transparent px-3 pb-8 pt-8">
+                    <div className="h-0.5 w-full overflow-hidden rounded-full bg-white/35">
+                      <div className="h-full w-1/3 rounded-full bg-white" />
                     </div>
-                    <Heart className="w-5 h-5 text-white" />
-                    <Send className="w-5 h-5 text-white" />
+                    <div className="mt-2.5 flex items-center gap-2 text-white">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold ring-1 ring-white/40">D</div>
+                      <span className="text-xs font-semibold">daimefilmes</span>
+                      <span className="text-[11px] text-white/70">1 min</span>
+                      <span className="ml-auto flex items-center gap-3">
+                        <Ellipsis size={18} aria-hidden="true" />
+                        <X size={20} aria-hidden="true" />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 bg-gradient-to-t from-black/55 to-transparent px-3 pb-4 pt-10 text-white">
+                    <div className="flex-1 rounded-full border border-white/60 px-3.5 py-2 text-xs text-white/90">Enviar mensagem...</div>
+                    <Heart className="h-6 w-6" aria-hidden="true" />
+                    <Send className="h-6 w-6" aria-hidden="true" />
                   </div>
                 </div>
               )}
@@ -748,10 +913,21 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
       </div>
 
-      {isImageEditorOpen && selectedFile && mediaPreviewUrl && !isVideo && (
+      {lightboxIndex !== null && media[lightboxIndex] && (
+        <MediaLightbox
+          items={media}
+          index={lightboxIndex}
+          onIndex={(i) => { setLightboxIndex(i); setActiveMediaId(media[i].id); }}
+          onClose={() => setLightboxIndex(null)}
+          onRemove={(id) => removeMedia(id)}
+          onCrop={(id) => { setActiveMediaId(id); setLightboxIndex(null); setIsImageEditorOpen(true); }}
+        />
+      )}
+
+      {isImageEditorOpen && activeMedia && !activeMedia.isVideo && (
         <InstagramImageEditor
-          src={mediaPreviewUrl}
-          fileName={selectedFile.name}
+          src={activeMedia.url}
+          fileName={activeMedia.file.name}
           contentType={contentType}
           initialFormatId={exactFormat?.id ?? suggestedFormat?.id}
           onCancel={() => setIsImageEditorOpen(false)}
@@ -759,6 +935,108 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         />
       )}
 
+    </div>
+  );
+}
+
+// Visualizador grande: Esc ou clique fora fecha; setas navegam no carrossel.
+function MediaLightbox({
+  items,
+  index,
+  onIndex,
+  onClose,
+  onRemove,
+  onCrop,
+}: {
+  items: MediaItem[];
+  index: number;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+  onRemove: (id: string) => void;
+  onCrop: (id: string) => void;
+}) {
+  const item = items[index];
+  const many = items.length > 1;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
+      if (event.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
+      if (event.key === 'ArrowRight' && index < items.length - 1) onIndex(index + 1);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [index, items.length, onClose, onIndex]);
+
+  const closeOnBackdrop = (event: React.PointerEvent) => {
+    if (event.target === event.currentTarget) onClose();
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={many ? `Mídia ${index + 1} de ${items.length}` : 'Mídia em tamanho grande'}
+      onPointerDown={closeOnBackdrop}
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-black/85 p-4 backdrop-blur-sm"
+    >
+      <div className="flex w-full max-w-5xl items-center justify-between gap-3 text-white">
+        <span className="min-w-0 truncate text-sm font-medium tabular-nums">{many ? `${index + 1} de ${items.length}` : item.file.name}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          {!item.isVideo && (
+            <button type="button" onClick={() => onCrop(item.id)} className="flex min-h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold hover:bg-white/20">
+              <Crop size={15} aria-hidden="true" /> Ajustar recorte
+            </button>
+          )}
+          <button type="button" onClick={() => onRemove(item.id)} className="flex min-h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold hover:bg-status-danger">
+            <Trash2 size={15} aria-hidden="true" /> Remover
+          </button>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div className="relative flex min-h-0 w-full max-w-5xl flex-1 items-center justify-center" onPointerDown={closeOnBackdrop}>
+        {item.isVideo ? (
+          <video key={item.id} src={item.url} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) antes do envio
+          <img key={item.id} src={item.url} alt={`Mídia ${index + 1}`} className="max-h-full max-w-full rounded-lg object-contain" />
+        )}
+        {many && index > 0 && (
+          <button type="button" onClick={() => onIndex(index - 1)} aria-label="Mídia anterior" className="absolute left-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-lg hover:bg-white">
+            <ChevronLeft size={20} aria-hidden="true" />
+          </button>
+        )}
+        {many && index < items.length - 1 && (
+          <button type="button" onClick={() => onIndex(index + 1)} aria-label="Próxima mídia" className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-900 shadow-lg hover:bg-white">
+            <ChevronRight size={20} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      {many && (
+        <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
+          {items.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onIndex(i)}
+              aria-label={`Ir para a mídia ${i + 1}`}
+              aria-current={i === index}
+              className={`h-14 w-14 shrink-0 overflow-hidden rounded-md border-2 ${i === index ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'}`}
+            >
+              {m.isVideo ? (
+                <video src={m.url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) antes do envio
+                <img src={m.url} alt="" className="h-full w-full object-cover" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
