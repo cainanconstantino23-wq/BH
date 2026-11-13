@@ -19,7 +19,8 @@ export const coverUrlFor = (mediaUrl: string, mediaType?: string) => {
   const clean = mediaUrl.split('#', 1)[0];
   const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
   const isR2 = (r2Base && clean.startsWith(`${r2Base}/uploads/`)) || /\.r2\.dev\/uploads\//.test(clean);
-  return isR2 ? `${clean}.jpg` : null;
+  // ?v=2: capas refeitas respeitando a proporção do pixel (vídeos 1080×1080 exibidos em 9:16)
+  return isR2 ? `${clean}.jpg?v=2` : null;
 };
 
 /** Tira um quadro do vídeo (no navegador, do arquivo local) e devolve um JPG de até 720 px. */
