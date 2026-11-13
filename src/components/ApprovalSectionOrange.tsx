@@ -74,6 +74,15 @@ async function uploadMedia(file: File, onPercent: (percent: number) => void) {
 
 const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
 
+// "Previsto para 1 dez, 19:00": aparece na fila quando o post não tem legenda.
+const queueDate = (date?: string, time?: string) => {
+  if (!date) return '';
+  const parsed = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const day = parsed.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+  return `Previsto para ${day}${time ? `, ${time}` : ''}`;
+};
+
 const decisionLabel = (status: string) =>
   status === 'approved' ? 'Aprovado' : status === 'changes_requested' ? 'Pediu ajustes' : status === 'rejected' ? 'Reprovado' : '';
 
@@ -548,12 +557,11 @@ export default function ApprovalSectionOrange() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 truncate text-[10px] font-semibold uppercase text-ink">
+                    <div className="flex items-start justify-between gap-2">
+                      <span title={p.house_label} className="line-clamp-2 min-w-0 break-words text-sm font-semibold leading-snug text-ink">
                         {p.house_label}
-                        {p.versions.length > 1 && <span className="ml-1 font-medium text-ink-muted">· V{p.versions.length}</span>}
                       </span>
-                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
                         p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
                         p.approval_status === 'rejected' ? 'border border-status-danger-border bg-status-danger-soft text-status-danger' :
@@ -567,7 +575,12 @@ export default function ApprovalSectionOrange() {
                          p.approval_status === 'rejected' ? 'Reprovado' : 'Pendente'}
                       </span>
                     </div>
-                    <p className="mt-1 truncate text-xs text-ink-muted">{p.caption || 'Sem legenda'}</p>
+                    <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+                      {p.versions.length > 1 && (
+                        <span className="shrink-0 rounded bg-surface-muted px-1.5 py-px text-[10px] font-semibold text-ink">V{p.versions.length}</span>
+                      )}
+                      <span className="truncate">{p.caption || queueDate(p.scheduled_date, p.scheduled_time) || 'Sem legenda'}</span>
+                    </p>
                   </div>
                 </button>
               ))
@@ -579,11 +592,8 @@ export default function ApprovalSectionOrange() {
           {selectedPost ? (
             <div className="space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
-                      {selectedPost.house_label}
-                    </span>
+                <div className="min-w-0 flex-1 basis-64">
+                  <div className="flex flex-wrap items-center gap-2">
                     {selectedPost.versions.length > 1 && (
                       <span className="inline-flex rounded-full border border-border bg-canvas px-2.5 py-0.5 text-[10px] font-semibold text-ink">
                         Versão {selectedPost.versions.length}
@@ -605,7 +615,7 @@ export default function ApprovalSectionOrange() {
                     </span>
                   </div>
 
-                  <h3 className="mt-2 text-sm font-semibold text-ink">Link de aprovação e resposta do cliente</h3>
+                  <h3 className="mt-2 break-words text-base font-semibold leading-snug text-ink">{selectedPost.house_label}</h3>
                   {(selectedPost.scheduled_date || selectedPost.scheduled_time) && (
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
                       <Calendar aria-hidden="true" size={13} />
