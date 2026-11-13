@@ -7,6 +7,7 @@ import { MediaPreview } from '@/components/MediaPreview';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { houseLabel } from '@/lib/house';
+import { useFileDrop } from '@/lib/useFileDrop';
 import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw } from 'lucide-react';
 
 interface ApprovalVersion {
@@ -294,16 +295,25 @@ export default function ApprovalSectionOrange() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      setFile(selectedFile);
-      setMediaPreview((previousPreview) => {
-        if (previousPreview) URL.revokeObjectURL(previousPreview);
-        return URL.createObjectURL(selectedFile);
-      });
-    }
+  const chooseFile = (selectedFile: File) => {
+    setFile(selectedFile);
+    setFeedbackMessage('');
+    setMediaPreview((previousPreview) => {
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
+      return URL.createObjectURL(selectedFile);
+    });
   };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) chooseFile(e.target.files[0]);
+  };
+
+  // Arrastar o vídeo ou a foto do computador direto para a janela.
+  const createDrop = useFileDrop(
+    chooseFile,
+    () => setFeedbackMessage('Esse arquivo não é vídeo nem foto. Arraste um vídeo (MP4, MOV) ou uma imagem.'),
+    submitting,
+  );
 
   const handleSendForApproval = async () => {
     if (!houseName.trim()) {
@@ -436,9 +446,7 @@ export default function ApprovalSectionOrange() {
     setVersionModalOpen(true);
   };
 
-  const handleVersionFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = e.target.files?.[0];
-    if (!chosen) return;
+  const chooseVersionFile = (chosen: File) => {
     setVersionFile(chosen);
     setVersionError('');
     setVersionPreview((previous) => {
@@ -446,6 +454,18 @@ export default function ApprovalSectionOrange() {
       return URL.createObjectURL(chosen);
     });
   };
+
+  const handleVersionFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = e.target.files?.[0];
+    if (chosen) chooseVersionFile(chosen);
+  };
+
+  const versionDrop = useFileDrop(
+    (chosen) => chooseVersionFile(chosen),
+    () => setVersionError('Esse arquivo não é vídeo nem foto. Arraste um vídeo (MP4, MOV) ou uma imagem.'),
+    submitting,
+  );
+
 
   // Envia a V2, V3... no mesmo link: o post volta para "pendente" e o aprovador vê todas as versões.
   const handleSendNewVersion = async () => {
@@ -858,8 +878,9 @@ export default function ApprovalSectionOrange() {
       </div>
 
       {isModalOpen && (
-        <div {...createDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+        <div {...createDismiss} {...createDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+            {createDrop.dragging && <DropOverlay />}
             
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
@@ -963,7 +984,7 @@ export default function ApprovalSectionOrange() {
                   ) : (
                     <div className="p-4 text-center">
                       <ImageIcon size={32} className="mx-auto mb-2 text-brand-lime" />
-                      <p className="text-[11px] font-medium text-white/70">A prévia da mídia aparece aqui.</p>
+                      <p className="text-[11px] font-medium text-white/70">Arraste o vídeo ou a foto para cá,<br />ou use &ldquo;Selecionar mídia&rdquo;.</p>
                     </div>
                   )}
                 </div>
@@ -995,8 +1016,9 @@ export default function ApprovalSectionOrange() {
       )}
 
       {versionModalOpen && selectedPost && (
-        <div {...versionDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+        <div {...versionDismiss} {...versionDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+            {versionDrop.dragging && <DropOverlay />}
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                 <div>
@@ -1023,7 +1045,7 @@ export default function ApprovalSectionOrange() {
 
               <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-border bg-canvas px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
                 <ImageIcon size={16} aria-hidden="true" />
-                {versionFile ? 'Trocar arquivo' : 'Escolher vídeo ou foto corrigida'}
+                {versionFile ? 'Trocar arquivo' : 'Escolher ou arrastar o vídeo/foto corrigida'}
                 <input type="file" accept="video/*,image/*" onChange={handleVersionFile} className="sr-only" />
               </label>
               {versionFile && <p className="truncate text-xs text-ink-muted">{versionFile.name}</p>}
@@ -1224,6 +1246,19 @@ function VersionTimeline({ versions }: { versions: ApprovalVersion[] }) {
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+// Aviso por cima da janela enquanto o arquivo está sendo arrastado.
+function DropOverlay() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-panel border-2 border-dashed border-brand-plum bg-surface/90 p-6">
+      <div className="text-center">
+        <Upload size={32} className="mx-auto text-brand-plum" aria-hidden="true" />
+        <p className="mt-3 text-base font-semibold text-ink">Solte o vídeo ou a foto aqui</p>
+        <p className="mt-1 text-xs text-ink-muted">MP4, MOV, JPG, PNG ou WEBP</p>
+      </div>
     </div>
   );
 }
