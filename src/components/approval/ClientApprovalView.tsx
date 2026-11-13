@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useId, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { coverUrlFor } from '@/lib/media';
 import { AlertTriangle, ArrowLeft, Check, LoaderCircle, PencilLine, X } from 'lucide-react';
 
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
@@ -234,6 +235,7 @@ export function ClientApprovalView({ post, onRespond, backHref }: ClientApproval
               <video
                 key={mediaUrl}
                 src={mediaUrl}
+                poster={coverUrlFor(mediaUrl, 'video') ?? undefined}
                 controls
                 playsInline
                 preload="metadata"

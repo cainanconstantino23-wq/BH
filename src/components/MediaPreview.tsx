@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ImageOff, Video } from 'lucide-react';
-import { isVideoMedia } from '@/lib/media';
+import { coverUrlFor, isVideoMedia } from '@/lib/media';
 
 interface MediaPreviewProps {
   src: string;
@@ -14,6 +14,8 @@ interface MediaPreviewProps {
   muted?: boolean;
   loop?: boolean;
   preload?: 'none' | 'metadata' | 'auto';
+  /** Miniatura: para vídeo, mostra a capa JPG (leve) em vez de carregar o vídeo. Sem capa, usa o vídeo. */
+  cover?: boolean;
 }
 
 export function MediaPreview({
@@ -26,9 +28,19 @@ export function MediaPreview({
   muted = false,
   loop = false,
   preload = 'metadata',
+  cover = false,
 }: MediaPreviewProps) {
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
   const isVideo = isVideoMedia(src, mediaType);
+  const coverUrl = cover && isVideo ? coverUrlFor(src, mediaType) : null;
+
+  if (coverUrl && !coverFailed && !hasLoadError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={coverUrl} alt={alt} loading="lazy" onError={() => setCoverFailed(true)} className={className} />
+    );
+  }
 
   if (!src || hasLoadError) {
     return (

@@ -551,7 +551,7 @@ function InstagramFeedPreview() {
                       canReorder ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${isDragged ? 'opacity-35' : ''}`}
                   >
-                    <MediaPreview key={post.imageUrl} src={coverSrc(post.imageUrl, post.mediaType)} mediaType={post.mediaType} alt="" muted preload="metadata" className="pointer-events-none h-full w-full object-cover" />
+                    <MediaPreview key={post.imageUrl} src={coverSrc(post.imageUrl, post.mediaType)} mediaType={post.mediaType} alt="" cover muted preload="metadata" className="pointer-events-none h-full w-full object-cover" />
 
                     <span className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1">
                       {isVideoMedia(post.imageUrl, post.mediaType) && (
@@ -625,7 +625,7 @@ function InstagramFeedPreview() {
           className="pointer-events-none fixed z-[70] w-28 overflow-hidden rounded-md shadow-[0_12px_32px_-8px_rgb(35_27_45/0.45)]"
           style={{ left: drag.x, top: drag.y, transform: drag.touch ? 'translate(-50%, -115%) rotate(-2deg)' : 'translate(-50%, -60%) rotate(-2deg)' }}
         >
-          <MediaPreview src={coverSrc(draggedPost.imageUrl, draggedPost.mediaType)} mediaType={draggedPost.mediaType} alt="" muted className="aspect-[3/4] w-full object-cover" />
+          <MediaPreview src={coverSrc(draggedPost.imageUrl, draggedPost.mediaType)} mediaType={draggedPost.mediaType} alt="" cover muted className="aspect-[3/4] w-full object-cover" />
         </div>,
         document.body,
       )}

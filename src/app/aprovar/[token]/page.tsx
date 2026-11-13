@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { ChevronRight, Film, LoaderCircle, PencilLine } from 'lucide-react';
 import { formatSchedule } from '@/components/approval/ClientApprovalView';
+import { MediaPreview } from '@/components/MediaPreview';
 import type { ApprovalListItem } from '@/app/api/approval-list/[token]/route';
 
 // Lista para o aprovador: todos os posts ainda não aprovados num link só.
@@ -113,13 +114,17 @@ function ItemGrid({ items, listToken, muted = false }: { items: ApprovalListItem
               className="group block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata"
             >
               <div className={`relative aspect-[4/5] overflow-hidden rounded-xl bg-bh-azul ${muted ? 'opacity-70' : ''}`}>
-                {item.coverUrl &&
-                  (item.mediaType === 'video' ? (
-                    <video src={coverSrc(item)} muted playsInline preload="metadata" aria-hidden="true" className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03] motion-reduce:transition-none" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.coverUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03] motion-reduce:transition-none" />
-                  ))}
+                {item.coverUrl && (
+                  <MediaPreview
+                    src={coverSrc(item)}
+                    mediaType={item.mediaType}
+                    alt=""
+                    cover
+                    muted
+                    preload="metadata"
+                    className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03] motion-reduce:transition-none"
+                  />
+                )}
                 <span className="absolute left-2 top-2 flex items-center gap-1">
                   {item.mediaType === 'video' && (
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-bh-tinta/70 text-white">

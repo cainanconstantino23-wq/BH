@@ -349,6 +349,7 @@ export function PlannerScheduler() {
                                   src={matchedPost.image}
                                   mediaType={matchedPost.mediaType}
                                   alt={`Prévia de ${matchedPost.title}`}
+                                  cover
                                   muted
                                   loop
                                   autoPlay
@@ -397,6 +398,7 @@ export function PlannerScheduler() {
                         src={post.image}
                         mediaType={post.mediaType}
                         alt={`Prévia de ${post.title}`}
+                        cover
                         muted={post.isVideo}
                         loop={post.isVideo}
                         autoPlay={post.isVideo}

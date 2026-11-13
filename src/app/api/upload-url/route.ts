@@ -12,6 +12,7 @@ const s3Client = new S3Client({
   },
 });
 
+const VIDEO_KEY = /^uploads\/[A-Za-z0-9._-]+\.(mp4|mov|webm|m4v)$/;
 const ALLOWED_TYPES = /^(image\/(jpeg|png|webp|heic|heif)|video\/(mp4|quicktime|webm))$/;
 
 // Gera uma URL assinada para enviar mídia ao R2. Só para quem cria ou edita publicações.
@@ -23,13 +24,27 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { fileName, fileType } = (await request.json()) as { fileName?: unknown; fileType?: unknown };
+    const { fileName, fileType, coverFor } = (await request.json()) as {
+      fileName?: unknown;
+      fileType?: unknown;
+      coverFor?: unknown;
+    };
     if (typeof fileName !== 'string' || typeof fileType !== 'string' || !ALLOWED_TYPES.test(fileType)) {
       return NextResponse.json({ error: 'Tipo de arquivo não permitido.' }, { status: 400 });
     }
 
-    const fileExt = (fileName.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
-    const key = `uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    let key: string;
+    if (coverFor !== undefined) {
+      // Capa de um vídeo já enviado: fica ao lado dele, com o mesmo nome + ".jpg" (ver coverUrlFor em src/lib/media.ts).
+      const videoKey = typeof coverFor === 'string' ? coverFor.replace(`${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/`, '') : '';
+      if (fileType !== 'image/jpeg' || !VIDEO_KEY.test(videoKey)) {
+        return NextResponse.json({ error: 'Capa inválida.' }, { status: 400 });
+      }
+      key = `${videoKey}.jpg`;
+    } else {
+      const fileExt = (fileName.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+      key = `uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    }
 
     const command = new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME,

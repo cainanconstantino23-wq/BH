@@ -9,8 +9,14 @@ const isMedia = (file: File) =>
  * Arrastar um vídeo ou foto do computador e soltar na janela.
  * Espalhe `dropProps` no elemento que recebe o arquivo; `dragging` liga o aviso "Solte aqui".
  * Só aceita imagem ou vídeo; outro tipo chama `onReject`.
+ * Com `onFiles`, recebe todos os arquivos soltos (ex.: carrossel) em vez de só o primeiro.
  */
-export function useFileDrop(onFile: (file: File) => void, onReject?: () => void, disabled = false) {
+export function useFileDrop(
+  onFile: (file: File) => void,
+  onReject?: () => void,
+  disabled = false,
+  onFiles?: (files: File[]) => void,
+) {
   const [dragging, setDragging] = useState(false);
   // dragenter/dragleave disparam a cada filho; o contador evita o aviso piscar.
   const depth = useRef(0);
@@ -41,9 +47,10 @@ export function useFileDrop(onFile: (file: File) => void, onReject?: () => void,
       depth.current = 0;
       setDragging(false);
       if (disabled) return;
-      const file = Array.from(event.dataTransfer.files).find(isMedia);
-      if (file) onFile(file);
-      else onReject?.();
+      const files = Array.from(event.dataTransfer.files).filter(isMedia);
+      if (files.length === 0) onReject?.();
+      else if (onFiles) onFiles(files);
+      else onFile(files[0]);
     },
   };
 

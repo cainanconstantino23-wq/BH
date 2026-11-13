@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { isVideoMedia } from '@/lib/media';
+import { captureVideoCover, isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
-import { houseLabel } from '@/lib/house';
+import { guessHouseFromFileName, houseLabel } from '@/lib/house';
+import { DropOverlay } from '@/components/media/DropOverlay';
 import { useFileDrop } from '@/lib/useFileDrop';
 import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw } from 'lucide-react';
 
@@ -70,6 +71,26 @@ async function uploadMedia(file: File, onPercent: (percent: number) => void) {
     xhr.onerror = () => reject(new Error('falha de rede no envio'));
     xhr.send(file);
   });
+
+  // Vídeo: tira um quadro e envia como capa (JPG leve para listas e grade). Se falhar, segue sem capa.
+  if (file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(file.name)) {
+    try {
+      const cover = await captureVideoCover(file);
+      if (cover) {
+        const coverRes = await fetch('/api/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: 'capa.jpg', fileType: 'image/jpeg', coverFor: publicUrl }),
+        });
+        if (coverRes.ok) {
+          const { uploadUrl: coverUploadUrl } = (await coverRes.json()) as { uploadUrl: string };
+          await fetch(coverUploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: cover });
+        }
+      }
+    } catch (error) {
+      console.warn('Capa do vídeo não foi gerada:', error);
+    }
+  }
   return publicUrl;
 }
 
@@ -298,6 +319,10 @@ export default function ApprovalSectionOrange() {
   const chooseFile = (selectedFile: File) => {
     setFile(selectedFile);
     setFeedbackMessage('');
+    // Nome e número da casa pelo nome do arquivo, só nos campos ainda vazios.
+    const guess = guessHouseFromFileName(selectedFile.name);
+    if (guess.name) setHouseName((current) => current || guess.name);
+    if (guess.number) setHouseNumber((current) => current || guess.number);
     setMediaPreview((previousPreview) => {
       if (previousPreview) URL.revokeObjectURL(previousPreview);
       return URL.createObjectURL(selectedFile);
@@ -670,6 +695,7 @@ export default function ApprovalSectionOrange() {
                       mediaType={p.media_type}
                       alt={`Prévia da publicação de ${p.house_name}`}
                       className="h-full w-full object-cover"
+                      cover
                       muted
                       loop
                       autoPlay
@@ -1250,15 +1276,3 @@ function VersionTimeline({ versions }: { versions: ApprovalVersion[] }) {
   );
 }
 
-// Aviso por cima da janela enquanto o arquivo está sendo arrastado.
-function DropOverlay() {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-panel border-2 border-dashed border-brand-plum bg-surface/90 p-6">
-      <div className="text-center">
-        <Upload size={32} className="mx-auto text-brand-plum" aria-hidden="true" />
-        <p className="mt-3 text-base font-semibold text-ink">Solte o vídeo ou a foto aqui</p>
-        <p className="mt-1 text-xs text-ink-muted">MP4, MOV, JPG, PNG ou WEBP</p>
-      </div>
-    </div>
-  );
-}

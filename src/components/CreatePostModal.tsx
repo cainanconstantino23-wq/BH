@@ -5,7 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { MediaPreview } from '@/components/MediaPreview';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { useDismiss } from '@/lib/useDismiss';
-import { houseLabel } from '@/lib/house';
+import { guessHouseFromFileName, houseLabel } from '@/lib/house';
+import { useFileDrop } from '@/lib/useFileDrop';
+import { DropOverlay } from '@/components/media/DropOverlay';
 import { findClosestFormat, findExactFormat, type InstagramFormat } from '@/lib/instagramFormats';
 import * as tus from 'tus-js-client';
 import { 
@@ -192,7 +194,16 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
+    addFiles(files);
+  };
+
+  const addFiles = (files: File[]) => {
     if (files.length === 0) return;
+
+    // Nome e número da casa pelo nome do arquivo, só nos campos ainda vazios.
+    const guess = guessHouseFromFileName(files[0].name);
+    if (guess.name) setHouseName((current) => current || guess.name);
+    if (guess.number) setHouseNumber((current) => current || guess.number);
 
     if (contentType === 'CARROSSEL') {
       const room = CAROUSEL_LIMIT - media.length;
@@ -383,6 +394,14 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     }
   };
 
+  // Arrastar fotos ou vídeo do computador para a janela (no carrossel, várias de uma vez).
+  const fileDrop = useFileDrop(
+    () => undefined,
+    () => setEditorFeedback('Esse arquivo não é vídeo nem foto.'),
+    loading || isImageEditorOpen,
+    (files) => addFiles(files),
+  );
+
   const dismiss = useDismiss(isOpen, onClose, loading || isImageEditorOpen || lightboxIndex !== null);
 
   if (!isOpen) return null;
@@ -401,8 +420,9 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
     : null;
 
   return (
-    <div {...dismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 backdrop-blur-xs">
-      <div className="flex h-[96vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#f8f9fa] text-gray-900 shadow-2xl">
+    <div {...dismiss} {...fileDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4 backdrop-blur-xs">
+      <div className="relative flex h-[96vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#f8f9fa] text-gray-900 shadow-2xl">
+        {fileDrop.dragging && <DropOverlay />}
         
         {/* Topbar Superior */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
