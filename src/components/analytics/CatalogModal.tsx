@@ -21,6 +21,7 @@ import {
 import { MediaPreview } from '@/components/MediaPreview';
 import { isVideoMedia } from '@/lib/media';
 import { useTeam } from '@/lib/team';
+import { houseLabel } from '@/lib/house';
 
 type FeedStatusFilter = 'all' | 'pending' | 'approved';
 
@@ -28,6 +29,7 @@ interface ScheduledTile {
   kind: 'scheduled';
   id: number | string;
   title: string;
+  house: string; // "Casa 110 · Vila dos Coqueiros" (vazio se o post não tem casa)
   caption: string;
   imageUrl: string;
   mediaType: string;
@@ -131,7 +133,7 @@ function InstagramFeedPreview() {
   const loadPosts = useCallback(async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, title, content, caption, image_url, media_type, platform, scheduled_date, time_string, hour, approval_status')
+      .select('id, title, house_name, house_number, content, caption, image_url, media_type, platform, scheduled_date, time_string, hour, approval_status')
       .not('scheduled_date', 'is', null);
     if (error) throw error;
 
@@ -140,6 +142,7 @@ function InstagramFeedPreview() {
         kind: 'scheduled',
         id: row.id,
         title: row.title || 'Publicação',
+        house: houseLabel(row.house_name, row.house_number),
         caption: row.content || row.caption || '',
         imageUrl: row.image_url || '',
         mediaType: row.media_type || '',
@@ -277,7 +280,7 @@ function InstagramFeedPreview() {
         isUndo
           ? { text: 'Troca desfeita.' }
           : {
-              text: `“${a.title}” foi para ${formatDay(slotB.scheduledDate)} às ${slotB.timeString} e “${b.title}” para ${formatDay(slotA.scheduledDate)} às ${slotA.timeString}.`,
+              text: `“${a.house || a.title}” foi para ${formatDay(slotB.scheduledDate)} às ${slotB.timeString} e “${b.house || b.title}” para ${formatDay(slotA.scheduledDate)} às ${slotA.timeString}.`,
               undo: [a.id, b.id],
             },
       );
@@ -534,7 +537,7 @@ function InstagramFeedPreview() {
                   <button
                     type="button"
                     aria-haspopup="dialog"
-                    aria-label={`${post.title}, ${formatDay(post.scheduledDate)} às ${post.timeString}, ${approval.label}. Abrir prévia.`}
+                    aria-label={`${post.house || post.title}, ${formatDay(post.scheduledDate)} às ${post.timeString}, ${approval.label}. Abrir prévia.`}
                     onPointerDown={(event) => onTilePointerDown(event, post.id)}
                     onContextMenu={(event) => canReorder && event.preventDefault()}
                     onClick={() => {
@@ -561,8 +564,13 @@ function InstagramFeedPreview() {
                       </span>
                     </span>
 
-                    <span className="pointer-events-none absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white sm:text-[11px]">
-                      {formatDay(post.scheduledDate)} {post.timeString}
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-1.5 pb-1.5 pt-6 text-white">
+                      {post.house && (
+                        <span className="block truncate text-[10px] font-semibold leading-tight sm:text-xs">{post.house}</span>
+                      )}
+                      <span className="block text-[10px] font-medium tabular-nums leading-tight text-white/85 sm:text-[11px]">
+                        {formatDay(post.scheduledDate)} {post.timeString}
+                      </span>
                     </span>
 
                     {canReorder && (
@@ -651,7 +659,10 @@ function InstagramFeedPreview() {
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="min-w-0">
-                  <h3 id="feed-post-preview-title" className="text-sm font-semibold">{selected.title}</h3>
+                  <h3 id="feed-post-preview-title" className="text-sm font-semibold">{selected.house || selected.title}</h3>
+                  {selected.house && selected.title !== selected.house && (
+                    <p className="mt-0.5 truncate text-xs text-ink-muted">{selected.title}</p>
+                  )}
                   <p className="mt-1 text-xs capitalize text-ink-muted">
                     {formatLongDay(selected.scheduledDate)}, {selected.timeString}
                   </p>

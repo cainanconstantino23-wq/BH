@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { MediaPreview } from '@/components/MediaPreview';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { useDismiss } from '@/lib/useDismiss';
+import { houseLabel } from '@/lib/house';
 import { findClosestFormat, findExactFormat, type InstagramFormat } from '@/lib/instagramFormats';
 import * as tus from 'tus-js-client';
 import { 
@@ -72,6 +73,8 @@ const getErrorMessage = (error: unknown) => {
 export default function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostModalProps) {
   const [contentType, setContentType] = useState<ContentType>('REEL');
   const [caption, setCaption] = useState('');
+  const [houseName, setHouseName] = useState('');
+  const [houseNumber, setHouseNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('mobile');
@@ -256,7 +259,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
       const response = await fetch('/api/copy/reels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: caption, currentCaption: caption, format: contentType }),
+        body: JSON.stringify({ houseName: houseLabel(houseName, houseNumber), notes: caption, currentCaption: caption, format: contentType }),
       });
       const result = (await response.json().catch(() => ({}))) as { caption?: string; error?: string };
       if (!response.ok || !result.caption) {
@@ -328,7 +331,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
         ?? 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80';
 
       setUploadStatus('Agendando...');
-      const titleVal = caption.slice(0, 25) || `${contentType} Novo`;
+      const titleVal = houseLabel(houseName, houseNumber) || caption.slice(0, 25) || `${contentType} Novo`;
       const formattedHour = scheduledHour % 12 || 12;
       const ampm = scheduledHour >= 12 ? 'PM' : 'AM';
       const timeStrVal = `${formattedHour}:00 ${ampm}`;
@@ -338,6 +341,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
 
       const { error: dbError } = await supabase.from('posts').insert([{
         title: titleVal,
+        house_name: houseName.trim() || null,
+        house_number: houseNumber.trim() || null,
         content: caption,
         platform: contentType,
         day_index: dayIndex,
@@ -356,6 +361,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
       onClose();
 
       setCaption('');
+      setHouseName('');
+      setHouseNumber('');
       setNotes('');
       media.forEach((item) => URL.revokeObjectURL(item.url));
       setMedia([]);
@@ -447,6 +454,31 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated }: Crea
               <button onClick={() => setIsNotesOpen(!isNotesOpen)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
                 <Bookmark size={14} /> {isNotesOpen ? 'Ocultar notas' : 'Notas'}
               </button>
+            </div>
+
+            {/* Casa: aparece na grade do feed e na aprovação */}
+            <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-gray-700">Nome da casa</span>
+                <input
+                  type="text"
+                  value={houseName}
+                  onChange={(e) => setHouseName(e.target.value)}
+                  placeholder="Ex.: Vila dos Coqueiros"
+                  className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-purple-900 focus:outline-none"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="block text-xs font-semibold text-gray-700">Número</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={houseNumber}
+                  onChange={(e) => setHouseNumber(e.target.value)}
+                  placeholder="Ex.: 110"
+                  className="min-h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm tabular-nums focus:border-purple-900 focus:outline-none"
+                />
+              </label>
             </div>
 
             {/* Caixa de Texto e Mídia */}

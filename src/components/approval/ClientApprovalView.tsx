@@ -7,6 +7,18 @@ import { AlertTriangle, Check, LoaderCircle, PencilLine, X } from 'lucide-react'
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
 export type ApprovalStatus = 'pending' | ApprovalDecision;
 
+export interface ClientApprovalVersion {
+  version: number;
+  mediaUrl: string;
+  mediaType: 'image' | 'video';
+  caption: string;
+  note?: string;
+  createdAt?: string;
+  decision: ApprovalDecision | null;
+  feedback?: string;
+  respondedAt?: string;
+}
+
 export interface ClientApprovalPost {
   houseName: string;
   caption: string;
@@ -17,11 +29,13 @@ export interface ClientApprovalPost {
   scheduledTime?: string;
   approvalStatus: ApprovalStatus;
   clientFeedback?: string;
+  currentVersion?: number;
+  versions?: ClientApprovalVersion[];
 }
 
 interface ClientApprovalViewProps {
   post: ClientApprovalPost;
-  onRespond: (decision: ApprovalDecision, feedback: string) => Promise<void>;
+  onRespond: (decision: ApprovalDecision, feedback: string, version: number) => Promise<void>;
 }
 
 const decisions: Record<
@@ -106,6 +120,15 @@ function formatHour(time?: string) {
   return minutes === '00' ? `${hour}h` : `${hour}h${minutes}`;
 }
 
+function formatSentAt(value?: string) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    .format(parsed)
+    .replace('.', '');
+}
+
 const isTallFormat = (format?: string) => ['REEL', 'STORY'].includes((format ?? '').toUpperCase());
 
 export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps) {
@@ -119,6 +142,17 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
   const schedule = formatSchedule(post.format, post.scheduledDate, post.scheduledTime);
   const answered = post.approvalStatus !== 'pending';
   const selected = choice ? decisions[choice] : null;
+
+  // Versões: abre na mais nova; as anteriores ficam nas abas para comparar.
+  const versions = post.versions ?? [];
+  const currentVersion = post.currentVersion ?? versions.at(-1)?.version ?? 1;
+  const [viewedVersion, setViewedVersion] = useState(currentVersion);
+  const viewed = versions.find((v) => v.version === viewedVersion);
+  const isCurrent = viewedVersion === currentVersion;
+  const mediaUrl = isCurrent ? post.mediaUrl || viewed?.mediaUrl || '' : viewed?.mediaUrl || '';
+  const mediaType = isCurrent ? post.mediaType : viewed?.mediaType ?? 'image';
+  const caption = isCurrent ? post.caption : viewed?.caption ?? '';
+  const hasVersions = versions.length > 1;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -134,7 +168,7 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
     setSubmitting(true);
     setErrorMessage('');
     try {
-      await onRespond(choice, feedback.trim());
+      await onRespond(choice, feedback.trim(), currentVersion);
     } catch (error) {
       const message = error instanceof Error && error.message ? ` (${error.message})` : '';
       setErrorMessage(`A resposta não foi enviada${message}. Verifique sua conexão e tente de novo.`);
@@ -159,12 +193,36 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
       <div className="mx-auto grid max-w-6xl gap-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14 lg:px-8">
         <section
           aria-label="Conteúdo para aprovação"
-          className="flex items-center justify-center bg-bh-azul px-5 py-6 sm:px-8 sm:py-10 lg:sticky lg:top-8 lg:self-start lg:rounded-[1.25rem] lg:py-12"
+          className="flex flex-col items-center justify-center gap-4 bg-bh-azul px-5 py-6 sm:px-8 sm:py-10 lg:sticky lg:top-8 lg:self-start lg:rounded-[1.25rem] lg:py-12"
         >
-          {post.mediaUrl ? (
-            post.mediaType === 'video' ? (
+          {hasVersions && (
+            <div role="tablist" aria-label="Versões do conteúdo" className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-bh-papel/70 p-1">
+              {versions.map((v) => {
+                const active = v.version === viewedVersion;
+                return (
+                  <button
+                    key={v.version}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setViewedVersion(v.version)}
+                    className={`min-h-10 shrink-0 rounded-full px-4 text-[0.95rem] transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata ${
+                      active ? 'bg-bh-tinta font-medium text-white' : 'text-bh-tinta hover:bg-bh-papel'
+                    }`}
+                  >
+                    V{v.version}
+                    {v.version === currentVersion && <span className={active ? 'text-white/75' : 'text-bh-tinta-suave'}> · atual</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {mediaUrl ? (
+            mediaType === 'video' ? (
               <video
-                src={post.mediaUrl}
+                key={mediaUrl}
+                src={mediaUrl}
                 controls
                 playsInline
                 preload="metadata"
@@ -174,7 +232,8 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={post.mediaUrl}
+                key={mediaUrl}
+                src={mediaUrl}
                 alt={`Imagem da publicação de ${post.houseName}`}
                 className="block max-h-[72dvh] w-auto max-w-full rounded-lg object-contain"
               />
@@ -192,16 +251,46 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
           </h1>
           {schedule && <p className="mt-3 text-base text-bh-tinta-suave">{schedule}</p>}
 
-          {post.caption && (
+          {hasVersions && !isCurrent && (
+            <div className="mt-6 rounded-xl border border-bh-linha bg-bh-papel p-4">
+              <p className="text-base text-bh-tinta">
+                Você está vendo a <strong className="font-medium">versão {viewedVersion}</strong>. A resposta vale para a versão{' '}
+                {currentVersion}, a mais recente.
+              </p>
+              <button
+                type="button"
+                onClick={() => setViewedVersion(currentVersion)}
+                className="mt-3 min-h-10 rounded-lg border border-bh-linha px-4 text-[0.95rem] font-medium text-bh-tinta hover:bg-bh-cal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+              >
+                Ver versão {currentVersion}
+              </button>
+            </div>
+          )}
+
+          {viewed?.note && (
             <section className="mt-8 border-t border-bh-linha pt-6">
-              <h2 className="text-[0.95rem] font-medium text-bh-tinta">Legenda da publicação</h2>
+              <h2 className="text-[0.95rem] font-medium text-bh-tinta">O que mudou na versão {viewed.version}</h2>
+              <p className="mt-3 max-w-[62ch] whitespace-pre-line text-base leading-[1.65] text-bh-tinta">{viewed.note}</p>
+            </section>
+          )}
+
+          {caption && (
+            <section className="mt-8 border-t border-bh-linha pt-6">
+              <h2 className="text-[0.95rem] font-medium text-bh-tinta">
+                Legenda da publicação{hasVersions ? ` · versão ${viewedVersion}` : ''}
+              </h2>
               <p className="mt-3 max-w-[62ch] whitespace-pre-line text-base leading-[1.65] text-bh-tinta">
-                {post.caption}
+                {caption}
               </p>
             </section>
           )}
 
           <section className="mt-8 border-t border-bh-linha pt-6" aria-live="polite">
+            {hasVersions && (
+              <p className="mb-2 text-[0.9rem] font-medium uppercase tracking-[0.08em] text-bh-tinta-suave">
+                Versão {currentVersion}
+              </p>
+            )}
             {answered ? (
               <AnsweredState status={post.approvalStatus as ApprovalDecision} feedback={post.clientFeedback} />
             ) : (
@@ -305,6 +394,8 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
               </form>
             )}
           </section>
+
+          {hasVersions && <VersionHistory versions={versions} currentVersion={currentVersion} onView={setViewedVersion} />}
         </div>
       </div>
     </main>
@@ -335,5 +426,55 @@ function AnsweredState({ status, feedback }: { status: ApprovalDecision; feedbac
         </blockquote>
       )}
     </div>
+  );
+}
+
+function VersionHistory({
+  versions,
+  currentVersion,
+  onView,
+}: {
+  versions: ClientApprovalVersion[];
+  currentVersion: number;
+  onView: (version: number) => void;
+}) {
+  return (
+    <section className="mt-10 border-t border-bh-linha pt-6">
+      <h2 className="text-[1.375rem] font-normal text-bh-tinta">Histórico</h2>
+      <ol className="mt-4 space-y-5">
+        {[...versions].reverse().map((v) => {
+          const option = v.decision ? decisions[v.decision] : null;
+          const Icon = option?.icon;
+          const sentAt = formatSentAt(v.createdAt);
+          return (
+            <li key={v.version} className="border-l-2 border-bh-linha pl-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <button
+                  type="button"
+                  onClick={() => onView(v.version)}
+                  className="text-left text-[1.0625rem] font-medium text-bh-tinta underline decoration-bh-linha underline-offset-4 hover:decoration-bh-tinta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+                >
+                  Versão {v.version}
+                </button>
+                {sentAt && <span className="text-[0.9rem] text-bh-tinta-suave">enviada em {sentAt}</span>}
+              </div>
+              {option && Icon ? (
+                <p className={`mt-1.5 flex items-center gap-1.5 text-[0.95rem] font-medium ${option.accent.split(' ').find((c) => c.startsWith('text-'))}`}>
+                  <Icon aria-hidden="true" size={15} strokeWidth={2} />
+                  {option.doneTitle}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[0.95rem] text-bh-tinta-suave">
+                  {v.version === currentVersion ? 'Aguardando sua resposta' : 'Sem resposta'}
+                </p>
+              )}
+              {v.feedback && (
+                <p className="mt-2 whitespace-pre-line text-base leading-[1.6] text-bh-tinta">“{v.feedback}”</p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }

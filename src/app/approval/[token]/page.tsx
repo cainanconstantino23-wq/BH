@@ -22,6 +22,7 @@ type LoadState = { status: 'loading' } | { status: 'missing' } | { status: 'read
 
 const responseErrors: Record<string, string> = {
   already_answered: 'Este conteúdo já foi respondido.',
+  new_version: 'A equipe acabou de enviar uma versão nova. Veja a versão atual e responda de novo.',
   feedback_required: 'Descreva o que precisa mudar.',
   feedback_too_long: 'O comentário passou de 2.000 caracteres.',
   not_found: 'Este link não está mais disponível.',
@@ -71,15 +72,15 @@ export default function ClientApprovalPage() {
     };
   }, [token, isReady]);
 
-  const handleRespond = async (decision: ApprovalDecision, feedback: string) => {
+  const handleRespond = async (decision: ApprovalDecision, feedback: string, version: number) => {
     const response = await fetch(`/api/approval/${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision, feedback }),
+      body: JSON.stringify({ decision, feedback, version }),
     });
     const result = (await response.json().catch(() => ({}))) as { post?: ClientApprovalPost; error?: string };
 
-    if (result.post && (response.ok || result.error === 'already_answered')) {
+    if (result.post && (response.ok || result.error === 'already_answered' || result.error === 'new_version')) {
       setState({ status: 'ready', post: result.post });
       if (response.ok) return;
     }
@@ -108,7 +109,7 @@ export default function ClientApprovalPage() {
     );
   }
 
-  return <ClientApprovalView post={state.post} onRespond={handleRespond} />;
+  return <ClientApprovalView key={state.post.currentVersion ?? 1} post={state.post} onRespond={handleRespond} />;
 }
 
 function StatusScreen({ children }: { children: React.ReactNode }) {

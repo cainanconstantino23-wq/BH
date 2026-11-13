@@ -6,11 +6,29 @@ import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2 } from 'lucide-react';
+import { houseLabel } from '@/lib/house';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History } from 'lucide-react';
+
+interface ApprovalVersion {
+  version: number;
+  media_url: string;
+  media_type: string;
+  caption: string;
+  note: string;
+  created_at: string;
+  created_by_label: string;
+  decision: string;
+  feedback: string;
+  responded_at: string;
+  responded_by_label: string;
+}
 
 interface ApprovalPost {
   id: string | number;
   house_name: string;
+  house_number: string;
+  house_label: string;
+  versions: ApprovalVersion[];
   caption: string;
   media_url: string;
   media_type: 'image' | 'video';
@@ -30,6 +48,35 @@ const getErrorMessage = (error: unknown) => {
   return 'Erro inesperado.';
 };
 
+// Envia o arquivo direto do navegador para o R2 (URL assinada), com progresso real.
+async function uploadMedia(file: File, onPercent: (percent: number) => void) {
+  const res = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+  });
+  if (!res.ok) throw new Error(`upload-url respondeu ${res.status}`);
+  const { uploadUrl, publicUrl } = (await res.json()) as { uploadUrl: string; publicUrl: string };
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onPercent(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`envio respondeu ${xhr.status}`)));
+    xhr.onerror = () => reject(new Error('falha de rede no envio'));
+    xhr.send(file);
+  });
+  return publicUrl;
+}
+
+const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
+
+const decisionLabel = (status: string) =>
+  status === 'approved' ? 'Aprovado' : status === 'changes_requested' ? 'Pediu ajustes' : status === 'rejected' ? 'Reprovado' : '';
+
 export default function ApprovalSectionOrange() {
   const team = useTeam();
   const [decisionComment, setDecisionComment] = useState('');
@@ -42,6 +89,7 @@ export default function ApprovalSectionOrange() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [houseName, setHouseName] = useState('');
+  const [houseNumber, setHouseNumber] = useState('');
   const [caption, setCaption] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
@@ -57,6 +105,21 @@ export default function ApprovalSectionOrange() {
   const [generatingCopy, setGeneratingCopy] = useState(false);
   // Tela de envio no centro: progresso real, depois sucesso ou erro em linguagem simples.
   const [sendState, setSendState] = useState<SendState | null>(null);
+  // Nova versão (V2, V3...) no mesmo link
+  const [versionModalOpen, setVersionModalOpen] = useState(false);
+  const [versionFile, setVersionFile] = useState<File | null>(null);
+  const [versionPreview, setVersionPreview] = useState<string | null>(null);
+  const [versionCaption, setVersionCaption] = useState('');
+  const [versionNote, setVersionNote] = useState('');
+  const [versionError, setVersionError] = useState('');
+  const closeVersionModal = useCallback(() => setVersionModalOpen(false), []);
+  const versionDismiss = useDismiss(versionModalOpen, closeVersionModal, submitting);
+
+  useEffect(() => {
+    return () => {
+      if (versionPreview) URL.revokeObjectURL(versionPreview);
+    };
+  }, [versionPreview]);
 
   useEffect(() => {
     return () => {
@@ -72,12 +135,40 @@ export default function ApprovalSectionOrange() {
 
     if (error) throw error;
 
+    // Versões de cada post (V1, V2...). Sem a tabela, a fila funciona só com a versão atual.
+    const { data: versionData, error: versionError } = await supabase
+      .from('post_versions')
+      .select('post_id, version, media_url, media_type, caption, note, created_at, created_by_label, decision, feedback, responded_at, responded_by_label')
+      .order('version', { ascending: true });
+    if (versionError) console.warn('Não foi possível carregar as versões:', versionError.message);
+    const versionsByPost = new Map<string, ApprovalVersion[]>();
+    for (const raw of (versionData ?? []) as Record<string, unknown>[]) {
+      const text = (value: unknown) => (typeof value === 'string' ? value : '');
+      const key = String(raw.post_id);
+      const list = versionsByPost.get(key) ?? [];
+      list.push({
+        version: typeof raw.version === 'number' ? raw.version : 1,
+        media_url: text(raw.media_url),
+        media_type: text(raw.media_type),
+        caption: text(raw.caption),
+        note: text(raw.note),
+        created_at: text(raw.created_at),
+        created_by_label: text(raw.created_by_label),
+        decision: text(raw.decision),
+        feedback: text(raw.feedback),
+        responded_at: text(raw.responded_at),
+        responded_by_label: text(raw.responded_by_label),
+      });
+      versionsByPost.set(key, list);
+    }
+
     const rows = (data ?? []) as Record<string, unknown>[];
     return rows.map((item, index) => {
       const id = typeof item.id === 'string' || typeof item.id === 'number' ? item.id : `post-${index}`;
       const stringValue = (value: unknown) => typeof value === 'string' ? value : '';
       const captionValue = stringValue(item.caption) || stringValue(item.content);
       const houseNameValue = stringValue(item.house_name) || stringValue(item.title) || 'Casa';
+      const houseNumberValue = stringValue(item.house_number);
 
       return {
         ...item,
@@ -89,6 +180,9 @@ export default function ApprovalSectionOrange() {
           stringValue(item.media_type),
         ) ? 'video' : 'image',
         house_name: houseNameValue,
+        house_number: houseNumberValue,
+        house_label: houseLabel(houseNameValue, houseNumberValue) || 'Casa',
+        versions: versionsByPost.get(String(id)) ?? [],
         approval_status: stringValue(item.approval_status) || 'pending',
         approval_token: stringValue(item.approval_token) || String(id),
         views_count: typeof item.views_count === 'number' ? item.views_count : 0,
@@ -207,49 +301,29 @@ export default function ApprovalSectionOrange() {
       return;
     }
 
-    const isVideoFile = file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
-    const kind = isVideoFile ? 'video' : 'foto';
+    const isVideo = isVideoFile(file);
+    const kind = isVideo ? 'video' : 'foto';
 
     try {
       setSubmitting(true);
       setFeedbackMessage('');
       setSendState({ phase: 'sending', percent: 0, kind });
 
-      // 1. autorização de envio (URL assinada)
-      const res = await fetch('/api/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
-      });
-      if (!res.ok) throw new Error(`upload-url respondeu ${res.status}`);
-      const { uploadUrl, publicUrl } = await res.json();
-
-      // 2. envio direto do navegador, com progresso real
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', file.type);
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            setSendState({ phase: 'sending', percent: Math.round((event.loaded / event.total) * 100), kind });
-          }
-        };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`envio respondeu ${xhr.status}`)));
-        xhr.onerror = () => reject(new Error('falha de rede no envio'));
-        xhr.send(file);
-      });
+      // 1 e 2. URL assinada + envio direto do navegador, com progresso real
+      const publicUrl = await uploadMedia(file, (percent) => setSendState({ phase: 'sending', percent, kind }));
 
       // 3. registra a publicação na fila
       setSendState({ phase: 'saving', kind });
       const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
       const { error: dbError } = await supabase.from('posts').insert([
         {
-          title: houseName,
-          house_name: houseName,
+          title: houseLabel(houseName, houseNumber),
+          house_name: houseName.trim(),
+          house_number: houseNumber.trim() || null,
           content: caption,
           caption: caption,
           image_url: publicUrl,
-          media_type: isVideoFile ? 'video' : 'image',
+          media_type: isVideo ? 'video' : 'image',
           approval_status: 'pending',
           approval_token: token,
           platform: 'REEL',
@@ -263,6 +337,7 @@ export default function ApprovalSectionOrange() {
 
       setIsModalOpen(false);
       setHouseName('');
+      setHouseNumber('');
       setCaption('');
       setFile(null);
       setMediaPreview(null);
@@ -289,7 +364,7 @@ export default function ApprovalSectionOrange() {
       const response = await fetch('/api/copy/reels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ houseName, notes: caption, currentCaption: caption, format: 'REEL' }),
+        body: JSON.stringify({ houseName: houseLabel(houseName, houseNumber), notes: caption, currentCaption: caption, format: 'REEL' }),
       });
       const result = (await response.json().catch(() => ({}))) as { caption?: string; error?: string };
       if (!response.ok || !result.caption) {
@@ -302,6 +377,68 @@ export default function ApprovalSectionOrange() {
       setFeedbackMessage('Sem conexão para gerar a legenda. Tente de novo.');
     } finally {
       setGeneratingCopy(false);
+    }
+  };
+
+  const openVersionModal = () => {
+    if (!selectedPost) return;
+    setVersionFile(null);
+    setVersionPreview(null);
+    setVersionCaption(selectedPost.caption);
+    setVersionNote('');
+    setVersionError('');
+    setVersionModalOpen(true);
+  };
+
+  const handleVersionFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = e.target.files?.[0];
+    if (!chosen) return;
+    setVersionFile(chosen);
+    setVersionError('');
+    setVersionPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return URL.createObjectURL(chosen);
+    });
+  };
+
+  // Envia a V2, V3... no mesmo link: o post volta para "pendente" e o aprovador vê todas as versões.
+  const handleSendNewVersion = async () => {
+    if (!selectedPost) return;
+    const captionChanged = versionCaption.trim() !== selectedPost.caption.trim();
+    if (!versionFile && !captionChanged) {
+      setVersionError('Escolha o vídeo ou a foto corrigida, ou altere a legenda.');
+      return;
+    }
+    const kind = versionFile ? (isVideoFile(versionFile) ? 'video' : 'foto') : selectedPost.media_type === 'video' ? 'video' : 'foto';
+
+    try {
+      setSubmitting(true);
+      setVersionError('');
+      setSendState({ phase: versionFile ? 'sending' : 'saving', percent: 0, kind } as SendState);
+      const publicUrl = versionFile
+        ? await uploadMedia(versionFile, (percent) => setSendState({ phase: 'sending', percent, kind }))
+        : null;
+
+      setSendState({ phase: 'saving', kind });
+      const { error } = await supabase.rpc('submit_post_version', {
+        p_post_id: Number(selectedPost.id),
+        p_media_url: publicUrl,
+        p_media_type: versionFile ? (isVideoFile(versionFile) ? 'video' : 'image') : null,
+        p_caption: versionCaption,
+        p_note: versionNote.trim() || null,
+      });
+      if (error) throw error;
+
+      setVersionModalOpen(false);
+      setVersionFile(null);
+      setVersionPreview(null);
+      setSendState({ phase: 'done', kind, message: 'Nova versão no mesmo link. Avise o aprovador.' });
+      await refreshPosts();
+    } catch (error) {
+      console.error('Erro ao enviar nova versão:', getErrorMessage(error), error);
+      setSendState({ phase: 'error', kind });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -411,8 +548,11 @@ export default function ApprovalSectionOrange() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="max-w-[90px] truncate text-[10px] font-semibold uppercase text-ink">{p.house_name || 'Casa'}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-[10px] font-semibold uppercase text-ink">
+                        {p.house_label}
+                        {p.versions.length > 1 && <span className="ml-1 font-medium text-ink-muted">· V{p.versions.length}</span>}
+                      </span>
                       <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
                         p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
@@ -442,8 +582,13 @@ export default function ApprovalSectionOrange() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="inline-flex rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-brand-plum">
-                      {selectedPost.house_name || 'Casa'}
+                      {selectedPost.house_label}
                     </span>
+                    {selectedPost.versions.length > 1 && (
+                      <span className="inline-flex rounded-full border border-border bg-canvas px-2.5 py-0.5 text-[10px] font-semibold text-ink">
+                        Versão {selectedPost.versions.length}
+                      </span>
+                    )}
 
                     {/* Badge Realtime: Cliente Online */}
                     {activeViewers > 0 && (
@@ -471,9 +616,18 @@ export default function ApprovalSectionOrange() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {team.can('editar_publicacoes') && (
+                    <button
+                      type="button"
+                      onClick={openVersionModal}
+                      className="flex min-h-11 items-center gap-2 rounded-control border border-border bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    >
+                      <Upload size={14} aria-hidden="true" /> Enviar nova versão
+                    </button>
+                  )}
                   {team.can('apagar_publicacoes') && <button
                     type="button"
-                    aria-label={`Excluir publicação de ${selectedPost.house_name}`}
+                    aria-label={`Excluir publicação de ${selectedPost.house_label}`}
                     onClick={() => deletePost(selectedPost.id)}
                     className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
                     title="Excluir publicação"
@@ -540,7 +694,7 @@ export default function ApprovalSectionOrange() {
                   
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `Olá! Segue o link exclusivo para aprovação do vídeo da ${selectedPost.house_name}: ${window.location.origin}/approval/${selectedPost.approval_token.replace(/[()]/g, '')}`
+                      `Olá! ${selectedPost.versions.length > 1 ? `Enviei a versão ${selectedPost.versions.length} com os ajustes` : 'Segue o link exclusivo para aprovação'} do vídeo da ${selectedPost.house_label}: ${window.location.origin}/approval/${selectedPost.approval_token.replace(/[()]/g, '')}`
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -558,7 +712,7 @@ export default function ApprovalSectionOrange() {
                     key={selectedPost.media_url}
                     src={selectedPost.media_url}
                     mediaType={selectedPost.media_type}
-                    alt={`Mídia para ${selectedPost.house_name}`}
+                    alt={`Mídia para ${selectedPost.house_label}`}
                     controls={selectedPost.media_type === 'video'}
                     className="h-full max-h-[360px] w-full object-contain"
                   />
@@ -571,14 +725,16 @@ export default function ApprovalSectionOrange() {
                       {selectedPost.caption || 'Sem legenda inserida.'}
                     </div>
 
-                    {selectedPost.client_feedback && (
+                    {selectedPost.versions.length > 1 ? (
+                      <VersionTimeline versions={selectedPost.versions} />
+                    ) : selectedPost.client_feedback ? (
                       <div className="mt-4">
                         <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">Feedback do cliente</h4>
                         <div className="rounded-control border border-status-warning-border bg-status-warning-soft p-3 text-xs font-medium text-status-warning">
                           {selectedPost.client_feedback}
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -609,16 +765,30 @@ export default function ApprovalSectionOrange() {
                 </button>
               </div>
 
-              <div>
-                <label htmlFor="approval-house-name" className="mb-1.5 block text-xs font-semibold text-ink">Nome da casa / cliente</label>
-                <input
-                  id="approval-house-name"
-                  type="text"
-                  value={houseName}
-                  onChange={(e) => { setHouseName(e.target.value); setFeedbackMessage(''); }}
-                  placeholder="Ex: Villa Trancoso"
-                  className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
-                />
+              <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+                <div>
+                  <label htmlFor="approval-house-name" className="mb-1.5 block text-xs font-semibold text-ink">Nome da casa / cliente</label>
+                  <input
+                    id="approval-house-name"
+                    type="text"
+                    value={houseName}
+                    onChange={(e) => { setHouseName(e.target.value); setFeedbackMessage(''); }}
+                    placeholder="Ex: Vila dos Coqueiros"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="approval-house-number" className="mb-1.5 block text-xs font-semibold text-ink">Número</label>
+                  <input
+                    id="approval-house-number"
+                    type="text"
+                    inputMode="numeric"
+                    value={houseNumber}
+                    onChange={(e) => { setHouseNumber(e.target.value); setFeedbackMessage(''); }}
+                    placeholder="Ex: 110"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium tabular-nums text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -715,11 +885,109 @@ export default function ApprovalSectionOrange() {
         </div>
       )}
 
+      {versionModalOpen && selectedPost && (
+        <div {...versionDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+            <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
+              <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+                <div>
+                  <h2 id="new-version-title" className="text-base font-semibold text-ink">
+                    Enviar versão {selectedPost.versions.length + 1}
+                  </h2>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    {selectedPost.house_label}. Vai para o mesmo link, e o aprovador vê esta versão e as anteriores.
+                  </p>
+                </div>
+                <button type="button" aria-label="Fechar" onClick={closeVersionModal} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {selectedPost.client_feedback && (
+                <div>
+                  <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">O que foi pedido</h3>
+                  <p className="whitespace-pre-line rounded-control border border-status-warning-border bg-status-warning-soft p-3 text-xs font-medium text-status-warning">
+                    {selectedPost.client_feedback}
+                  </p>
+                </div>
+              )}
+
+              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-border bg-canvas px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
+                <ImageIcon size={16} aria-hidden="true" />
+                {versionFile ? 'Trocar arquivo' : 'Escolher vídeo ou foto corrigida'}
+                <input type="file" accept="video/*,image/*" onChange={handleVersionFile} className="sr-only" />
+              </label>
+              {versionFile && <p className="truncate text-xs text-ink-muted">{versionFile.name}</p>}
+
+              <label className="block space-y-1.5">
+                <span className="block text-xs font-semibold text-ink">O que mudou (o aprovador vê)</span>
+                <textarea
+                  value={versionNote}
+                  onChange={(e) => setVersionNote(e.target.value)}
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="Ex: troquei a cena de abertura pela vista da piscina."
+                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                />
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="block text-xs font-semibold text-ink">Legenda</span>
+                <textarea
+                  value={versionCaption}
+                  onChange={(e) => { setVersionCaption(e.target.value); setVersionError(''); }}
+                  rows={5}
+                  maxLength={2200}
+                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                />
+              </label>
+
+              {versionError && <p role="alert" className="rounded-control border border-border bg-canvas px-3 py-2 text-xs text-ink">{versionError}</p>}
+            </div>
+
+            <div className="flex w-full flex-col justify-between gap-4 bg-canvas/60 p-4 sm:p-6 md:w-80">
+              <div className="flex flex-1 items-center justify-center">
+                <div className="relative flex aspect-[9/16] max-h-[340px] w-full max-w-[200px] items-center justify-center overflow-hidden rounded-panel border border-border bg-brand-plum">
+                  <MediaPreview
+                    key={versionPreview ?? selectedPost.media_url}
+                    src={versionPreview ?? selectedPost.media_url}
+                    mediaType={versionFile ? versionFile.type : selectedPost.media_type}
+                    alt="Prévia da nova versão"
+                    controls
+                    muted
+                    className="h-full w-full object-contain"
+                  />
+                  {!versionPreview && (
+                    <span className="absolute left-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      Versão atual
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
+                <button type="button" onClick={closeVersionModal} disabled={submitting} className="min-h-11 rounded-control px-4 text-xs font-semibold text-ink-muted hover:bg-surface hover:text-ink disabled:opacity-50">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSendNewVersion()}
+                  disabled={submitting}
+                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                >
+                  <Send size={14} aria-hidden="true" />
+                  {submitting ? 'Enviando…' : `Enviar versão ${selectedPost.versions.length + 1}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sendState && (
         <SendProgress
           state={sendState}
           onClose={() => setSendState(null)}
-          onRetry={() => { setSendState(null); void handleSendForApproval(); }}
+          onRetry={() => { setSendState(null); void (versionModalOpen ? handleSendNewVersion() : handleSendForApproval()); }}
         />
       )}
 
@@ -730,7 +998,7 @@ export default function ApprovalSectionOrange() {
 type SendState =
   | { phase: 'sending'; percent: number; kind: 'video' | 'foto' }
   | { phase: 'saving'; kind: 'video' | 'foto' }
-  | { phase: 'done'; kind: 'video' | 'foto' }
+  | { phase: 'done'; kind: 'video' | 'foto'; message?: string }
   | { phase: 'error'; kind: 'video' | 'foto' };
 
 // Carregamento no centro da tela, com mensagens para quem usa (sem termos técnicos).
@@ -786,7 +1054,7 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
               <CheckCircle2 size={34} aria-hidden="true" />
             </span>
             <p className="mt-4 text-base font-semibold text-ink">{What} foi {state.kind === 'video' ? 'enviado' : 'enviada'} com sucesso!</p>
-            <p className="mt-1 text-sm text-ink-muted">Já está na fila de aprovação.</p>
+            <p className="mt-1 text-sm text-ink-muted">{state.message ?? 'Já está na fila de aprovação.'}</p>
             <button type="button" onClick={onClose} autoFocus className="mt-5 min-h-11 w-full rounded-control bg-brand-plum px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
               Ok
             </button>
@@ -811,6 +1079,42 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// Histórico do post para a equipe: cada versão com a resposta do aprovador.
+function VersionTimeline({ versions }: { versions: ApprovalVersion[] }) {
+  const latest = versions.at(-1)?.version;
+  return (
+    <div className="mt-4">
+      <h4 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+        <History size={12} aria-hidden="true" /> Versões e respostas
+      </h4>
+      <ol className="space-y-2">
+        {[...versions].reverse().map((v) => {
+          const tone =
+            v.decision === 'approved' ? 'border-status-success-border bg-status-success-soft text-status-success'
+            : v.decision === 'changes_requested' ? 'border-status-warning-border bg-status-warning-soft text-status-warning'
+            : v.decision === 'rejected' ? 'border-status-danger-border bg-status-danger-soft text-status-danger'
+            : 'border-border bg-canvas text-ink-muted';
+          const when = v.created_at ? new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+          return (
+            <li key={v.version} className={`rounded-control border p-3 text-xs ${tone}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-ink">
+                  V{v.version}
+                  {v.version === latest && <span className="ml-1 font-medium text-ink-muted">(atual)</span>}
+                </span>
+                <span className="font-semibold">{decisionLabel(v.decision) || (v.version === latest ? 'Aguardando resposta' : 'Sem resposta')}</span>
+              </div>
+              {when && <p className="mt-0.5 text-[11px] text-ink-muted">Enviada em {when}{v.created_by_label ? ` por ${v.created_by_label}` : ''}</p>}
+              {v.note && <p className="mt-1.5 text-ink"><span className="font-semibold">Mudou:</span> {v.note}</p>}
+              {v.feedback && <p className="mt-1.5 whitespace-pre-line font-medium">“{v.feedback}”</p>}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

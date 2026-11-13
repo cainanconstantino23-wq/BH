@@ -15,7 +15,9 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
   - Token e conta em user_meta_config (só o servidor acessa; RLS fechado para o navegador).
   - Sincronização: src/lib/meta/instagramSync.ts → tabelas instagram_account_daily e instagram_media. Cron diário (vercel.json, 09:00 UTC) em /api/cron/instagram-sync com CRON_SECRET; botão "Atualizar agora" em /api/instagram/sync.
   - Painel: src/components/analytics/InstagramDashboard.tsx (dados via /api/instagram/metrics).
-- Central de aprovação: src/components/ApprovalSectionOrange.tsx gera link público /approval/[token]; a página do cliente lê e responde por /api/approval/[token] (chave de serviço no servidor); prazo de 7 dias ainda não é aplicado.
+- Central de aprovação: src/components/ApprovalSectionOrange.tsx gera link público /approval/[token]; a página do cliente lê e responde por /api/approval/[token] (chave de serviço no servidor); qualquer pessoa com o link responde, sem login; prazo de 7 dias ainda não é aplicado.
+  - Versões: tabela post_versions (V1 criada por trigger no insert; resposta gravada na versão atual por trigger). "Enviar nova versão" chama a função submit_post_version, que devolve o post a pendente no mesmo link. posts guarda sempre a versão atual.
+- Casa: posts.house_name + posts.house_number; exibição por houseLabel() em src/lib/house.ts ("Casa 110 · Vila dos Coqueiros").
 - Agendamento: src/components/CreatePostModal.tsx com editor de imagem nas medidas do Instagram (src/components/media/InstagramImageEditor.tsx, medidas em src/lib/instagramFormats.ts); salva na tabela posts.
 - Grade do feed: src/components/analytics/CatalogModal.tsx (prévia 3:4, agendados + publicados, arrastar para trocar datas).
 - Tela inicial após o login: src/components/home/HomeHub.tsx (fotos das casas em public/inicio, avisos do dia, dock com motion). O logo do painel volta para ela.
