@@ -7,7 +7,7 @@ import { MediaPreview } from '@/components/MediaPreview';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { houseLabel } from '@/lib/house';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw } from 'lucide-react';
 
 interface ApprovalVersion {
   version: number;
@@ -114,6 +114,11 @@ export default function ApprovalSectionOrange() {
   const [generatingCopy, setGeneratingCopy] = useState(false);
   // Tela de envio no centro: progresso real, depois sucesso ou erro em linguagem simples.
   const [sendState, setSendState] = useState<SendState | null>(null);
+  // Link único com todos os não aprovados (/aprovar/[token])
+  const [listLink, setListLink] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [listCopied, setListCopied] = useState(false);
+
   // Nova versão (V2, V3...) no mesmo link
   const [versionModalOpen, setVersionModalOpen] = useState(false);
   const [versionFile, setVersionFile] = useState<File | null>(null);
@@ -389,6 +394,38 @@ export default function ApprovalSectionOrange() {
     }
   };
 
+  const loadListLink = async (renew = false) => {
+    if (renew && !confirm('Gerar um link novo? O link antigo deixa de abrir.')) return;
+    setListLoading(true);
+    setFeedbackMessage('');
+    try {
+      const response = await fetch('/api/approval-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ renew }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { token?: string; error?: string };
+      if (!response.ok || !result.token) throw new Error(result.error ?? `erro ${response.status}`);
+      setListLink(`${window.location.origin}/aprovar/${result.token}`);
+      setListCopied(false);
+    } catch (error) {
+      setFeedbackMessage(`Não foi possível gerar o link da lista: ${getErrorMessage(error)}`);
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  const copyListLink = async () => {
+    if (!listLink) return;
+    try {
+      await navigator.clipboard.writeText(listLink);
+      setListCopied(true);
+      window.setTimeout(() => setListCopied(false), 3000);
+    } catch {
+      setFeedbackMessage('Não foi possível copiar automaticamente. Selecione e copie o link.');
+    }
+  };
+
   const openVersionModal = () => {
     if (!selectedPost) return;
     setVersionFile(null);
@@ -510,6 +547,19 @@ export default function ApprovalSectionOrange() {
             <p className="mt-1 text-xs leading-relaxed text-ink-muted">Revise conteúdos, acompanhe as respostas e compartilhe links de aprovação.</p>
           </div>
         </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+        {team.can('enviar_link_aprovacao') && (
+          <button
+            type="button"
+            onClick={() => (listLink ? setListLink(null) : void loadListLink())}
+            disabled={listLoading}
+            aria-expanded={Boolean(listLink)}
+            className="flex min-h-11 items-center justify-center gap-2 rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-60"
+          >
+            {listLoading ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <ListChecks size={15} aria-hidden="true" />}
+            Link com todos os pendentes
+          </button>
+        )}
         {team.can('criar_publicacoes') && <button
           type="button"
           onClick={() => { setFeedbackMessage(''); setIsModalOpen(true); }}
@@ -517,7 +567,56 @@ export default function ApprovalSectionOrange() {
         >
           <Plus size={16} /> Novo post para aprovação
         </button>}
+        </div>
       </div>
+
+      {listLink && (
+        <div className="space-y-3 rounded-panel border border-border bg-surface p-4 sm:p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">Link com todos os pendentes</h3>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              O aprovador vê numa página só tudo o que ainda não foi aprovado e responde um por um. O link é sempre o mesmo e se atualiza sozinho.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              readOnly
+              value={listLink}
+              aria-label="Link com todos os pendentes"
+              onFocus={(event) => event.target.select()}
+              className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-3 font-mono text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            />
+            <button type="button" onClick={() => void copyListLink()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+              <Copy size={13} aria-hidden="true" /> {listCopied ? 'Copiado!' : 'Copiar link'}
+            </button>
+            <a
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Aqui estão todos os conteúdos da Bahia Homes esperando aprovação: ${listLink}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            >
+              Enviar por WhatsApp
+            </a>
+            <a
+              href={listLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            >
+              Abrir
+            </a>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadListLink(true)}
+            disabled={listLoading}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-control px-2 text-xs font-medium text-ink-muted hover:bg-canvas hover:text-ink disabled:opacity-60"
+          >
+            <RefreshCw size={13} aria-hidden="true" /> Gerar link novo (o antigo para de abrir)
+          </button>
+        </div>
+      )}
 
       {feedbackMessage && !isModalOpen && <p role="status" className="rounded-control border border-border bg-surface px-4 py-3 text-xs text-ink">{feedbackMessage}</p>}
 

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { LoaderCircle } from 'lucide-react';
 import {
   ClientApprovalView,
@@ -35,6 +35,9 @@ export default function ClientApprovalPage() {
   const token = rawToken ? decodeURIComponent(rawToken).replace(/[()]/g, '').trim() : '';
 
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // Aberto pela lista (/aprovar/[token]): mostra o botão de voltar.
+  const list = useSearchParams()?.get('lista') ?? '';
+  const backHref = /^[A-Za-z0-9_-]{16,128}$/.test(list) ? `/aprovar/${list}` : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,7 +112,7 @@ export default function ClientApprovalPage() {
     );
   }
 
-  return <ClientApprovalView key={state.post.currentVersion ?? 1} post={state.post} onRespond={handleRespond} />;
+  return <ClientApprovalView key={state.post.currentVersion ?? 1} post={state.post} onRespond={handleRespond} backHref={backHref} />;
 }
 
 function StatusScreen({ children }: { children: React.ReactNode }) {

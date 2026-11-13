@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import { useId, useState, type FormEvent } from 'react';
-import { AlertTriangle, Check, LoaderCircle, PencilLine, X } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, ArrowLeft, Check, LoaderCircle, PencilLine, X } from 'lucide-react';
 
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected';
 export type ApprovalStatus = 'pending' | ApprovalDecision;
@@ -36,6 +37,8 @@ export interface ClientApprovalPost {
 interface ClientApprovalViewProps {
   post: ClientApprovalPost;
   onRespond: (decision: ApprovalDecision, feedback: string, version: number) => Promise<void>;
+  /** Quando o post foi aberto pela lista de aprovação: volta para ela. */
+  backHref?: string;
 }
 
 const decisions: Record<
@@ -94,7 +97,7 @@ const formatLabels: Record<string, string> = {
   CARROSSEL: 'Carrossel',
 };
 
-function formatSchedule(format?: string, date?: string, time?: string) {
+export function formatSchedule(format?: string, date?: string, time?: string) {
   const formatLabel = (format && formatLabels[format.toUpperCase()]) || 'Publicação';
   if (!date) return null;
 
@@ -131,7 +134,7 @@ function formatSentAt(value?: string) {
 
 const isTallFormat = (format?: string) => ['REEL', 'STORY'].includes((format ?? '').toUpperCase());
 
-export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps) {
+export function ClientApprovalView({ post, onRespond, backHref }: ClientApprovalViewProps) {
   const [choice, setChoice] = useState<ApprovalDecision | null>(null);
   const [feedback, setFeedback] = useState(post.clientFeedback ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -179,7 +182,7 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
 
   return (
     <main className="press-feedback min-h-dvh bg-bh-cal font-display text-bh-tinta antialiased">
-      <header className="mx-auto flex max-w-6xl items-center px-5 pb-4 pt-[calc(1.25rem+env(safe-area-inset-top))] sm:px-8 lg:pb-8 lg:pt-10">
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 pb-4 pt-[calc(1.25rem+env(safe-area-inset-top))] sm:px-8 lg:pb-8 lg:pt-10">
         <Image
           src="/bahia-homes-logo.png"
           alt="Bahia Homes"
@@ -188,6 +191,14 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
           priority
           className="h-auto w-32 mix-blend-multiply sm:w-36"
         />
+        {backHref && (
+          <Link
+            href={backHref}
+            className="flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[0.95rem] font-medium text-bh-tinta hover:bg-bh-papel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+          >
+            <ArrowLeft aria-hidden="true" size={17} /> Todos para aprovar
+          </Link>
+        )}
       </header>
 
       <div className="mx-auto grid max-w-6xl gap-8 pb-[calc(2.5rem+env(safe-area-inset-bottom))] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14 lg:px-8">
@@ -292,7 +303,17 @@ export function ClientApprovalView({ post, onRespond }: ClientApprovalViewProps)
               </p>
             )}
             {answered ? (
-              <AnsweredState status={post.approvalStatus as ApprovalDecision} feedback={post.clientFeedback} />
+              <>
+                <AnsweredState status={post.approvalStatus as ApprovalDecision} feedback={post.clientFeedback} />
+                {backHref && (
+                  <Link
+                    href={backHref}
+                    className="mt-6 flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-bh-tinta/85 px-5 text-base font-medium text-white transition-colors duration-150 ease-out hover:bg-bh-tinta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+                  >
+                    <ArrowLeft aria-hidden="true" size={18} /> Voltar para os outros conteúdos
+                  </Link>
+                )}
+              </>
             ) : (
               <form onSubmit={handleSubmit} noValidate>
                 <fieldset>

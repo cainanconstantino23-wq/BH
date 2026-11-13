@@ -17,6 +17,7 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
   - Painel: src/components/analytics/InstagramDashboard.tsx (dados via /api/instagram/metrics).
 - Central de aprovação: src/components/ApprovalSectionOrange.tsx gera link público /approval/[token]; a página do cliente lê e responde por /api/approval/[token] (chave de serviço no servidor); qualquer pessoa com o link responde, sem login; prazo de 7 dias ainda não é aplicado.
   - Versões: tabela post_versions (V1 criada por trigger no insert; resposta gravada na versão atual por trigger). "Enviar nova versão" chama a função submit_post_version, que devolve o post a pendente no mesmo link. posts guarda sempre a versão atual.
+  - Lista: /aprovar/[token] mostra todos os não aprovados num link fixo (tabela approval_list_links, só servidor); gerado no painel via /api/approval-list; dados públicos via /api/approval-list/[token]. Cada cartão abre /approval/[token]?lista=... com botão de voltar.
 - Casa: posts.house_name + posts.house_number; exibição por houseLabel() em src/lib/house.ts ("Casa 110 · Vila dos Coqueiros").
 - Agendamento: src/components/CreatePostModal.tsx com editor de imagem nas medidas do Instagram (src/components/media/InstagramImageEditor.tsx, medidas em src/lib/instagramFormats.ts); salva na tabela posts.
 - Grade do feed: src/components/analytics/CatalogModal.tsx (prévia 3:4, agendados + publicados, arrastar para trocar datas).
