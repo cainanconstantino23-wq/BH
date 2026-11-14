@@ -24,7 +24,7 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
   - Login Google OAuth (escopo drive.readonly) em src/app/api/auth/google/(login|callback); lógica em src/lib/google/drive.ts; tokens em google_drive_connections (só servidor; conexão da equipe = a mais recente). Env: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET.
   - Listagem /api/drive/list?folder=root|shared|drives|<id>; miniaturas pelo servidor em /api/drive/thumb/[id]?s=400. Em modo de teste do Google o acesso expira a cada 7 dias (reconectar).
 - Casa: posts.house_name + posts.house_number; exibição por houseLabel() em src/lib/house.ts ("Casa 110 · Vila dos Coqueiros").
-- Agendamento: src/components/CreatePostModal.tsx com editor de imagem nas medidas do Instagram (src/components/media/InstagramImageEditor.tsx, medidas em src/lib/instagramFormats.ts); salva na tabela posts.
+- Calendário de posts (aba planner, antes "Programar Post"): só mostra os agendados; posts são criados pela Aprovação de capa, que abre src/components/CreatePostModal.tsx com editor de imagem nas medidas do Instagram (src/components/media/InstagramImageEditor.tsx, medidas em src/lib/instagramFormats.ts); salva na tabela posts.
 - Grade do feed: src/components/analytics/CatalogModal.tsx (prévia 3:4, agendados + publicados, arrastar para trocar datas).
 - Tela inicial após o login: src/components/home/HomeHub.tsx (fotos das casas em public/inicio, avisos do dia, dock com motion). O logo do painel volta para ela.
 - Equipe: cadastro aberto, admin aprova no app e escolhe entre 13 permissões (src/lib/team.tsx, src/lib/team-server.ts, src/components/team/). Histórico em activity_log (triggers no banco), sininho de notificações, menu da conta no canto superior direito.
@@ -35,7 +35,7 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
 - Rotas protegidas: /api/cron/* exige CRON_SECRET; /api/instagram/* exige login.
 
 ## Situação atual
-- Publicação no Instagram: src/lib/meta/publish.ts (contêiner → espera processar → media_publish; foto, carrossel, Reels, Story). "Publicar agora" e "publicar sozinho no horário" na prévia da Grade do feed (POST/PATCH /api/instagram/publish, permissão publicar_instagram, só aprovados). Agendador: /api/cron/instagram-publish (CRON_SECRET; a cada 5 min por agendador externo, não publica atrasados > 6 h). Campos publish_* em posts só o servidor altera (guard). Exige instagram_content_publish no token; a API não aceita foto 3:4.
+- Publicação no Instagram: src/lib/meta/publish.ts (contêiner → espera processar → media_publish; foto, carrossel, Reels, Story). "Publicar agora" e "publicar sozinho no horário" na prévia da Grade do feed (POST/PATCH /api/instagram/publish, permissão publicar_instagram, só aprovados). Agendador: /api/cron/instagram-publish chamado a cada 5 min pelo cron-job.org (cabeçalho Authorization: Bearer CRON_SECRET; não publica atrasados > 6 h). Se trocar o CRON_SECRET na Vercel, atualizar também no cron-job.org. Campos publish_* em posts só o servidor altera (guard). Exige instagram_content_publish no token; a API não aceita foto 3:4.
 - Equipe única da Bahia Homes (sem organizations): todos os membros ativos veem os mesmos dados; permissões aplicadas no banco (has_permission + RLS + trigger guard_post_update).
 - /api/upload-url exige login e permissão de criar/editar publicações.
 
