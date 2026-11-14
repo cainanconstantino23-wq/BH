@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, ChevronLeft, ChevronRight, Crop, Loader2, Star, Undo2 } from 'lucide-react';
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Crop, Loader2, Star, Undo2 } from 'lucide-react';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { OnScreen } from '@/components/drive/OnScreen';
 import { formatPlaceLabel } from '@/lib/instagramFormats';
@@ -45,6 +45,14 @@ export function DrivePhotoViewer({
   const item = items[index];
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  // aviso no centro da tela ao salvar o corte: carregando → "Foto salva" (some sozinho)
+  const [toast, setToast] = useState<{ state: 'saving' | 'saved' | 'error'; detail?: string } | null>(null);
+
+  useEffect(() => {
+    if (toast?.state !== 'saved' && toast?.state !== 'error') return;
+    const timer = window.setTimeout(() => setToast(null), toast.state === 'saved' ? 1600 : 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
   const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
 
@@ -131,9 +139,6 @@ export function DrivePhotoViewer({
             ) : (
               <p className="text-xs leading-relaxed text-ink-muted">Ajuste o corte se quiser e clique em &ldquo;Salvar corte&rdquo;. Sem corte, vai a foto original.</p>
             )}
-            {saving && (
-              <p role="status" className="flex items-center gap-1.5 text-xs text-ink-muted"><Loader2 size={13} className="animate-spin" aria-hidden="true" /> Salvando o corte…</p>
-            )}
             {notice && !saving && (
               <p role="status" className={`text-xs font-medium ${notice.tone === 'ok' ? 'text-status-success' : 'text-status-danger'}`}>{notice.text}</p>
             )}
@@ -145,18 +150,53 @@ export function DrivePhotoViewer({
         onApply={async ({ file, format }) => {
           setSaving(true);
           setNotice(null);
+          setToast({ state: 'saving' });
           try {
             const url = await uploadImage(file);
             onEdited({ url, width: format.width, height: format.height, label: `${formatPlaceLabel(format)} ${format.ratioLabel}` });
-            setNotice({ tone: 'ok', text: `Corte salvo: ${formatPlaceLabel(format)} ${format.ratioLabel}.` });
+            setToast({ state: 'saved', detail: `${formatPlaceLabel(format)} ${format.ratioLabel} · ${format.width} × ${format.height}` });
           } catch (error) {
             console.error('Falha ao salvar o corte:', error);
-            setNotice({ tone: 'error', text: 'Não foi possível salvar o corte. Tente de novo.' });
+            setToast({ state: 'error' });
           } finally {
             setSaving(false);
           }
         }}
       />
+
+      {toast && (
+        <div
+          className={`fixed inset-0 z-[80] flex items-center justify-center p-4 ${toast.state === 'saving' ? 'bg-ink/30' : 'pointer-events-none'}`}
+          aria-live="assertive"
+        >
+          <div role="status" className="toast-pop flex min-w-56 flex-col items-center gap-3 rounded-panel bg-surface px-8 py-6 text-center shadow-2xl">
+            {toast.state === 'saving' && (
+              <>
+                <Loader2 size={30} className="animate-spin text-brand-plum motion-reduce:animate-none" aria-hidden="true" />
+                <p className="text-sm font-semibold text-ink">Salvando o corte…</p>
+              </>
+            )}
+            {toast.state === 'saved' && (
+              <>
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-status-success text-white">
+                  <Check size={26} strokeWidth={3} aria-hidden="true" />
+                </span>
+                <p className="text-base font-semibold text-ink">Foto salva</p>
+                {toast.detail && <p className="-mt-2 text-xs text-ink-muted">{toast.detail}</p>}
+              </>
+            )}
+            {toast.state === 'error' && (
+              <>
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-status-danger text-white">
+                  <AlertCircle size={26} aria-hidden="true" />
+                </span>
+                <p className="text-base font-semibold text-ink">Não foi possível salvar</p>
+                <p className="-mt-2 text-xs text-ink-muted">Tente de novo em instantes.</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </OnScreen>
   );
 }
