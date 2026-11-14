@@ -6,11 +6,10 @@ import { isVideoMedia } from '@/lib/media';
 import { MediaPreview } from '@/components/MediaPreview';
 import { 
   Calendar as CalendarIcon, List, Trash2, 
-  Plus, ChevronLeft, ChevronRight, X,
+  ChevronLeft, ChevronRight, X,
   CalendarDays, Search
 } from 'lucide-react';
 
-import CreatePostModal from '@/components/CreatePostModal';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 
@@ -46,7 +45,6 @@ export function PlannerScheduler() {
   const closeDetails = () => setSelectedPost(null);
   const detailsDismiss = useDismiss(selectedPost !== null, closeDetails);
   const [activeTab, setActiveTab] = useState<'calendar' | 'list'>('calendar');
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [draggedPostId, setDraggedPostId] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -228,13 +226,6 @@ export function PlannerScheduler() {
           </button>
         </div>
         
-        {team.can('criar_publicacoes') && <button 
-          type="button"
-          onClick={() => setIsCreateOpen(true)} 
-          className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
-        >
-          <Plus size={16} /> Criar publicação
-        </button>}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-border bg-surface p-3">
@@ -428,12 +419,6 @@ export function PlannerScheduler() {
           </div>
         </div>
       )}
-
-      <CreatePostModal 
-        isOpen={isCreateOpen} 
-        onClose={() => setIsCreateOpen(false)} 
-        onPostCreated={fetchPosts}
-      />
 
       {selectedPost && (
         <div {...detailsDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-4 backdrop-blur-xs">

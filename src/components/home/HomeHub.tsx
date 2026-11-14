@@ -12,7 +12,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'motion/react';
-import { BarChart3, CalendarPlus, ChevronRight, CircleCheck, ImageUp, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronRight, CircleCheck, ImageUp, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const outfit = Outfit({ subsets: ['latin'], weight: ['300', '400', '500'], display: 'swap' });
@@ -101,7 +101,7 @@ export function HomeHub({
   const items: DockItem[] = [
     ...(canSeeAnalytics ? [{ key: 'analytics' as const, name: 'Analytics', hint: 'Alcance, visualizações e ranking', icon: BarChart3 }] : []),
     { key: 'approval', name: 'Aprovação', hint: counts?.pending ? `${counts.pending} aguardando` : 'Envie para o cliente aprovar', icon: CircleCheck, badge: counts?.pending || undefined },
-    { key: 'planner', name: 'Programar post', hint: 'Fotos, Reels e Stories', icon: CalendarPlus },
+    { key: 'planner', name: 'Calendário de posts', hint: 'Posts agendados por dia', icon: CalendarDays },
     { key: 'feed', name: 'Grade do feed', hint: 'Organize o perfil arrastando', icon: LayoutGrid },
     { key: 'capa', name: 'Aprovação de capa', hint: 'Fotos do Drive e capa do feed', icon: ImageUp },
   ];

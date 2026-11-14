@@ -22,8 +22,10 @@ import {
 interface CreatePostModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Recebe o id do post criado. */
-  onPostCreated?: (postId?: number) => void;
+  /** Recebe o id do post criado e se a pessoa pediu para publicar agora. */
+  onPostCreated?: (postId?: number, publishNow?: boolean) => void;
+  /** Mostra "Publicar agora" (post que já nasce aprovado, ex.: capa aprovada na Aprovação de capa). */
+  allowPublishNow?: boolean;
   /** Abre já com estas fotos (ex.: capa aprovada + fotos da pasta da casa). Mais de uma vira carrossel. */
   initialFiles?: File[];
   initialHouse?: { name: string; number: string };
@@ -77,7 +79,7 @@ const getErrorMessage = (error: unknown) => {
   return 'Erro inesperado.';
 };
 
-export default function CreatePostModal({ isOpen, onClose, onPostCreated, initialFiles, initialHouse }: CreatePostModalProps) {
+export default function CreatePostModal({ isOpen, onClose, onPostCreated, initialFiles, initialHouse, allowPublishNow = false }: CreatePostModalProps) {
   const [contentType, setContentType] = useState<ContentType>(() =>
     initialFiles?.length ? (initialFiles.length > 1 ? 'CARROSSEL' : 'POST') : 'REEL',
   );
@@ -94,7 +96,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
   const [draftSaved, setDraftSaved] = useState(false);
   
   // Opções adicionais do Instagram
-  const [autoPublish, setAutoPublish] = useState(true);
+  // publicar sozinho no horário agendado (o agendador só publica posts aprovados)
+  const [autoPublish, setAutoPublish] = useState(false);
   const [showInFeed, setShowInFeed] = useState(true);
   const [isAIContent, setIsAIContent] = useState(false);
 
@@ -239,6 +242,21 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
     setEditorFeedback(`Mídia selecionada: ${files[0].name}`);
   };
 
+  // Ordem do carrossel: a primeira mídia é a capa. Arrastar a miniatura ou usar as setas.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const moveMedia = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= media.length || to >= media.length) return;
+    const next = [...media];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setMedia(next);
+    setActiveMediaId(moved.id);
+    setPreviewSlide(to);
+    setDraftSaved(false);
+    setEditorFeedback(to === 0 ? 'Esta mídia agora é a capa do carrossel.' : `Mídia movida para a posição ${to + 1}.`);
+  };
+
   const removeMedia = (id: string) => {
     const index = media.findIndex((item) => item.id === id);
     if (index < 0) return;
@@ -295,7 +313,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
   };
 
   // Envio ao Supabase com Suporte a Arquivos Grandes (>6MB via TUS)
-  const handleSavePost = async () => {
+  const handleSavePost = async (publishNow = false) => {
     setLoading(true);
     setUploadStatus('Processando...');
 
@@ -371,11 +389,13 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
         scheduled_date: scheduledDate,
         // a lista completa só vai quando há mais de uma mídia (carrossel)
         ...(uploaded.length > 1 ? { media_items: uploaded } : {}),
+        // sem a permissão de publicar, o banco grava como falso
+        auto_publish: autoPublish && !publishNow,
       }]).select('id').single();
 
       if (dbError) throw dbError;
 
-      if (onPostCreated) onPostCreated(typeof created?.id === 'number' ? created.id : undefined);
+      if (onPostCreated) onPostCreated(typeof created?.id === 'number' ? created.id : undefined, publishNow);
       onClose();
 
       setCaption('');
@@ -533,7 +553,36 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                 <div className="mx-4 mb-4 space-y-3">
                   <ul className="flex flex-wrap gap-3" aria-label="Mídias do post">
                     {media.map((item, i) => (
-                      <li key={item.id} className="relative">
+                      <li
+                        key={item.id}
+                        className={`relative transition-opacity ${media.length > 1 ? 'cursor-grab active:cursor-grabbing' : ''} ${dragIndex === i ? 'opacity-40' : ''}`}
+                        draggable={media.length > 1}
+                        onDragStart={(event) => {
+                          setDragIndex(i);
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', String(i));
+                        }}
+                        onDragOver={(event) => {
+                          if (dragIndex === null) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                          if (dropIndex !== i) setDropIndex(i);
+                        }}
+                        onDrop={(event) => {
+                          if (dragIndex === null) return;
+                          event.preventDefault();
+                          moveMedia(dragIndex, i);
+                          setDragIndex(null);
+                          setDropIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDragIndex(null);
+                          setDropIndex(null);
+                        }}
+                      >
+                        {dropIndex === i && dragIndex !== null && dragIndex !== i && (
+                          <span aria-hidden="true" className={`pointer-events-none absolute -top-1 bottom-6 z-10 w-1 rounded-full bg-brand-plum ${dragIndex < i ? '-right-2' : '-left-2'}`} />
+                        )}
                         <button
                           type="button"
                           onClick={() => { setActiveMediaId(item.id); setLightboxIndex(i); }}
@@ -555,7 +604,9 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                             <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/60 p-0.5 text-white"><Video size={11} aria-hidden="true" /></span>
                           )}
                           {media.length > 1 && (
-                            <span className="pointer-events-none absolute left-1 bottom-1 min-w-4 rounded bg-black/60 px-1 text-center text-[10px] font-semibold text-white">{i + 1}</span>
+                            <span className={`pointer-events-none absolute left-1 bottom-1 min-w-4 rounded px-1 text-center text-[10px] font-semibold text-white ${i === 0 ? 'bg-brand-plum' : 'bg-black/60'}`}>
+                              {i === 0 ? 'Capa' : i + 1}
+                            </span>
                           )}
                         </button>
                         <button
@@ -584,7 +635,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
 
                   {contentType === 'CARROSSEL' && (
                     <p className="text-[11px] text-gray-500">
-                      {media.length} de {CAROUSEL_LIMIT} mídias. A ordem dos números é a ordem do carrossel.
+                      {media.length} de {CAROUSEL_LIMIT} mídias. Arraste as miniaturas para mudar a ordem; a primeira é a capa.
                     </p>
                   )}
 
@@ -695,7 +746,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-700">Predefinições globais</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Publicação automática</span>
+                  <span className="text-xs text-gray-500" title="Publica sozinho no Instagram na data e hora agendadas, depois de aprovado">Publicar sozinho no horário</span>
                   <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} className="h-4 w-4 rounded-md accent-purple-900" />
                 </div>
               </div>
@@ -962,8 +1013,20 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
               <span>{scheduledDate} às {String(scheduledHour).padStart(2, '0')}:00</span>
             </div>
 
-            <button 
-              onClick={handleSavePost}
+            {allowPublishNow && !loading && (
+              <button
+                onClick={() => void handleSavePost(false)}
+                disabled={loading}
+                className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Agendar
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (allowPublishNow && !window.confirm('Publicar agora no Instagram? Depois de publicado, só dá para apagar pelo app do Instagram.')) return;
+                void handleSavePost(allowPublishNow);
+              }}
               disabled={loading}
               className="flex items-center gap-2 rounded-lg bg-gray-900 px-6 py-2 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
             >
@@ -972,8 +1035,13 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                   <Loader2 size={14} className="animate-spin" />
                   <span>{uploadStatus}</span>
                 </>
+              ) : allowPublishNow ? (
+                <>
+                  <Send size={14} aria-hidden="true" />
+                  <span>Publicar agora</span>
+                </>
               ) : (
-                <span>Agendar / Publicar</span>
+                <span>Agendar</span>
               )}
             </button>
           </div>

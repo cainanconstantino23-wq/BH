@@ -597,7 +597,7 @@ export default function Home() {
                     { label: 'Analytics', icon: BarChart2, tab: 'comunidade' as const },
                     { label: 'Inbox', icon: Inbox, tab: 'inbox' as const },
                     { label: 'Aprovação', icon: CheckCircle2, tab: 'approval' as const },
-                    { label: 'Programar Post', icon: CalendarDays, tab: 'planner' as const },
+                    { label: 'Calendário de posts', icon: CalendarDays, tab: 'planner' as const },
                   ].map((item) => {
                     const Icon = item.icon;
                     const isActive = item.tab === activeTab || (item.tab === 'comunidade' && activeTab === 'demografia');
@@ -720,7 +720,7 @@ export default function Home() {
               aria-current={activeTab === 'planner' ? 'page' : undefined}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'planner' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
             >
-              <CalendarDays size={15} /> Programar Post
+              <CalendarDays size={15} /> Calendário de posts
             </button>
             
             <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum-hover">

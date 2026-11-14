@@ -550,7 +550,7 @@ function InstagramFeedPreview() {
               {filter === 'all' ? 'Nenhuma publicação agendada' : `Nenhuma publicação ${filter === 'approved' ? 'aprovada' : 'pendente'}`}
             </h4>
             <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-muted">
-              Agende publicações em Programar Post para ver aqui como o perfil vai ficar.
+              Programe posts pela Aprovação de capa para ver aqui como o perfil vai ficar.
             </p>
           </div>
         ) : (

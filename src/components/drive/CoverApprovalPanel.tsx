@@ -299,6 +299,47 @@ function FolderDetail({
   const [preparing, setPreparing] = useState('');
   const [scheduleFiles, setScheduleFiles] = useState<File[] | null>(null);
   const [scheduled, setScheduled] = useState(false);
+  // andamento no centro da tela: aprovar → publicar no Instagram
+  const [publishing, setPublishing] = useState<
+    | { state: 'working'; text: string }
+    | { state: 'done'; permalink: string | null }
+    | { state: 'processing' }
+    | { state: 'error'; text: string }
+    | null
+  >(null);
+
+  const afterPostCreated = async (postId: number | undefined, publishNow: boolean) => {
+    if (!postId) return;
+    setPublishing(publishNow ? { state: 'working', text: 'Marcando como aprovado…' } : null);
+    // capa aprovada pela Thereza: o post já entra como aprovado (o servidor confere)
+    const approve = await fetch(`/api/capa/${id}/post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId }),
+    }).catch(() => null);
+    if (!approve?.ok) {
+      const text = 'O post foi salvo, mas não foi possível marcar como aprovado. Aprove na aba Aprovação e publique pela Grade do feed.';
+      if (publishNow) setPublishing({ state: 'error', text });
+      else setError(text);
+      return;
+    }
+    if (!publishNow) return;
+
+    setPublishing({ state: 'working', text: 'Publicando no Instagram… vídeos e carrosséis podem levar alguns minutos.' });
+    try {
+      const response = await fetch('/api/instagram/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { status?: string; message?: string; permalink?: string | null };
+      if (result.status === 'published') setPublishing({ state: 'done', permalink: result.permalink ?? null });
+      else if (result.status === 'processing') setPublishing({ state: 'processing' });
+      else setPublishing({ state: 'error', text: result.message ?? 'Não foi possível publicar.' });
+    } catch {
+      setPublishing({ state: 'error', text: 'Sem conexão com o servidor. O post ficou salvo e aprovado: publique pela Grade do feed.' });
+    }
+  };
 
   const schedule = async (photos: CoverPhoto[]) => {
     setScheduled(false);
@@ -380,7 +421,7 @@ function FolderDetail({
     ? new Date(collection.respondedAt).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
     : '';
   const approvedHint = scheduled
-    ? 'Post programado e já aprovado. Ele aparece no calendário e na grade do feed.'
+    ? 'Post salvo e aprovado. Ele aparece no calendário e na Grade do feed (lá também dá para publicar).'
     : !collection.responded
       ? link ? 'Aguardando a escolha pelo link.' : 'Gere o link nas favoritas e envie para a Thereza.'
       : approved.length === 0
@@ -530,8 +571,8 @@ function FolderDetail({
         {approved.length > 0 && team.can('criar_publicacoes') && (
           <div className="flex flex-col gap-3 rounded-panel border border-border bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-ink">Programar o post</p>
-              <p className="mt-0.5 text-xs text-ink-muted">Abre o Programar Post com a casa preenchida e as fotos na ordem: capa aprovada primeiro.</p>
+              <p className="text-sm font-semibold text-ink">Programar ou publicar o post</p>
+              <p className="mt-0.5 text-xs text-ink-muted">Abre o Programar Post com a casa e as fotos (capa aprovada primeiro). Lá você escolhe Agendar ou Publicar agora no Instagram.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -589,6 +630,44 @@ function FolderDetail({
         );
       })()}
 
+      {publishing && (
+        <OnScreen>
+          <div className={`fixed inset-0 z-[80] flex items-center justify-center p-4 ${publishing.state === 'working' ? 'bg-ink/40' : 'bg-ink/30'}`}>
+            <div role="status" aria-live="assertive" className="toast-pop flex w-full max-w-sm flex-col items-center gap-3 rounded-panel bg-surface px-7 py-6 text-center shadow-2xl">
+              {publishing.state === 'working' && (
+                <>
+                  <Loader2 size={30} className="animate-spin text-brand-plum motion-reduce:animate-none" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-ink">{publishing.text}</p>
+                </>
+              )}
+              {publishing.state === 'done' && (
+                <>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-status-success text-white"><Check size={26} strokeWidth={3} aria-hidden="true" /></span>
+                  <p className="text-base font-semibold text-ink">Publicado no Instagram</p>
+                  {publishing.permalink && (
+                    <a href={publishing.permalink} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand-plum underline underline-offset-2">Ver o post</a>
+                  )}
+                </>
+              )}
+              {publishing.state === 'processing' && (
+                <p className="text-sm text-ink">O Instagram ainda está processando a mídia. Abra o post na <strong>Grade do feed</strong> em instantes e clique em <strong>Concluir publicação</strong>.</p>
+              )}
+              {publishing.state === 'error' && (
+                <>
+                  <p className="text-base font-semibold text-ink">Não foi possível publicar</p>
+                  <p className="text-sm leading-relaxed text-ink-muted">{publishing.text}</p>
+                </>
+              )}
+              {publishing.state !== 'working' && (
+                <button type="button" autoFocus onClick={() => setPublishing(null)} className="mt-1 min-h-10 rounded-control bg-brand-plum px-5 text-sm font-semibold text-white hover:bg-brand-plum-hover">
+                  OK
+                </button>
+              )}
+            </div>
+          </div>
+        </OnScreen>
+      )}
+
       {scheduleFiles && (
         <OnScreen>
           <CreatePostModal
@@ -596,19 +675,11 @@ function FolderDetail({
             initialFiles={scheduleFiles}
             initialHouse={{ name: [collection.houseName, collection.neighborhood].filter(Boolean).join(' · '), number: collection.houseNumber }}
             onClose={() => setScheduleFiles(null)}
-            onPostCreated={(postId) => {
+            allowPublishNow={team.can('publicar_instagram')}
+            onPostCreated={(postId, publishNow) => {
               setScheduleFiles(null);
               setScheduled(true);
-              // capa aprovada pela Thereza: o post já entra como aprovado (o servidor confere)
-              if (postId) {
-                void fetch(`/api/capa/${id}/post`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ postId }),
-                }).then((response) => {
-                  if (!response.ok) setError('O post foi programado, mas não foi possível marcar como aprovado. Marque na Aprovação.');
-                });
-              }
+              void afterPostCreated(postId, Boolean(publishNow));
             }}
           />
         </OnScreen>
