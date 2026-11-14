@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# credenciais baixadas do Google Cloud (nunca versionar)
+client_secret_*.json

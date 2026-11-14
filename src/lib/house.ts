@@ -9,6 +9,11 @@ export function houseLabel(name?: string | null, number?: string | null) {
   return cleanName;
 }
 
+/** Pasta da aprovação de capa: "Casa 110 · Vila dos Coqueiros · Trancoso". */
+export function coverFolderLabel(name?: string | null, neighborhood?: string | null, number?: string | null) {
+  return [houseLabel(name, number), (neighborhood ?? '').trim()].filter(Boolean).join(' · ');
+}
+
 const withoutAccents = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // O que aparece no nome do arquivo e não é o nome da casa: marca, peça, versão, cor, extras de edição.

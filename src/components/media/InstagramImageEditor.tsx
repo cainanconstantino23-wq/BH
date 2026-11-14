@@ -1,22 +1,37 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { AlertTriangle, FlipHorizontal, LoaderCircle, RotateCcw, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   FORMATS_BY_CONTENT_TYPE,
+  NETWORKS,
+  NETWORK_LABELS,
+  PLACEMENT_LABELS,
+  formatPlaceLabel,
+  formatsFor,
   getFormat,
+  placementsFor,
   type InstagramContentType,
   type InstagramFormat,
   type InstagramFormatId,
+  type SocialPlacement,
 } from '@/lib/instagramFormats';
 
 interface InstagramImageEditorProps {
   src: string;
   fileName: string;
+  /** Tipo do post: escolhe o formato inicial. A pessoa pode trocar a rede e o lugar no editor. */
   contentType: InstagramContentType;
   initialFormatId?: InstagramFormatId;
   onCancel: () => void;
   onApply: (result: { file: File; format: InstagramFormat }) => void;
+  /** Modo "prévia com edição" (Aprovação de capa): título, botões extras no topo, setas na foto e aviso acima dos formatos. */
+  title?: ReactNode;
+  headerActions?: ReactNode;
+  stageExtras?: ReactNode;
+  asideTop?: ReactNode;
+  applyLabel?: string;
+  cancelLabel?: string;
 }
 
 type Rotation = 0 | 90 | 180 | 270;
@@ -25,14 +40,7 @@ interface Point { x: number; y: number }
 const MAX_ZOOM = 5;
 const JPEG_QUALITY = 0.92;
 
-// Faixas da tela cobertas pela interface do Instagram (aproximadas, em fração da altura).
-const INTERFACE_BANDS: Partial<Record<InstagramContentType, { top: number; bottom: number }>> = {
-  STORY: { top: 0.14, bottom: 0.14 },
-  REEL: { top: 0.12, bottom: 0.22 },
-};
-
 const GRID_RATIO = 3 / 4;
-const SHOWN_ON_PROFILE_GRID: InstagramContentType[] = ['POST', 'CARROSSEL', 'REEL'];
 
 interface Geometry {
   orientedWidth: number;
@@ -81,13 +89,20 @@ function drawCrop(
   geometry: Geometry,
   rotation: Rotation,
   flipX: boolean,
+  /** Para o fundo da prévia: escala e posição do recorte dentro de uma tela maior. */
+  context?: { scale: number; offsetX: number; offsetY: number },
 ) {
-  const scale = outWidth / geometry.cropWidth;
+  const scale = context?.scale ?? outWidth / geometry.cropWidth;
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, outWidth, outHeight);
+  if (context) {
+    ctx.clearRect(0, 0, outWidth, outHeight);
+    ctx.translate(context.offsetX, context.offsetY);
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, outWidth, outHeight);
+  }
   ctx.scale(scale, scale);
   ctx.translate(
     -(geometry.center.x - geometry.cropWidth / 2),
@@ -107,11 +122,19 @@ export function InstagramImageEditor({
   initialFormatId,
   onCancel,
   onApply,
+  title,
+  headerActions,
+  stageExtras,
+  asideTop,
+  applyLabel,
+  cancelLabel,
 }: InstagramImageEditorProps) {
-  const availableFormats = FORMATS_BY_CONTENT_TYPE[contentType];
   const [formatId, setFormatId] = useState<InstagramFormatId>(
-    initialFormatId && availableFormats.includes(initialFormatId) ? initialFormatId : availableFormats[0],
+    initialFormatId && getFormat(initialFormatId) ? initialFormatId : FORMATS_BY_CONTENT_TYPE[contentType][0],
   );
+  const network = getFormat(formatId).network;
+  const placement = getFormat(formatId).placement;
+  const availableFormats = formatsFor(network, placement);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [rotation, setRotation] = useState<Rotation>(0);
@@ -126,6 +149,8 @@ export function InstagramImageEditor({
 
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // fundo: a foto inteira, escurecida, para ver o que fica de fora do recorte
+  const contextCanvasRef = useRef<HTMLCanvasElement>(null);
   const pointers = useRef(new Map<number, Point>());
   const pinchStart = useRef<{ distance: number; zoom: number } | null>(null);
 
@@ -174,19 +199,28 @@ export function InstagramImageEditor({
     canvas.height = Math.round(frame.height * dpr);
     const ctx = canvas.getContext('2d');
     if (ctx) drawCrop(ctx, canvas.width, canvas.height, image, geometry, rotation, flipX);
+
+    const contextCanvas = contextCanvasRef.current;
+    const contextCtx = contextCanvas?.getContext('2d');
+    if (contextCanvas && contextCtx && stageSize.width > 0) {
+      contextCanvas.width = Math.round(stageSize.width * dpr);
+      contextCanvas.height = Math.round(stageSize.height * dpr);
+      drawCrop(contextCtx, contextCanvas.width, contextCanvas.height, image, geometry, rotation, flipX, {
+        scale: (frame.width * dpr) / geometry.cropWidth,
+        offsetX: ((stageSize.width - frame.width) / 2) * dpr,
+        offsetY: ((stageSize.height - frame.height) / 2) * dpr,
+      });
+    }
   });
 
-  const panBy = useCallback(
-    (dxScreen: number, dyScreen: number) => {
-      if (!geometry || frame.width < 1) return;
-      const sourcePerScreen = geometry.cropWidth / frame.width;
-      setCenter({
-        x: geometry.center.x - dxScreen * sourcePerScreen,
-        y: geometry.center.y - dyScreen * sourcePerScreen,
-      });
-    },
-    [geometry, frame.width],
-  );
+  const panBy = (dxScreen: number, dyScreen: number) => {
+    if (!geometry || frame.width < 1) return;
+    const sourcePerScreen = geometry.cropWidth / frame.width;
+    setCenter({
+      x: geometry.center.x - dxScreen * sourcePerScreen,
+      y: geometry.center.y - dyScreen * sourcePerScreen,
+    });
+  };
 
   const changeZoom = (next: number) => {
     setZoom(Math.min(Math.max(next, 1), MAX_ZOOM));
@@ -196,6 +230,11 @@ export function InstagramImageEditor({
   const resetFraming = () => {
     setZoom(1);
     setCenter(null);
+  };
+
+  const choose = (id: InstagramFormatId) => {
+    setFormatId(id);
+    resetFraming();
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -264,11 +303,9 @@ export function InstagramImageEditor({
       if (!blob) throw new Error('blob');
 
       const baseName = fileName.replace(/\.[^.]+$/, '') || 'imagem';
-      const file = new File([blob], `${baseName}-${format.width}x${format.height}.jpg`, {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
-      });
+      const file = new File([blob], `${baseName}-${format.width}x${format.height}.jpg`, { type: 'image/jpeg' });
       onApply({ file, format });
+      setExporting(false);
     } catch (error) {
       console.error('Falha ao exportar a imagem recortada:', error);
       setExportError('Não foi possível gerar a imagem. Tente novamente ou use uma imagem menor.');
@@ -287,8 +324,8 @@ export function InstagramImageEditor({
 
   const sourcePixelsAcross = geometry ? Math.round(geometry.cropWidth) : 0;
   const upscale = sourcePixelsAcross > 0 ? format.width / sourcePixelsAcross : 1;
-  const bands = showGuides ? INTERFACE_BANDS[contentType] : undefined;
-  const onProfileGrid = SHOWN_ON_PROFILE_GRID.includes(contentType);
+  const bands = showGuides ? format.bands : undefined;
+  const onProfileGrid = Boolean(format.profileGrid);
   const gridCropsImage = onProfileGrid && Math.abs(ratio - GRID_RATIO) > 0.001;
   const gridPreview =
     showGuides && gridCropsImage
@@ -309,7 +346,8 @@ export function InstagramImageEditor({
         className="flex h-dvh w-full max-w-5xl flex-col overflow-hidden bg-surface text-ink sm:h-[min(92dvh,52rem)] sm:rounded-panel sm:border sm:border-border"
       >
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
-          <h2 id="image-editor-title" className="text-sm font-semibold">Ajustar imagem para o Instagram</h2>
+          <h2 id="image-editor-title" className="min-w-0 truncate text-sm font-semibold">{title ?? <>Ajustar imagem · {formatPlaceLabel(format)}</>}</h2>
+          {headerActions && <div className="ml-auto flex shrink-0 items-center gap-2">{headerActions}</div>}
           <button
             type="button"
             onClick={onCancel}
@@ -322,7 +360,15 @@ export function InstagramImageEditor({
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
-          <div ref={stageRef} className="relative flex h-[50dvh] shrink-0 items-center justify-center bg-[#e9e6e0] md:h-auto md:min-h-0 md:flex-1 md:shrink">
+          <div ref={stageRef} className="relative flex h-[50dvh] shrink-0 items-center justify-center overflow-hidden bg-[#1c1a18] md:h-auto md:min-h-0 md:flex-1 md:shrink">
+            {stageExtras}
+            {image && !loadError && (
+              <>
+                <canvas ref={contextCanvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
+                {/* o que fica de fora do recorte, mais escuro */}
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/60" />
+              </>
+            )}
             {loadError ? (
               <p className="max-w-xs px-6 text-center text-sm text-ink-muted">
                 Este arquivo não pôde ser aberto no navegador. Converta para JPG ou PNG e selecione de novo.
@@ -340,7 +386,7 @@ export function InstagramImageEditor({
                 onPointerCancel={handlePointerUp}
                 onWheel={(event) => changeZoom(zoom * (event.deltaY < 0 ? 1.06 : 1 / 1.06))}
                 onKeyDown={handleFrameKeyDown}
-                className={`relative touch-none select-none overflow-hidden bg-white outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-plum ${
+                className={`relative z-10 touch-none select-none overflow-hidden bg-white shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_8px_30px_rgb(0_0_0/0.35)] outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-plum ${
                   isDragging ? 'cursor-grabbing' : 'cursor-grab'
                 }`}
                 style={{ width: frame.width, height: frame.height }}
@@ -375,41 +421,86 @@ export function InstagramImageEditor({
           </div>
 
           <aside className="flex shrink-0 flex-col gap-5 border-t md:overflow-y-auto border-border p-4 sm:p-5 md:w-80 md:border-l md:border-t-0">
-            <fieldset>
-              <legend className="text-xs font-semibold text-ink">Formato</legend>
-              <div className={`mt-2 grid gap-2 ${availableFormats.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {availableFormats.map((id) => {
-                  const option = getFormat(id);
-                  const selected = id === formatId;
-                  return (
-                    <label
-                      key={id}
-                      className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-control border px-3 py-2 transition-colors duration-150 ease-out focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum ${
-                        selected ? 'border-brand-plum bg-surface-muted' : 'border-border hover:bg-canvas'
+            {asideTop}
+            <div className="space-y-4">
+              <div>
+                <p id="image-editor-network" className="text-xs font-semibold text-ink">Rede social</p>
+                <div role="radiogroup" aria-labelledby="image-editor-network" className="mt-2 grid grid-cols-2 gap-1 rounded-control bg-canvas p-1">
+                  {NETWORKS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={option === network}
+                      onClick={() => {
+                        if (option === network) return;
+                        // mantém o mesmo lugar (ex.: Story) na outra rede, se existir
+                        const sameKind = formatsFor(option, placement);
+                        choose((sameKind.length ? sameKind : formatsFor(option, 'feed'))[0]);
+                      }}
+                      className={`min-h-9 rounded-[calc(var(--radius-control,0.5rem)-2px)] text-xs font-semibold transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum ${
+                        option === network ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'
                       }`}
                     >
-                      <input
-                        type="radio"
-                        name="instagram-format"
-                        value={id}
-                        checked={selected}
-                        onChange={() => {
-                          setFormatId(id);
-                          resetFraming();
-                        }}
-                        className="sr-only"
-                      />
-                      <RatioGlyph width={option.width} height={option.height} selected={selected} />
-                      <span className="min-w-0">
-                        <span className="block text-xs font-semibold text-ink">{option.ratioLabel} {option.label}</span>
-                        <span className="block text-[11px] tabular-nums text-ink-muted">{option.width} × {option.height}</span>
-                      </span>
-                    </label>
-                  );
-                })}
+                      {NETWORK_LABELS[option]}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-ink-muted">{format.hint}</p>
-            </fieldset>
+
+              <div>
+                <p id="image-editor-placement" className="text-xs font-semibold text-ink">Onde vai aparecer</p>
+                <div role="radiogroup" aria-labelledby="image-editor-placement" className="mt-2 flex flex-wrap gap-1.5">
+                  {placementsFor(network).map((option: SocialPlacement) => (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={option === placement}
+                      onClick={() => option !== placement && choose(formatsFor(network, option)[0])}
+                      className={`min-h-8 rounded-full border px-3 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum ${
+                        option === placement ? 'border-brand-plum bg-brand-plum text-white' : 'border-border text-ink hover:bg-canvas'
+                      }`}
+                    >
+                      {PLACEMENT_LABELS[option]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <fieldset>
+                <legend className="text-xs font-semibold text-ink">Formato</legend>
+                <div className={`mt-2 grid gap-2 ${availableFormats.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {availableFormats.map((id) => {
+                    const option = getFormat(id);
+                    const selected = id === formatId;
+                    return (
+                      <label
+                        key={id}
+                        className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-control border px-3 py-2 transition-colors duration-150 ease-out focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum ${
+                          selected ? 'border-brand-plum bg-surface-muted' : 'border-border hover:bg-canvas'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="social-format"
+                          value={id}
+                          checked={selected}
+                          onChange={() => choose(id)}
+                          className="sr-only"
+                        />
+                        <RatioGlyph width={option.width} height={option.height} selected={selected} />
+                        <span className="min-w-0">
+                          <span className="block text-xs font-semibold text-ink">{option.ratioLabel} {option.label}</span>
+                          <span className="block text-[11px] tabular-nums text-ink-muted">{option.width} × {option.height}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-ink-muted">{format.hint}</p>
+              </fieldset>
+            </div>
 
             <div>
               <label htmlFor="image-editor-zoom" className="text-xs font-semibold text-ink">Aproximação</label>
@@ -468,16 +559,16 @@ export function InstagramImageEditor({
               />
               <span>
                 Mostrar guias
-                <span className="mt-0.5 block text-ink-muted">
-                  {INTERFACE_BANDS[contentType]
-                    ? 'Faixas escuras: áreas cobertas pela interface do Instagram (aproximadas).'
-                    : null}
-                  {INTERFACE_BANDS[contentType] && onProfileGrid ? ' ' : null}
-                  {!onProfileGrid
-                    ? null
-                    : gridCropsImage
-                      ? 'Tracejado: parte que aparece na grade do perfil.'
-                      : 'Este formato aparece inteiro na grade do perfil.'}
+                <span className="mt-1.5 block space-y-1 text-ink-muted">
+                  <span className="block"><strong className="font-semibold text-ink">Área clara:</strong> o que vai para o {NETWORK_LABELS[network]}. A parte escura em volta será cortada.</span>
+                  {format.bands && (
+                    <span className="block"><strong className="font-semibold text-ink">Faixas escuras em cima e embaixo:</strong> ficam por baixo do nome, botões e legenda do app. Evite texto e rostos ali.</span>
+                  )}
+                  {onProfileGrid && gridCropsImage && (
+                    <span className="block"><strong className="font-semibold text-ink">Tracejado:</strong> o pedaço que aparece na grade do perfil (3:4). A foto inteira aparece ao abrir o post.</span>
+                  )}
+                  {onProfileGrid && !gridCropsImage && <span className="block">Este formato aparece inteiro na grade do perfil.</span>}
+                  <span className="block"><strong className="font-semibold text-ink">Linhas finas ao arrastar:</strong> divisão em terços, para alinhar horizonte e pontos de interesse.</span>
                 </span>
               </span>
             </label>
@@ -519,7 +610,7 @@ export function InstagramImageEditor({
             disabled={exporting}
             className="min-h-10 rounded-control px-4 text-xs font-semibold text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink disabled:opacity-50"
           >
-            Cancelar
+            {cancelLabel ?? 'Cancelar'}
           </button>
           <button
             type="button"
@@ -528,7 +619,7 @@ export function InstagramImageEditor({
             className="flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors duration-150 ease-out hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
           >
             {exporting && <LoaderCircle aria-hidden="true" size={14} className="animate-spin motion-reduce:animate-none" />}
-            {exporting ? 'Gerando imagem…' : `Aplicar ${format.width} × ${format.height}`}
+            {exporting ? 'Gerando imagem…' : `${applyLabel ?? 'Aplicar'} ${format.width} × ${format.height}`}
           </button>
         </footer>
       </div>

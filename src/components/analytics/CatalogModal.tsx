@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Film,
   GripVertical,
@@ -33,6 +35,8 @@ interface ScheduledTile {
   caption: string;
   imageUrl: string;
   mediaType: string;
+  /** Todas as mídias na ordem (carrossel); para post comum, só a capa. */
+  items: { url: string; type: string }[];
   format: string;
   scheduledDate: string;
   timeString: string;
@@ -133,7 +137,7 @@ function InstagramFeedPreview() {
   const loadPosts = useCallback(async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('id, title, house_name, house_number, content, caption, image_url, media_type, platform, scheduled_date, time_string, hour, approval_status')
+      .select('id, title, house_name, house_number, content, caption, image_url, media_type, media_items, platform, scheduled_date, time_string, hour, approval_status')
       .not('scheduled_date', 'is', null);
     if (error) throw error;
 
@@ -146,6 +150,14 @@ function InstagramFeedPreview() {
         caption: row.content || row.caption || '',
         imageUrl: row.image_url || '',
         mediaType: row.media_type || '',
+        items: (() => {
+          const list = Array.isArray(row.media_items)
+            ? (row.media_items as { url?: unknown; type?: unknown }[])
+                .filter((item) => typeof item?.url === 'string' && item.url)
+                .map((item) => ({ url: item.url as string, type: typeof item.type === 'string' ? item.type : '' }))
+            : [];
+          return list.length ? list : [{ url: row.image_url || '', type: row.media_type || '' }];
+        })(),
         format: row.platform || 'POST',
         scheduledDate: row.scheduled_date,
         hour: row.hour ?? 19,
@@ -554,6 +566,11 @@ function InstagramFeedPreview() {
                     <MediaPreview key={post.imageUrl} src={coverSrc(post.imageUrl, post.mediaType)} mediaType={post.mediaType} alt="" cover muted preload="metadata" className="pointer-events-none h-full w-full object-cover" />
 
                     <span className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1">
+                      {post.items.length > 1 && (
+                        <span title={`Carrossel com ${post.items.length} mídias`} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
+                          <Layers size={12} aria-hidden="true" />
+                        </span>
+                      )}
                       {isVideoMedia(post.imageUrl, post.mediaType) && (
                         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
                           <Film size={12} aria-hidden="true" />
@@ -646,15 +663,7 @@ function InstagramFeedPreview() {
         {selected && (
           <div className="flex max-h-[92dvh] flex-col md:flex-row">
             <div className="flex min-h-0 shrink-0 items-center justify-center bg-ink md:w-1/2">
-              <MediaPreview
-                key={selected.imageUrl}
-                src={isVideoMedia(selected.imageUrl, selected.mediaType) ? coverSrc(selected.imageUrl, selected.mediaType) : selected.imageUrl}
-                mediaType={selected.mediaType}
-                alt={selected.title}
-                controls={isVideoMedia(selected.imageUrl, selected.mediaType)}
-                muted={isVideoMedia(selected.imageUrl, selected.mediaType)}
-                className="block h-auto max-h-[55dvh] w-auto max-w-full object-contain md:max-h-[86dvh]"
-              />
+              <FeedCarousel key={selected.id} items={selected.items} title={selected.title} />
             </div>
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
@@ -763,6 +772,83 @@ export function CatalogModal({ isOpen, onClose }: Props) {
         </div>
         <InstagramFeedPreview />
       </div>
+    </div>
+  );
+}
+
+// Prévia do post na grade: todas as mídias do carrossel, passando para o lado (setas, dedo, trackpad ou teclado).
+function FeedCarousel({ items, title }: { items: { url: string; type: string }[]; title: string }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const many = items.length > 1;
+
+  const goTo = (next: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const clamped = Math.min(Math.max(next, 0), items.length - 1);
+    track.scrollTo({ left: clamped * track.clientWidth, behavior: 'smooth' });
+  };
+
+  return (
+    <div
+      className="relative w-full"
+      role={many ? 'region' : undefined}
+      aria-roledescription={many ? 'carrossel' : undefined}
+      aria-label={many ? `${title}: mídia ${index + 1} de ${items.length}` : undefined}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') goTo(index - 1);
+        if (event.key === 'ArrowRight') goTo(index + 1);
+      }}
+    >
+      <div
+        ref={trackRef}
+        tabIndex={many ? 0 : undefined}
+        onScroll={(event) => {
+          const track = event.currentTarget;
+          setIndex(Math.round(track.scrollLeft / Math.max(track.clientWidth, 1)));
+        }}
+        className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] focus-visible:outline-none [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((item, i) => {
+          const video = isVideoMedia(item.url, item.type);
+          return (
+            <div key={`${item.url}-${i}`} className="flex w-full shrink-0 snap-center items-center justify-center">
+              <MediaPreview
+                src={video ? coverSrc(item.url, item.type) : item.url}
+                mediaType={item.type}
+                alt={many ? `${title}, mídia ${i + 1}` : title}
+                controls={video}
+                muted={video}
+                preload={Math.abs(i - index) <= 1 ? 'auto' : 'metadata'}
+                className="block h-auto max-h-[55dvh] w-auto max-w-full object-contain md:max-h-[86dvh]"
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {many && (
+        <>
+          {index > 0 && (
+            <button type="button" onClick={() => goTo(index - 1)} aria-label="Mídia anterior" className="absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-md hover:bg-white">
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+          )}
+          {index < items.length - 1 && (
+            <button type="button" onClick={() => goTo(index + 1)} aria-label="Próxima mídia" className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-ink shadow-md hover:bg-white">
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          )}
+          <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-white">
+            {index + 1}/{items.length}
+          </span>
+          <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1" aria-hidden="true">
+            {items.map((item, i) => (
+              <span key={`${item.url}-dot-${i}`} className={`h-1.5 w-1.5 rounded-full transition-colors ${i === index ? 'bg-white' : 'bg-white/45'}`} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

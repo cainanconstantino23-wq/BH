@@ -15,6 +15,7 @@ import { AccountMenu, type AccountPage } from '@/components/team/AccountMenu';
 import { NotificationBell } from '@/components/team/NotificationBell';
 import { HomeHub, type HubTarget } from '@/components/home/HomeHub';
 import { HistoryPanel, MyAccountPanel, PeoplePanel } from '@/components/team/TeamPanel';
+import { CoverApprovalPanel } from '@/components/drive/CoverApprovalPanel';
 import {
   BarChart2,
   Inbox,
@@ -29,6 +30,7 @@ import {
   X,
   MapPin,
   Users,
+  Star,
 } from 'lucide-react';
 
 const SectionLoading = () => (
@@ -94,7 +96,15 @@ const instagramErrorMessages: Record<string, string> = {
   admin_only: 'Você não tem permissão para conectar o Instagram da empresa. Peça a quem administra a equipe.',
 };
 
-type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'planner' | AccountPage;
+type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'planner' | 'capa' | AccountPage;
+
+const driveErrorMessages: Record<string, string> = {
+  not_configured: 'Faltam as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).',
+  admin_only: 'Só um administrador pode conectar o Google Drive.',
+  authorization_denied: 'A conexão foi cancelada no Google.',
+  missing_scope: 'Marque a permissão de ver os arquivos do Google Drive na tela do Google e tente de novo.',
+  missing_refresh_token: 'O Google não liberou o acesso contínuo. Tente conectar de novo.',
+};
 
 const sectionEntranceClass = 'section-enter';
 
@@ -181,6 +191,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('comunidade');
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
   const [instagramNotice, setInstagramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [driveNotice, setDriveNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [isSupabaseAuthenticated, setIsSupabaseAuthenticated] = useState(false);
   const [isRestoringUser, setIsRestoringUser] = useState(true);
   const [membership, setMembership] = useState<TeamMember | null | undefined>(undefined);
@@ -239,6 +250,20 @@ export default function Home() {
                 tone: 'error',
                 text: instagramErrorMessages[reason] ?? 'Não foi possível conectar o Instagram. Tente de novo em alguns minutos.',
               });
+            }
+            const driveResult = url.searchParams.get('drive');
+            if (driveResult) {
+              setActiveTab('capa');
+              setShowHub(false);
+              setDriveNotice(
+                driveResult === 'connected'
+                  ? { tone: 'success', text: 'Google Drive conectado.' }
+                  : {
+                      tone: 'error',
+                      text: driveErrorMessages[url.searchParams.get('reason') ?? ''] ?? 'Não foi possível conectar o Google Drive. Tente de novo.',
+                    },
+              );
+              url.searchParams.delete('drive');
             }
             url.searchParams.delete('instagram');
             url.searchParams.delete('meta');
@@ -599,6 +624,22 @@ export default function Home() {
                       Grade do feed
                     </button>
                   </li>
+                  <li>
+                    <button
+                      type="button"
+                      aria-current={activeTab === 'capa' ? 'page' : undefined}
+                      onClick={() => {
+                        setActiveTab('capa');
+                        closeMobileMenu();
+                      }}
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
+                        activeTab === 'capa' ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
+                      }`}
+                    >
+                      <Star size={16} />
+                      Aprovação de capa
+                    </button>
+                  </li>
                 </ul>
               </div>
             </nav>
@@ -674,6 +715,14 @@ export default function Home() {
             
             <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum-hover">
               <FolderPlus size={15} /> Grade do feed
+            </button>
+
+            <button
+              onClick={() => setActiveTab('capa')}
+              aria-current={activeTab === 'capa' ? 'page' : undefined}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'capa' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+            >
+              <Star size={15} /> Aprovação de capa
             </button>
           </nav>
 
@@ -859,6 +908,12 @@ export default function Home() {
             {activeTab === 'inbox' && (
               <div key="inbox" className={`min-w-0 ${sectionEntranceClass}`}>
                 <MessagesInbox />
+              </div>
+            )}
+
+            {activeTab === 'capa' && (
+              <div key="cover-approval" className={sectionEntranceClass}>
+                <CoverApprovalPanel notice={driveNotice} />
               </div>
             )}
 

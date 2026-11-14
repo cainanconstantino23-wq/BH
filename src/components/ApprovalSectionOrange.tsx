@@ -9,7 +9,10 @@ import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
 import { DropOverlay } from '@/components/media/DropOverlay';
 import { useFileDrop } from '@/lib/useFileDrop';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw } from 'lucide-react';
+import { MediaLightbox } from '@/components/media/MediaLightbox';
+import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
+import { findClosestFormat, findExactFormat, formatPlaceLabel, type InstagramFormat } from '@/lib/instagramFormats';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw, Crop, Check, Video } from 'lucide-react';
 
 interface ApprovalVersion {
   version: number;
@@ -124,6 +127,10 @@ export default function ApprovalSectionOrange() {
   const [caption, setCaption] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  // Mesmo bloco de mídia do "Programar Post": miniatura com X, prévia grande e recorte nas medidas do Instagram.
+  const [mediaDims, setMediaDims] = useState<{ width: number; height: number } | null>(null);
+  const [mediaLightboxOpen, setMediaLightboxOpen] = useState(false);
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [scheduledDate, setScheduledDate] = useState(() => {
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -131,7 +138,7 @@ export default function ApprovalSectionOrange() {
   const [scheduledTime, setScheduledTime] = useState('19:00');
   const [submitting, setSubmitting] = useState(false);
   const closeCreateModal = useCallback(() => setIsModalOpen(false), []);
-  const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting);
+  const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting || mediaLightboxOpen || imageEditorOpen);
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [generatingCopy, setGeneratingCopy] = useState(false);
   // Tela de envio no centro: progresso real, depois sucesso ou erro em linguagem simples.
@@ -316,8 +323,44 @@ export default function ApprovalSectionOrange() {
     }
   };
 
+  const readMediaDims = (selectedFile: File) => {
+    setMediaDims(null);
+    if (isVideoFile(selectedFile)) return;
+    const url = URL.createObjectURL(selectedFile);
+    const img = new window.Image();
+    img.onload = () => {
+      setMediaDims({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  };
+
+  const removeFile = () => {
+    setMediaPreview((previousPreview) => {
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
+      return null;
+    });
+    setFile(null);
+    setMediaDims(null);
+    setMediaLightboxOpen(false);
+    setFeedbackMessage('');
+  };
+
+  const applyCrop = ({ file: cropped, format }: { file: File; format: InstagramFormat }) => {
+    setFile(cropped);
+    setMediaPreview((previousPreview) => {
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
+      return URL.createObjectURL(cropped);
+    });
+    setMediaDims({ width: format.width, height: format.height });
+    setImageEditorOpen(false);
+    setFeedbackMessage(`Imagem ajustada para ${formatPlaceLabel(format)}: ${format.width} × ${format.height} px (${format.ratioLabel}).`);
+  };
+
   const chooseFile = (selectedFile: File) => {
     setFile(selectedFile);
+    readMediaDims(selectedFile);
     setFeedbackMessage('');
     // Nome e número da casa pelo nome do arquivo, só nos campos ainda vazios.
     const guess = guessHouseFromFileName(selectedFile.name);
@@ -337,7 +380,7 @@ export default function ApprovalSectionOrange() {
   const createDrop = useFileDrop(
     chooseFile,
     () => setFeedbackMessage('Esse arquivo não é vídeo nem foto. Arraste um vídeo (MP4, MOV) ou uma imagem.'),
-    submitting,
+    submitting || imageEditorOpen || mediaLightboxOpen,
   );
 
   const handleSendForApproval = async () => {
@@ -390,6 +433,7 @@ export default function ApprovalSectionOrange() {
       setCaption('');
       setFile(null);
       setMediaPreview(null);
+      setMediaDims(null);
       setSendState({ phase: 'done', kind });
       await refreshPosts();
     } catch (error) {
@@ -581,6 +625,11 @@ export default function ApprovalSectionOrange() {
       setFeedbackMessage(`Não foi possível eliminar o conteúdo: ${getErrorMessage(error)}`);
     }
   };
+
+  const fileIsVideo = file ? isVideoFile(file) : false;
+  const photoDims = file && !fileIsVideo ? mediaDims : null;
+  const photoExact = photoDims ? findExactFormat(null, photoDims.width, photoDims.height) : null;
+  const photoSuggested = photoDims ? findClosestFormat(null, photoDims.width, photoDims.height) : null;
 
   return (
     <div className="section-enter space-y-6">
@@ -968,6 +1017,73 @@ export default function ApprovalSectionOrange() {
                   aria-label="Legenda para o cliente"
                   className="min-h-28 w-full resize-y text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-none"
                 />
+
+                {/* Miniatura: clicar abre em tamanho grande; o X remove para escolher outra */}
+                {file && mediaPreview && (
+                  <div className="flex flex-wrap items-start gap-4 pt-1">
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setMediaLightboxOpen(true)}
+                        aria-label="Ver mídia em tamanho grande"
+                        className="group relative block h-20 w-20 overflow-hidden rounded-control border border-border bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                      >
+                        {fileIsVideo ? (
+                          <video src={mediaPreview} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) antes do envio
+                          <img src={mediaPreview} alt="" className="h-full w-full object-cover" />
+                        )}
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                          Ver
+                        </span>
+                        {fileIsVideo && (
+                          <span className="pointer-events-none absolute right-1 bottom-1 rounded bg-black/60 p-0.5 text-white"><Video size={11} aria-hidden="true" /></span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeFile}
+                        disabled={submitting}
+                        aria-label="Remover mídia"
+                        title="Remover"
+                        className="absolute -right-2.5 -top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white shadow-md transition-colors duration-150 hover:bg-status-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum disabled:opacity-50"
+                      >
+                        <X size={13} strokeWidth={2.5} aria-hidden="true" />
+                      </button>
+                    </div>
+
+                    {!fileIsVideo && (
+                      <div className="min-w-0 flex-1 space-y-2">
+                        {photoDims && photoExact ? (
+                          <p className="flex items-center gap-1.5 text-xs font-medium text-status-success">
+                            <Check size={14} aria-hidden="true" />
+                            {photoExact.width} × {photoExact.height} px, pronto para {formatPlaceLabel(photoExact)}
+                          </p>
+                        ) : photoDims && photoSuggested ? (
+                          <p className="text-xs leading-relaxed text-status-warning">
+                            Esta imagem tem {photoDims.width} × {photoDims.height} px. Para o feed, o Instagram usa {photoSuggested.width} × {photoSuggested.height} px ({photoSuggested.ratioLabel}).
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setImageEditorOpen(true)}
+                          disabled={submitting}
+                          className={`flex items-center gap-2 rounded-control px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            photoDims && !photoExact
+                              ? 'bg-brand-plum text-white hover:bg-brand-plum-hover'
+                              : 'border border-border bg-canvas text-ink hover:bg-surface'
+                          }`}
+                        >
+                          <Crop size={14} aria-hidden="true" />
+                          {photoDims && !photoExact && photoSuggested
+                            ? `Ajustar para ${photoSuggested.width} × ${photoSuggested.height}`
+                            : 'Ajustar recorte'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-ink-muted">
                   <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-xs font-semibold transition-colors hover:bg-canvas hover:text-brand-plum focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
@@ -1039,6 +1155,28 @@ export default function ApprovalSectionOrange() {
 
           </div>
         </div>
+      )}
+
+      {mediaLightboxOpen && file && mediaPreview && (
+        <MediaLightbox
+          items={[{ id: 'aprovacao', file, url: mediaPreview, isVideo: fileIsVideo }]}
+          index={0}
+          onIndex={() => undefined}
+          onClose={() => setMediaLightboxOpen(false)}
+          onRemove={removeFile}
+          onCrop={() => { setMediaLightboxOpen(false); setImageEditorOpen(true); }}
+        />
+      )}
+
+      {imageEditorOpen && file && mediaPreview && !fileIsVideo && (
+        <InstagramImageEditor
+          src={mediaPreview}
+          fileName={file.name}
+          contentType="POST"
+          initialFormatId={photoExact?.id ?? photoSuggested?.id}
+          onCancel={() => setImageEditorOpen(false)}
+          onApply={applyCrop}
+        />
       )}
 
       {versionModalOpen && selectedPost && (
