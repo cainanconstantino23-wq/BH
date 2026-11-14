@@ -1,19 +1,19 @@
-// Medidas de publicação por rede social e por lugar (feed, carrossel, story, reels, capa).
+// Medidas de publicação por rede social e por lugar (feed, carrossel, story, reels).
+// Só tamanhos aceitos na publicação automática pela API do Instagram: fotos de 4:5 a 1,91:1 e 9:16 em Story/Reels.
+// Por isso ficam de fora o 3:4 (1080×1440, só pelo app) e a capa de página do Facebook (2,63:1).
 // Conferidas em nov/2026 (guia de anúncios da Meta + guias de tamanho de 2026). Revisar se as redes mudarem as regras.
 // O nome do arquivo ficou "instagramFormats" por histórico; hoje cobre Instagram e Facebook.
 
 export type InstagramContentType = 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
 
 export type SocialNetwork = 'instagram' | 'facebook';
-export type SocialPlacement = 'feed' | 'carrossel' | 'story' | 'reels' | 'capa';
+export type SocialPlacement = 'feed' | 'carrossel' | 'story' | 'reels';
 
 export type InstagramFormatId =
-  | 'ig-feed-3x4'
   | 'ig-feed-4x5'
   | 'ig-feed-1x1'
   | 'ig-feed-1.91x1'
   | 'ig-carrossel-4x5'
-  | 'ig-carrossel-3x4'
   | 'ig-carrossel-1x1'
   | 'ig-story'
   | 'ig-reels'
@@ -23,8 +23,7 @@ export type InstagramFormatId =
   | 'fb-carrossel-1x1'
   | 'fb-carrossel-4x5'
   | 'fb-story'
-  | 'fb-reels'
-  | 'fb-capa';
+  | 'fb-reels';
 
 export interface InstagramFormat {
   id: InstagramFormatId;
@@ -51,7 +50,6 @@ export const PLACEMENT_LABELS: Record<SocialPlacement, string> = {
   carrossel: 'Carrossel',
   story: 'Story',
   reels: 'Reels',
-  capa: 'Capa da página',
 };
 
 const STORY_BANDS = { top: 0.14, bottom: 0.14 };
@@ -60,17 +58,13 @@ const REELS_BANDS = { top: 0.12, bottom: 0.22 };
 const list: InstagramFormat[] = [
   // ── Instagram ──
   { id: 'ig-feed-4x5', network: 'instagram', placement: 'feed', label: 'Retrato', ratioLabel: '4:5', width: 1080, height: 1350, profileGrid: true,
-    hint: 'O mais usado no feed e o mais seguro para agendar: a Meta aceita 4:5 na publicação automática. Na grade do perfil, as laterais são levemente cortadas.' },
-  { id: 'ig-feed-3x4', network: 'instagram', placement: 'feed', label: 'Retrato alto', ratioLabel: '3:4', width: 1080, height: 1440, profileGrid: true,
-    hint: 'O mais alto do feed desde 2025 e aparece inteiro na grade do perfil. Atenção: publicação automática e anúncios ainda pedem 4:5.' },
+    hint: 'O mais alto aceito na publicação automática. Ocupa mais espaço no feed; na grade do perfil (3:4), as laterais são levemente cortadas.' },
   { id: 'ig-feed-1x1', network: 'instagram', placement: 'feed', label: 'Quadrado', ratioLabel: '1:1', width: 1080, height: 1080, profileGrid: true,
     hint: 'Ocupa menos espaço no feed. Na grade do perfil, as laterais são cortadas.' },
   { id: 'ig-feed-1.91x1', network: 'instagram', placement: 'feed', label: 'Paisagem', ratioLabel: '1,91:1', width: 1080, height: 566, profileGrid: true,
     hint: 'Ocupa pouco espaço no feed. Use para vistas panorâmicas.' },
   { id: 'ig-carrossel-4x5', network: 'instagram', placement: 'carrossel', label: 'Retrato', ratioLabel: '4:5', width: 1080, height: 1350, profileGrid: true,
     hint: 'Até 20 fotos. O Instagram corta todas no formato da primeira: use o mesmo formato em todas.' },
-  { id: 'ig-carrossel-3x4', network: 'instagram', placement: 'carrossel', label: 'Retrato alto', ratioLabel: '3:4', width: 1080, height: 1440, profileGrid: true,
-    hint: 'Até 20 fotos, inteiras na grade do perfil. Publicando pelo app. Todas no mesmo formato da primeira.' },
   { id: 'ig-carrossel-1x1', network: 'instagram', placement: 'carrossel', label: 'Quadrado', ratioLabel: '1:1', width: 1080, height: 1080, profileGrid: true,
     hint: 'Até 20 fotos, todas no formato da primeira.' },
   { id: 'ig-story', network: 'instagram', placement: 'story', label: 'Tela cheia', ratioLabel: '9:16', width: 1080, height: 1920, bands: STORY_BANDS,
@@ -93,8 +87,6 @@ const list: InstagramFormat[] = [
     hint: 'Deixe textos longe do topo e da base, onde ficam o nome da página e o campo de resposta.' },
   { id: 'fb-reels', network: 'facebook', placement: 'reels', label: 'Capa do Reels', ratioLabel: '9:16', width: 1080, height: 1920, bands: REELS_BANDS,
     hint: 'Tela cheia. A legenda e os botões cobrem a parte de baixo.' },
-  { id: 'fb-capa', network: 'facebook', placement: 'capa', label: 'Capa', ratioLabel: '2,63:1', width: 1640, height: 624,
-    hint: 'Aparece com 820 × 312 no computador (enviada em dobro para ficar nítida). No celular, as laterais são cortadas: mantenha o principal no centro.' },
 ];
 
 export const INSTAGRAM_FORMATS = Object.fromEntries(list.map((format) => [format.id, format])) as Record<InstagramFormatId, InstagramFormat>;
@@ -115,8 +107,8 @@ export const formatsFor = (network: SocialNetwork, placement: SocialPlacement) =
 
 /** Formatos aceitos por tipo de conteúdo do Instagram (Programar Post); o primeiro é o recomendado. */
 export const FORMATS_BY_CONTENT_TYPE: Record<InstagramContentType, InstagramFormatId[]> = {
-  POST: ['ig-feed-4x5', 'ig-feed-3x4', 'ig-feed-1x1', 'ig-feed-1.91x1'],
-  CARROSSEL: ['ig-carrossel-4x5', 'ig-carrossel-3x4', 'ig-carrossel-1x1'],
+  POST: ['ig-feed-4x5', 'ig-feed-1x1', 'ig-feed-1.91x1'],
+  CARROSSEL: ['ig-carrossel-4x5', 'ig-carrossel-1x1'],
   STORY: ['ig-story'],
   REEL: ['ig-reels'],
 };

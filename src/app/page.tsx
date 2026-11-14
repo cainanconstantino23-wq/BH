@@ -104,6 +104,14 @@ const driveErrorMessages: Record<string, string> = {
   authorization_denied: 'A conexão foi cancelada no Google.',
   missing_scope: 'Marque a permissão de ver os arquivos do Google Drive na tela do Google e tente de novo.',
   missing_refresh_token: 'O Google não liberou o acesso contínuo. Tente conectar de novo.',
+  invalid_state: 'A conexão expirou ou foi aberta em outra aba. Clique em Conectar Google Drive de novo, nesta mesma aba.',
+  authentication_required: 'Sua sessão no BH Analytics expirou. Entre de novo e conecte o Drive.',
+  missing_code: 'O Google não devolveu a autorização. Tente de novo.',
+  save_failed: 'O Google autorizou, mas não foi possível salvar a conexão no banco. Tente de novo.',
+  exchange_failed_invalid_client: 'O Google recusou as credenciais do servidor: confira GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET na Vercel (sem aspas e sem espaços) e faça Redeploy. (invalid_client)',
+  exchange_failed_unauthorized_client: 'O Google recusou as credenciais do servidor: confira GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET na Vercel. (unauthorized_client)',
+  exchange_failed_redirect_uri_mismatch: 'O endereço de retorno não está autorizado no Google Cloud: adicione https://bh-analytics-murex.vercel.app/api/auth/google/callback. (redirect_uri_mismatch)',
+  exchange_failed_invalid_grant: 'A autorização do Google expirou antes de concluir. Clique em Conectar de novo. (invalid_grant)',
 };
 
 const sectionEntranceClass = 'section-enter';
@@ -260,7 +268,9 @@ export default function Home() {
                   ? { tone: 'success', text: 'Google Drive conectado.' }
                   : {
                       tone: 'error',
-                      text: driveErrorMessages[url.searchParams.get('reason') ?? ''] ?? 'Não foi possível conectar o Google Drive. Tente de novo.',
+                      text:
+                        driveErrorMessages[url.searchParams.get('reason') ?? ''] ??
+                        `Não foi possível conectar o Google Drive. Tente de novo. (${url.searchParams.get('reason') || 'sem código'})`,
                     },
               );
               url.searchParams.delete('drive');

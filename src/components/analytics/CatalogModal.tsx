@@ -16,6 +16,7 @@ import {
   LayoutGrid,
   MessageSquareWarning,
   RefreshCw,
+  Send,
   Undo2,
   X,
   XCircle,
@@ -42,6 +43,11 @@ interface ScheduledTile {
   timeString: string;
   hour: number;
   approvalStatus: string;
+  /** Publicação no Instagram pela plataforma */
+  autoPublish: boolean;
+  publishStatus: '' | 'processing' | 'published' | 'error';
+  publishError: string;
+  permalink: string;
 }
 
 interface PublishedTile {
@@ -135,10 +141,16 @@ function InstagramFeedPreview() {
   }, [posts]);
 
   const loadPosts = useCallback(async () => {
-    const { data, error } = await supabase
+    const base = 'id, title, house_name, house_number, content, caption, image_url, media_type, media_items, platform, scheduled_date, time_string, hour, approval_status';
+    const withPublish = await supabase
       .from('posts')
-      .select('id, title, house_name, house_number, content, caption, image_url, media_type, media_items, platform, scheduled_date, time_string, hour, approval_status')
+      .select(`${base}, auto_publish, publish_status, publish_error, ig_permalink`)
       .not('scheduled_date', 'is', null);
+    // antes da migração da publicação as colunas novas não existem: segue sem elas
+    const { data, error } =
+      withPublish.error && /column/i.test(withPublish.error.message)
+        ? await supabase.from('posts').select(base).not('scheduled_date', 'is', null)
+        : withPublish;
     if (error) throw error;
 
     return (data ?? []).map(
@@ -163,6 +175,10 @@ function InstagramFeedPreview() {
         hour: row.hour ?? 19,
         timeString: normalizeTime(row.time_string, row.hour ?? 19),
         approvalStatus: row.approval_status || '',
+        autoPublish: (row as { auto_publish?: boolean }).auto_publish === true,
+        publishStatus: (((row as { publish_status?: string }).publish_status ?? '') as ScheduledTile['publishStatus']),
+        publishError: (row as { publish_error?: string }).publish_error ?? '',
+        permalink: (row as { ig_permalink?: string }).ig_permalink ?? '',
       }),
     );
   }, []);
@@ -566,6 +582,14 @@ function InstagramFeedPreview() {
                     <MediaPreview key={post.imageUrl} src={coverSrc(post.imageUrl, post.mediaType)} mediaType={post.mediaType} alt="" cover muted preload="metadata" className="pointer-events-none h-full w-full object-cover" />
 
                     <span className="pointer-events-none absolute right-1.5 top-1.5 flex items-center gap-1">
+                      {post.publishStatus === 'published' && (
+                        <span title="Publicado no Instagram" className="flex h-6 items-center rounded-full bg-status-success px-1.5 text-[10px] font-semibold text-white">No ar</span>
+                      )}
+                      {post.publishStatus !== 'published' && post.autoPublish && (
+                        <span title="Publica sozinho no horário" className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
+                          <Send size={11} aria-hidden="true" />
+                        </span>
+                      )}
                       {post.items.length > 1 && (
                         <span title={`Carrossel com ${post.items.length} mídias`} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
                           <Layers size={12} aria-hidden="true" />
@@ -700,7 +724,9 @@ function InstagramFeedPreview() {
                 </p>
               )}
 
-              <div className="mt-auto space-y-2 border-t border-border px-4 py-3">
+              <PublishPanel post={selected} canPublish={team.can('publicar_instagram')} onChanged={() => void refresh()} />
+
+              <div className="space-y-2 border-t border-border px-4 py-3">
                 <p className="text-xs font-semibold text-ink">Mudar posição no feed</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -848,6 +874,101 @@ function FeedCarousel({ items, title }: { items: { url: string; type: string }[]
             ))}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// Publicar no Instagram: agora ou sozinho no horário agendado. Só posts aprovados.
+function PublishPanel({ post, canPublish, onChanged }: { post: ScheduledTile; canPublish: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error' | 'info'; text: string } | null>(null);
+  const [auto, setAuto] = useState(post.autoPublish);
+
+  const approved = post.approvalStatus === 'approved';
+  const published = post.publishStatus === 'published';
+
+  const publishNow = async () => {
+    if (!window.confirm('Publicar este post agora no Instagram? Depois de publicado, só dá para apagar pelo app do Instagram.')) return;
+    setBusy(true);
+    setMessage({ tone: 'info', text: 'Publicando no Instagram… vídeos podem levar alguns minutos.' });
+    try {
+      const response = await fetch('/api/instagram/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { status?: string; message?: string };
+      if (result.status === 'published') setMessage({ tone: 'ok', text: 'Publicado no Instagram.' });
+      else if (result.status === 'processing') setMessage({ tone: 'info', text: 'O Instagram ainda está processando o vídeo. Clique de novo em instantes para concluir.' });
+      else setMessage({ tone: 'error', text: result.message ?? 'Não foi possível publicar.' });
+    } catch {
+      setMessage({ tone: 'error', text: 'Sem conexão com o servidor. Tente de novo.' });
+    } finally {
+      setBusy(false);
+      onChanged();
+    }
+  };
+
+  const toggleAuto = async (next: boolean) => {
+    setAuto(next);
+    const response = await fetch('/api/instagram/publish', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId: post.id, auto: next }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      setAuto(!next);
+      setMessage({ tone: 'error', text: 'Não foi possível mudar a publicação automática. A migração da publicação foi rodada?' });
+    } else onChanged();
+  };
+
+  return (
+    <div className="mt-auto space-y-2 border-t border-border px-4 py-3">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Send size={13} aria-hidden="true" /> Instagram</p>
+
+      {published ? (
+        <p className="text-xs text-status-success">
+          Publicado.{' '}
+          {post.permalink && (
+            <a href={post.permalink} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">Ver no Instagram</a>
+          )}
+        </p>
+      ) : !approved ? (
+        <p className="text-xs text-ink-muted">Só posts aprovados podem ser publicados.</p>
+      ) : !canPublish ? (
+        <p className="text-xs text-ink-muted">Você não tem a permissão &ldquo;Publicar no Instagram&rdquo;.</p>
+      ) : (
+        <>
+          {post.publishStatus === 'error' && post.publishError && !message && (
+            <p className="text-xs text-status-danger">Última tentativa: {post.publishError}</p>
+          )}
+          {post.publishStatus === 'processing' && !message && (
+            <p className="text-xs text-ink-muted">Publicação em andamento (o Instagram está processando a mídia).</p>
+          )}
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-ink">
+            <input type="checkbox" checked={auto} onChange={(event) => void toggleAuto(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-plum" />
+            <span>
+              Publicar sozinho no horário agendado
+              <span className="block text-ink-muted">{formatLongDay(post.scheduledDate)}, {post.timeString}</span>
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void publishNow()}
+            disabled={busy}
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-60"
+          >
+            {busy ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+            {busy ? 'Publicando…' : post.publishStatus === 'processing' ? 'Concluir publicação' : 'Publicar agora'}
+          </button>
+        </>
+      )}
+
+      {message && (
+        <p role="status" className={`text-xs ${message.tone === 'ok' ? 'text-status-success' : message.tone === 'error' ? 'text-status-danger' : 'text-ink-muted'}`}>
+          {message.text}
+        </p>
       )}
     </div>
   );

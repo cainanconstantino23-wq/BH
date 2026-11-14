@@ -61,6 +61,8 @@ export async function GET(request: NextRequest) {
     return finish('connected');
   } catch (error) {
     console.error('Falha ao conectar o Google Drive:', error);
-    return finish('error', 'exchange_failed');
+    // ex.: "Google token: invalid_client Unauthorized" → mostra o código do Google para achar a causa
+    const code = String(error).match(/Google token: ([a-z_]+)/)?.[1];
+    return finish('error', code ? `exchange_failed_${code}` : 'exchange_failed');
   }
 }

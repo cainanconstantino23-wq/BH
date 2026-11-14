@@ -35,7 +35,7 @@ Tom visual: elegante, limpo, "luxo descalço". Interface em português (pt-BR).
 - Rotas protegidas: /api/cron/* exige CRON_SECRET; /api/instagram/* exige login.
 
 ## Situação atual
-- Publicação automática no Instagram NÃO existe ainda (agendamento só salva no banco).
+- Publicação no Instagram: src/lib/meta/publish.ts (contêiner → espera processar → media_publish; foto, carrossel, Reels, Story). "Publicar agora" e "publicar sozinho no horário" na prévia da Grade do feed (POST/PATCH /api/instagram/publish, permissão publicar_instagram, só aprovados). Agendador: /api/cron/instagram-publish (CRON_SECRET; a cada 5 min por agendador externo, não publica atrasados > 6 h). Campos publish_* em posts só o servidor altera (guard). Exige instagram_content_publish no token; a API não aceita foto 3:4.
 - Equipe única da Bahia Homes (sem organizations): todos os membros ativos veem os mesmos dados; permissões aplicadas no banco (has_permission + RLS + trigger guard_post_update).
 - /api/upload-url exige login e permissão de criar/editar publicações.
 

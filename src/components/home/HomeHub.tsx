@@ -12,12 +12,12 @@ import {
   useTransform,
   type MotionValue,
 } from 'motion/react';
-import { BarChart3, CalendarPlus, ChevronRight, CircleCheck, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarPlus, ChevronRight, CircleCheck, ImageUp, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const outfit = Outfit({ subsets: ['latin'], weight: ['300', '400', '500'], display: 'swap' });
 
-export type HubTarget = 'analytics' | 'approval' | 'planner' | 'feed';
+export type HubTarget = 'analytics' | 'approval' | 'planner' | 'feed' | 'capa';
 
 // Fotos de Bruno Pinheiro para a Bahia Homes (Trancoso). Ficam em public/inicio.
 const PHOTOS = [
@@ -103,6 +103,7 @@ export function HomeHub({
     { key: 'approval', name: 'Aprovação', hint: counts?.pending ? `${counts.pending} aguardando` : 'Envie para o cliente aprovar', icon: CircleCheck, badge: counts?.pending || undefined },
     { key: 'planner', name: 'Programar post', hint: 'Fotos, Reels e Stories', icon: CalendarPlus },
     { key: 'feed', name: 'Grade do feed', hint: 'Organize o perfil arrastando', icon: LayoutGrid },
+    { key: 'capa', name: 'Aprovação de capa', hint: 'Fotos do Drive e capa do feed', icon: ImageUp },
   ];
 
   const photo = PHOTOS[index];
