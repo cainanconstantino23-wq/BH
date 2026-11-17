@@ -12,12 +12,12 @@ import {
   useTransform,
   type MotionValue,
 } from 'motion/react';
-import { BarChart3, CalendarDays, ChevronRight, CircleCheck, ImageUp, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronRight, CircleCheck, Clapperboard, Images, LayoutGrid, LogOut, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const outfit = Outfit({ subsets: ['latin'], weight: ['300', '400', '500'], display: 'swap' });
 
-export type HubTarget = 'analytics' | 'approval' | 'planner' | 'feed' | 'capa';
+export type HubTarget = 'analytics' | 'approval' | 'planner' | 'feed' | 'fotos';
 
 // Fotos de Bruno Pinheiro para a Bahia Homes (Trancoso). Ficam em public/inicio.
 const PHOTOS = [
@@ -73,7 +73,14 @@ export function HomeHub({
 }) {
   const reduced = useReducedMotion() ?? false;
   const [index, setIndex] = useState(0);
-  const [counts, setCounts] = useState<{ pending: number; today: number } | null>(null);
+  // resumo do dia: vídeos e fotos aguardando / aprovados prontos para publicar, e publicações de hoje
+  const [counts, setCounts] = useState<{
+    videosPending: number;
+    videosReady: number;
+    photosPending: number | null; // null: sem acesso às pastas de fotos
+    photosReady: number | null;
+    today: number;
+  } | null>(null);
 
   // troca de foto
   useEffect(() => {
@@ -85,12 +92,28 @@ export function HomeHub({
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const [pending, today] = await Promise.all([
-        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('approval_status', 'pending'),
-        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('scheduled_date', todayISO()),
+      const [videosPending, videosReady, today, folders] = await Promise.all([
+        supabase.from('posts').select('id', { count: 'exact', head: true })
+          .eq('media_type', 'video').in('approval_status', ['pending', 'changes_requested']),
+        // aprovado e ainda não agendado nem publicado: pronto para publicar
+        supabase.from('posts').select('id', { count: 'exact', head: true })
+          .eq('media_type', 'video').eq('approval_status', 'approved').eq('auto_publish', false).is('publish_status', null),
+        // vão para o Instagram hoje (agendados) ou já foram
+        supabase.from('posts').select('id', { count: 'exact', head: true })
+          .eq('scheduled_date', todayISO()).or('auto_publish.eq.true,publish_status.not.is.null'),
+        fetch('/api/capa?tipo=fotos', { cache: 'no-store' })
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null) as Promise<{ collections?: { shareToken: string | null; responded: boolean; approvedCount: number; post?: unknown }[] } | null>,
       ]);
-      if (!active || pending.error || today.error) return;   // sem dados, sem avisos
-      setCounts({ pending: pending.count ?? 0, today: today.count ?? 0 });
+      if (!active || videosPending.error || videosReady.error || today.error) return; // sem dados, sem avisos
+      const list = folders?.collections;
+      setCounts({
+        videosPending: videosPending.count ?? 0,
+        videosReady: videosReady.count ?? 0,
+        photosPending: list ? list.filter((c) => c.shareToken && !c.responded).length : null,
+        photosReady: list ? list.filter((c) => c.responded && c.approvedCount > 0 && !c.post).length : null,
+        today: today.count ?? 0,
+      });
     };
     void load();
     return () => {
@@ -100,10 +123,10 @@ export function HomeHub({
 
   const items: DockItem[] = [
     ...(canSeeAnalytics ? [{ key: 'analytics' as const, name: 'Analytics', hint: 'Alcance, visualizações e ranking', icon: BarChart3 }] : []),
-    { key: 'approval', name: 'Aprovação', hint: counts?.pending ? `${counts.pending} aguardando` : 'Envie para o cliente aprovar', icon: CircleCheck, badge: counts?.pending || undefined },
+    { key: 'approval', name: 'Aprovação vídeos', hint: counts?.videosPending ? `${counts.videosPending} aguardando` : 'Reels para o cliente aprovar', icon: Clapperboard, badge: counts?.videosPending || undefined },
+    { key: 'fotos', name: 'Aprovação fotos', hint: counts?.photosPending ? `${counts.photosPending} aguardando` : 'Carrossel e capas do Drive', icon: Images, badge: counts?.photosPending || undefined },
     { key: 'planner', name: 'Calendário de posts', hint: 'Posts agendados por dia', icon: CalendarDays },
     { key: 'feed', name: 'Grade do feed', hint: 'Organize o perfil arrastando', icon: LayoutGrid },
-    { key: 'capa', name: 'Aprovação de capa', hint: 'Fotos do Drive e capa do feed', icon: ImageUp },
   ];
 
   const photo = PHOTOS[index];
@@ -177,13 +200,25 @@ export function HomeHub({
           {counts && (
             <>
               <SummaryCard
-                value={counts.pending}
-                label={counts.pending === 1 ? 'post aguardando aprovação' : 'posts aguardando aprovação'}
-                emptyLabel="Nada aguardando aprovação"
+                value={counts.videosPending}
+                label={counts.videosPending === 1 ? 'vídeo aguardando aprovação' : 'vídeos aguardando aprovação'}
+                emptyLabel="Nenhum vídeo aguardando"
+                extra={counts.videosReady ? `${counts.videosReady} ${counts.videosReady === 1 ? 'aprovado pronto' : 'aprovados prontos'} para publicar` : undefined}
                 tone="warning"
                 onClick={() => onOpen('approval')}
                 reduced={reduced}
               />
+              {counts.photosPending !== null && (
+                <SummaryCard
+                  value={counts.photosPending}
+                  label={counts.photosPending === 1 ? 'casa com fotos aguardando' : 'casas com fotos aguardando'}
+                  emptyLabel="Nenhuma foto aguardando"
+                  extra={counts.photosReady ? `${counts.photosReady} ${counts.photosReady === 1 ? 'aprovada pronta' : 'aprovadas prontas'} para publicar` : undefined}
+                  tone="warning"
+                  onClick={() => onOpen('fotos')}
+                  reduced={reduced}
+                />
+              )}
               <SummaryCard
                 value={counts.today}
                 label={counts.today === 1 ? 'publicação agendada hoje' : 'publicações agendadas hoje'}
@@ -222,6 +257,7 @@ function SummaryCard({
   value,
   label,
   emptyLabel,
+  extra,
   tone,
   onClick,
   reduced,
@@ -229,6 +265,8 @@ function SummaryCard({
   value: number;
   label: string;
   emptyLabel: string;
+  /** Segunda linha em verde (ex.: "2 aprovados prontos para publicar"). */
+  extra?: string;
   tone: 'warning' | 'plum';
   onClick: () => void;
   reduced: boolean;
@@ -248,7 +286,10 @@ function SummaryCard({
       ) : (
         <span className={`shrink-0 text-2xl font-semibold leading-none tracking-[-0.02em] tabular-nums ${numberColor}`}>{value}</span>
       )}
-      <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-ink">{empty ? emptyLabel : label}</span>
+      <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-ink">
+        {empty ? emptyLabel : label}
+        {extra && <span className="block text-xs font-semibold text-status-success">{extra}</span>}
+      </span>
       <ChevronRight aria-hidden="true" size={16} className="shrink-0 text-ink-muted transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
     </motion.button>
   );

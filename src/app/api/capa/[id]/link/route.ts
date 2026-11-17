@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
+import { collectionKind, collectionName, logCoverActivity } from '@/lib/covers-server';
 
 // Link público da pasta (só as favoritas). Devolve o atual; { renew: true } troca por um novo e o antigo para de funcionar.
 const noStore = { 'Cache-Control': 'private, no-store' };
@@ -19,7 +20,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (row.share_token && !renew) return NextResponse.json({ token: row.share_token }, { headers: noStore });
 
   const token = randomBytes(18).toString('base64url');
-  const { error } = await admin.from('cover_collections').update({ share_token: token }).eq('id', id);
+  const { error } = await admin
+    .from('cover_collections')
+    .update({ share_token: token, link_created_by: member.label, link_created_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) return NextResponse.json({ error: 'save_failed' }, { status: 500, headers: noStore });
+  await logCoverActivity(admin, {
+    collectionId: id,
+    actorId: member.user.id,
+    actorLabel: member.label,
+    action: row.share_token ? 'capa.link_renovado' : 'capa.link_gerado',
+    details: { pasta: await collectionName(admin, id), tipo: await collectionKind(admin, id) },
+  });
   return NextResponse.json({ token }, { headers: noStore });
 }

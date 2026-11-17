@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
+import { collectionKind, collectionName, logCoverActivity } from '@/lib/covers-server';
 
 // Post programado a partir de uma pasta com capa aprovada pela aprovadora (link de capa):
 // o post já nasce "aprovado". Feito no servidor para ninguém criar post aprovado sem a escolha dela.
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .from('posts')
     .update({
       approval_status: 'approved',
+      cover_collection_id: collectionId, // a Grade do feed só mostra posts ligados a uma capa aprovada
       client_feedback: feedback ? `Capa aprovada pelo link de capa: ${feedback}` : 'Capa aprovada pelo link de capa.',
     })
     .eq('id', post.id);
@@ -49,5 +51,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error('Falha ao marcar post como aprovado:', error.message);
     return NextResponse.json({ error: 'save_failed' }, { status: 500, headers: noStore });
   }
+  await logCoverActivity(admin, {
+    collectionId,
+    actorId: member.user.id,
+    actorLabel: member.label,
+    action: 'capa.post_criado',
+    details: { pasta: await collectionName(admin, collectionId), tipo: await collectionKind(admin, collectionId), post: post.id },
+  });
   return NextResponse.json({ ok: true }, { headers: noStore });
 }

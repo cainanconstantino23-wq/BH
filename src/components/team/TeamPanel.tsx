@@ -3,11 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CalendarClock,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronDown,
+  Crop,
   FilePlus2,
+  FolderPlus,
   History,
+  ImagePlus,
+  Link2,
+  Star,
   KeyRound,
   MessageSquareWarning,
   PencilLine,
@@ -519,7 +525,7 @@ export interface ActivityRow {
   details: Record<string, unknown>;
 }
 
-type HistoryFilter = 'all' | 'post' | 'equipe';
+type HistoryFilter = 'all' | 'post' | 'capa' | 'equipe';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'pendente',
@@ -543,6 +549,16 @@ const presetLabel = (value: unknown) => {
   if (key in PRESET_LABELS) return PRESET_LABELS[key as TeamPreset];
   if (key === 'membro') return 'Membro';
   return key;
+};
+
+const names = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+const nameList = (value: unknown, max = 6) => {
+  const list = names(value);
+  return list.length > max ? `${list.slice(0, max).join(', ')} e mais ${list.length - max}` : list.join(', ');
+};
+const folderOf = (d: Record<string, unknown>) => {
+  const area = str(d.tipo) === 'fotos' ? 'Aprovação fotos' : 'Aprovação de capa';
+  return `${str(d.pasta) ? `“${str(d.pasta)}”` : 'uma pasta'} (${area})`;
 };
 
 const permissionList = (value: unknown) =>
@@ -592,6 +608,60 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
       const note = [added && `Recebeu: ${added}`, removed && `Perdeu: ${removed}`].filter(Boolean).join('. ');
       return { icon: UserRoundCog, tone: 'text-status-info', text: `${who} alterou as permissões de ${str(d.pessoa)}`, note: note || undefined };
     }
+    case 'capa.pasta_criada':
+      return { icon: FolderPlus, tone: 'text-ink-muted', text: `${who} criou a pasta ${folderOf(d)}` };
+    case 'capa.fotos_adicionadas': {
+      const count = Number(d.quantidade) || 0;
+      const capas = names(d.capas).length;
+      return {
+        icon: ImagePlus,
+        tone: 'text-ink-muted',
+        text: `${who} escolheu ${count} ${count === 1 ? 'foto' : 'fotos'}${capas ? ` (${capas} como capa)` : ''} em ${folderOf(d)}`,
+        note: nameList(d.fotos) || undefined,
+      };
+    }
+    case 'capa.capa_marcada':
+      return { icon: Star, tone: 'text-status-warning', text: `${who} marcou “${str(d.foto)}” como capa em ${folderOf(d)}` };
+    case 'capa.capa_desmarcada':
+      return { icon: Star, tone: 'text-ink-muted', text: `${who} tirou “${str(d.foto)}” das capas em ${folderOf(d)}${d.era_aprovada ? ' (estava aprovada)' : ''}` };
+    case 'capa.foto_removida':
+      return { icon: Trash2, tone: 'text-status-danger', text: `${who} tirou “${str(d.foto)}” de ${folderOf(d)}` };
+    case 'capa.foto_cortada':
+      return { icon: Crop, tone: 'text-ink-muted', text: `${who} cortou “${str(d.foto)}”${str(d.formato) ? ` (${str(d.formato)})` : ''} em ${folderOf(d)}` };
+    case 'capa.corte_desfeito':
+      return { icon: Crop, tone: 'text-ink-muted', text: `${who} desfez o corte de “${str(d.foto)}” em ${folderOf(d)}` };
+    case 'capa.pasta_renomeada':
+      return { icon: PencilLine, tone: 'text-ink-muted', text: `${who} renomeou ${str(d.de) ? `“${str(d.de)}”` : 'a pasta'} para ${folderOf(d)}` };
+    case 'capa.data_planejada': {
+      const [y, m, dd] = str(d.data).split('-');
+      const hora = typeof d.hora === 'number' ? ` às ${String(d.hora).padStart(2, '0')}:00` : '';
+      return { icon: CalendarDays, tone: 'text-ink-muted', text: `${who} planejou ${folderOf(d)} para ${dd && m ? `${dd}/${m}/${y}` : 'outra data'}${hora}` };
+    }
+    case 'capa.pasta_apagada':
+      return { icon: Trash2, tone: 'text-status-danger', text: `${who} apagou a pasta ${folderOf(d)}` };
+    case 'capa.link_gerado':
+      return { icon: Link2, tone: 'text-status-info', text: `${who} gerou o link de aprovação de ${folderOf(d)}` };
+    case 'capa.link_renovado':
+      return { icon: Link2, tone: 'text-status-info', text: `${who} trocou o link de aprovação de ${folderOf(d)} (o anterior parou de funcionar)` };
+    case 'capa.capas_adicionadas_aprovadora':
+      return { icon: Star, tone: 'text-status-warning', text: `${who} adicionou ${names(d.fotos).length} ${names(d.fotos).length === 1 ? 'foto' : 'fotos'} às capas de ${folderOf(d)}`, note: nameList(d.fotos) || undefined };
+    case 'capa.respondido': {
+      const approvedNames = names(d.aprovadas);
+      const removedNames = nameList(d.desmarcadas);
+      const note = [approvedNames.length && `Aprovadas: ${nameList(d.aprovadas)}`, removedNames && `Desmarcadas: ${removedNames}`, str(d.comentario) && `Comentário: ${str(d.comentario)}`]
+        .filter(Boolean)
+        .join('. ');
+      return {
+        icon: approvedNames.length ? CheckCircle2 : MessageSquareWarning,
+        tone: approvedNames.length ? 'text-status-success' : 'text-status-warning',
+        text: approvedNames.length
+          ? `${who} aprovou ${approvedNames.length} ${approvedNames.length === 1 ? 'capa' : 'capas'} em ${folderOf(d)}`
+          : `${who} respondeu ${folderOf(d)} sem aprovar capa`,
+        note: note || undefined,
+      };
+    }
+    case 'capa.post_criado':
+      return { icon: FilePlus2, tone: 'text-ink-muted', text: `${who} criou o post a partir de ${folderOf(d)}, já aprovado` };
     case 'equipe.removido':
       return { icon: UserX, tone: 'text-status-danger', text: `${who} removeu ${str(d.pessoa)} da equipe` };
     default:
@@ -655,7 +725,7 @@ export function HistoryPanel() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Histórico" description="Quem fez o quê: publicações criadas, reagendadas, aprovadas ou apagadas, e mudanças na equipe." />
+      <PageHeader title="Histórico" description="Quem fez o quê e quando: publicações, fotos e capas escolhidas e aprovadas, links enviados e mudanças na equipe." />
 
       {error ? (
         <p role="alert" className="rounded-control border border-status-danger-border bg-status-danger-soft px-4 py-3 text-xs text-status-danger">
@@ -673,6 +743,7 @@ export function HistoryPanel() {
                 [
                   ['all', 'Tudo'],
                   ['post', 'Publicações'],
+                  ['capa', 'Fotos e capas'],
                   ['equipe', 'Equipe'],
                 ] as const
               ).map(([value, label]) => (

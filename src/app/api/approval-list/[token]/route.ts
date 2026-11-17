@@ -46,8 +46,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     .select('id, approval_token, house_name, house_number, title, image_url, media_type, platform, scheduled_date, time_string, approval_status, client_feedback')
     .in('approval_status', ['pending', 'changes_requested'])
     .not('approval_token', 'is', null)
-    .order('scheduled_date', { ascending: true })
-    .order('hour', { ascending: true });
+    .eq('media_type', 'video') // lista da Aprovação vídeos: fotos são aprovadas pelo link de capa
+    .order('created_at', { ascending: true });
   if (error) {
     console.error('Falha ao buscar posts da lista:', error.message);
     return NextResponse.json({ error: 'lookup_failed' }, { status: 500, headers: noStore });

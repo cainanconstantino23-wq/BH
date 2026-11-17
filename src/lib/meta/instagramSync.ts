@@ -274,5 +274,63 @@ export async function syncInstagramAccount(
     if (mediaError) throw new Error(`Falha ao salvar as publicações: ${mediaError.message}`);
   }
 
+  // 4) O que foi apagado no Instagram sai da plataforma também.
+  try {
+    await reconcileDeletedMedia(db, igId, token);
+  } catch (error) {
+    warnings.push(`conferência de apagados: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   return { instagramAccountId: igId, days: dailyRows.length, media: mediaRows.length, mediaWithoutInsights, warnings };
+}
+
+/**
+ * Confere no Instagram o que ainda existe e limpa o que foi apagado lá:
+ * - some de instagram_media (grade e métricas);
+ * - o post da plataforma deixa de estar "publicado" e volta a "aprovado, não publicado".
+ * Só age quando a lista do Instagram veio completa (sem cortar páginas).
+ */
+export async function reconcileDeletedMedia(db: SupabaseClient, igId: string, token: string) {
+  const ids = new Set<string>();
+  let after: string | undefined;
+  let complete = false;
+  for (let page = 0; page < 40; page++) {
+    const response = await graphGet<{ data: { id: string }[]; paging?: { cursors?: { after?: string }; next?: string } }>(
+      `/${igId}/media`,
+      { fields: 'id', limit: '100', access_token: token, ...(after ? { after } : {}) },
+    );
+    response.data.forEach((item) => ids.add(item.id));
+    after = response.paging?.cursors?.after;
+    if (!response.paging?.next || !after) {
+      complete = true;
+      break;
+    }
+  }
+  if (!complete) return { removedMedia: 0, unpublishedPosts: 0 };
+
+  const { data: stored } = await db.from('instagram_media').select('id').eq('instagram_account_id', igId);
+  const goneMedia = (stored ?? []).map((row) => String(row.id)).filter((id) => !ids.has(id));
+  if (goneMedia.length) await db.from('instagram_media').delete().in('id', goneMedia);
+
+  const { data: published } = await db
+    .from('posts')
+    .select('id, ig_media_id')
+    .eq('publish_status', 'published')
+    .not('ig_media_id', 'is', null);
+  const gonePosts = (published ?? []).filter((row) => !ids.has(String(row.ig_media_id))).map((row) => row.id);
+  if (gonePosts.length) {
+    await db
+      .from('posts')
+      .update({
+        publish_status: null,
+        ig_media_id: null,
+        ig_permalink: null,
+        published_at: null,
+        publish_container_id: null,
+        auto_publish: false,
+        publish_error: `Apagado no Instagram (detectado em ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Bahia' })}).`,
+      })
+      .in('id', gonePosts);
+  }
+  return { removedMedia: goneMedia.length, unpublishedPosts: gonePosts.length };
 }

@@ -4,11 +4,12 @@ import { OnScreen } from '@/components/drive/OnScreen';
 import { useEffect, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Crop, Folder, FolderInput, HardDrive, Loader2, RefreshCw, Star, Users, X } from 'lucide-react';
 import type { DriveEntry } from '@/app/api/drive/list/route';
-import type { CoverCollectionDetail, CoverCollectionSummary, EditedImage } from '@/lib/covers';
+import { photoLimit, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type EditedImage } from '@/lib/covers';
 import { DrivePhotoViewer } from '@/components/drive/DrivePhotoViewer';
 import { coverFolderLabel, guessHouseFromFileName } from '@/lib/house';
 
 // Navegação no Google Drive: escolher fotos (✓) e favoritar para capa (★); depois salvar numa pasta de casa.
+// Na aprovação fotos (mode 'fotos') a pasta da casa guarda no máximo 15 fotos: as do carrossel.
 
 type Source = 'root' | 'shared' | 'drives';
 const SOURCES: { key: Source; label: string; icon: typeof HardDrive }[] = [
@@ -22,11 +23,13 @@ interface Crumb { id: string; name: string }
 export const driveThumb = (id: string, size = 400) => `/api/drive/thumb/${encodeURIComponent(id)}?s=${size}`;
 
 export function DriveBrowser({
+  mode = 'capa',
   collections,
   target,
   onSaved,
   onNotConnected,
 }: {
+  mode?: CollectionKind;
   collections: CoverCollectionSummary[];
   /** Pasta de casa já escolhida (ao vir de "Adicionar fotos do Drive"). */
   target: CoverCollectionSummary | null;
@@ -47,6 +50,11 @@ export function DriveBrowser({
   const [edits, setEdits] = useState<Map<string, EditedImage>>(new Map());
 
   const folderId = path.length ? path[path.length - 1].id : source;
+  const limit = photoLimit(mode);
+  // vagas que sobram na pasta da casa (ao adicionar numa pasta que já tem fotos)
+  const room = limit === null ? Infinity : Math.max(0, limit - (target?.photoCount ?? 0));
+  const [limitNotice, setLimitNotice] = useState(false);
+  const isFull = (current: Map<string, DriveEntry>) => current.size >= room;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,6 +109,11 @@ export function DriveBrowser({
   };
 
   const toggleSelected = (entry: DriveEntry) => {
+    if (!selected.has(entry.id) && isFull(selected)) {
+      setLimitNotice(true);
+      return;
+    }
+    setLimitNotice(false);
     setSelected((current) => {
       const next = new Map(current);
       if (next.has(entry.id)) next.delete(entry.id);
@@ -117,6 +130,10 @@ export function DriveBrowser({
   };
 
   const toggleFavorite = (entry: DriveEntry) => {
+    if (!selected.has(entry.id) && isFull(selected)) {
+      setLimitNotice(true);
+      return;
+    }
     setSelected((current) => (current.has(entry.id) ? current : new Map(current).set(entry.id, entry)));
     setFavorites((current) => {
       const next = new Set(current);
@@ -130,12 +147,24 @@ export function DriveBrowser({
   const folders = entries?.filter((entry) => entry.kind === 'folder') ?? [];
   const sourceLabel = SOURCES.find((item) => item.key === source)?.label ?? '';
   const allChosen = images.length > 0 && images.every((entry) => selected.has(entry.id));
+  const carousel = mode === 'fotos';
 
   return (
     <div className="space-y-5 pb-28">
       {target && (
         <p className="rounded-control border border-status-info-border bg-status-info-soft px-4 py-3 text-sm text-status-info">
           Adicionando fotos em <strong>{coverFolderLabel(target.houseName, target.neighborhood, target.houseNumber)}</strong>.
+          {limit !== null && ` Cabem mais ${room} de ${limit} fotos no carrossel.`}
+        </p>
+      )}
+      {carousel && !target && (
+        <p className="text-sm text-ink-muted">
+          Abra a pasta da casa no Drive, marque com ✓ as {limit} fotos do carrossel e, entre elas, marque com ★ as capas.
+        </p>
+      )}
+      {limitNotice && (
+        <p role="alert" className="rounded-control border border-status-warning-border bg-status-warning-soft px-4 py-3 text-sm text-status-warning">
+          O carrossel já tem {limit} fotos. Tire uma da seleção para escolher outra.
         </p>
       )}
 
@@ -178,7 +207,7 @@ export function DriveBrowser({
             </span>
           ))}
         </nav>
-        {images.length > 0 && (
+        {images.length > 0 && (allChosen || selected.size + images.filter((entry) => !selected.has(entry.id)).length <= room) && (
           <button
             type="button"
             onClick={() =>
@@ -263,8 +292,17 @@ export function DriveBrowser({
               ))}
             </ul>
             <p className="min-w-0 flex-1 text-xs text-ink-muted sm:flex-none sm:text-right">
-              <span className="block font-semibold text-ink">{selected.size} {selected.size === 1 ? 'foto escolhida' : 'fotos escolhidas'}</span>
-              {favorites.size} {favorites.size === 1 ? 'favorita' : 'favoritas'} para capa
+              {carousel ? (
+                <>
+                  <span className="block font-semibold text-ink tabular-nums">{selected.size + (target?.photoCount ?? 0)} de {limit} fotos do carrossel</span>
+                  {favorites.size} {favorites.size === 1 ? 'capa marcada' : 'capas marcadas'}
+                </>
+              ) : (
+                <>
+                  <span className="block font-semibold text-ink">{selected.size} {selected.size === 1 ? 'foto escolhida' : 'fotos escolhidas'}</span>
+                  {favorites.size} {favorites.size === 1 ? 'favorita' : 'favoritas'} para capa
+                </>
+              )}
             </p>
             <button
               type="button"
@@ -295,8 +333,8 @@ export function DriveBrowser({
               else next.delete(preview.id);
               return next;
             });
-            // foto cortada já entra na seleção
-            if (edited) setSelected((current) => (current.has(preview.id) ? current : new Map(current).set(preview.id, preview)));
+            // foto cortada já entra na seleção (se ainda couber no carrossel)
+            if (edited) setSelected((current) => (current.has(preview.id) || isFull(current) ? current : new Map(current).set(preview.id, preview)));
           }}
         />
       )}
@@ -304,6 +342,7 @@ export function DriveBrowser({
       {saveOpen && (
         <OnScreen>
         <SaveDialog
+          mode={mode}
           collections={collections}
           target={target}
           guessFrom={path.length ? path[path.length - 1].name : ''}
@@ -314,6 +353,7 @@ export function DriveBrowser({
             setSelected(new Map());
             setFavorites(new Set());
             setEdits(new Map());
+            setLimitNotice(false);
             onSaved(collection);
           }}
         />
@@ -331,6 +371,8 @@ export function PhotoTile({
   favorite,
   approved = false,
   edited = false,
+  badge,
+  meta,
   onOpen,
   onSelect,
   onFavorite,
@@ -342,6 +384,10 @@ export function PhotoTile({
   favorite: boolean;
   approved?: boolean;
   edited?: boolean;
+  /** Etiqueta sobre a foto (ex.: "Adicionada por Thereza"). */
+  badge?: string;
+  /** Linha do registro abaixo do nome (quem e quando). */
+  meta?: string;
   onOpen: () => void;
   onSelect?: () => void;
   onFavorite: () => void;
@@ -366,7 +412,10 @@ export function PhotoTile({
           // eslint-disable-next-line @next/next/no-img-element -- miniatura do Drive pelo servidor
           <img src={src} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} className="h-full w-full object-cover" />
         )}
-        {edited && !approved && (
+        {badge && !approved && (
+          <span className="absolute inset-x-2 bottom-2 rounded-full bg-amber-400 px-2 py-1 text-center text-[11px] font-semibold text-white">{badge}</span>
+        )}
+        {edited && !approved && !badge && (
           <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
             <Crop size={11} aria-hidden="true" /> Cortada
           </span>
@@ -401,11 +450,13 @@ export function PhotoTile({
         <Star size={15} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
       </button>
       <p className="mt-1.5 truncate text-[11px] text-ink-muted" title={name}>{name}</p>
+      {meta && <p className="truncate text-[11px] tabular-nums text-ink-muted" title={meta}>{meta}</p>}
     </li>
   );
 }
 
 function SaveDialog({
+  mode,
   collections,
   target,
   guessFrom,
@@ -413,6 +464,7 @@ function SaveDialog({
   onClose,
   onSaved,
 }: {
+  mode: CollectionKind;
   collections: CoverCollectionSummary[];
   target: CoverCollectionSummary | null;
   guessFrom: string;
@@ -422,17 +474,25 @@ function SaveDialog({
 }) {
   // nome e número sugeridos pelo nome da pasta do Drive (ex.: "Casa 110 Vila dos Coqueiros")
   const guess = guessHouseFromFileName(guessFrom);
-  const [mode, setMode] = useState<'new' | 'existing'>(target || (collections.length && !guess.number && !guess.name) ? 'existing' : 'new');
+  const [choice, setChoice] = useState<'new' | 'existing'>(target || (collections.length && !guess.number && !guess.name) ? 'existing' : 'new');
   const [collectionId, setCollectionId] = useState<number>(target?.id ?? collections[0]?.id ?? 0);
   const [houseName, setHouseName] = useState(guess.name);
   const [neighborhood, setNeighborhood] = useState('');
   const [houseNumber, setHouseNumber] = useState(guess.number);
+  // data planejada da publicação: o post já aparece na Grade do feed nessa data (planejamento do mês)
+  const askDate = mode === 'fotos' && choice === 'new';
+  const [plannedDate, setPlannedDate] = useState('');
+  const [plannedHour, setPlannedHour] = useState(19);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const save = async () => {
-    if (mode === 'new' && !houseName.trim() && !houseNumber.trim()) {
+    if (choice === 'new' && !houseName.trim() && !houseNumber.trim()) {
       setError('Informe o nome ou o número da casa.');
+      return;
+    }
+    if (askDate && !plannedDate) {
+      setError('Escolha a data planejada para publicar.');
       return;
     }
     setSaving(true);
@@ -441,9 +501,18 @@ function SaveDialog({
       const response = await fetch('/api/capa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mode === 'existing' ? { collectionId, photos } : { houseName, neighborhood, houseNumber, photos }),
+        body: JSON.stringify(
+          choice === 'existing'
+            ? { collectionId, photos }
+            : { houseName, neighborhood, houseNumber, photos, kind: mode, ...(askDate ? { plannedDate, plannedHour } : {}) },
+        ),
       });
       const data = await response.json().catch(() => ({}));
+      if (data.error === 'too_many') {
+        setError(`O carrossel da casa aceita no máximo ${data.limit} fotos${typeof data.current === 'number' ? ` e esta pasta já tem ${data.current}` : ''}. Tire algumas da seleção.`);
+        setSaving(false);
+        return;
+      }
       if (!response.ok || !data.collection) throw new Error(data.error ?? String(response.status));
       onSaved(data.collection);
     } catch (saveError) {
@@ -465,7 +534,7 @@ function SaveDialog({
           <div>
             <h2 id="save-cover-title" className="text-base font-semibold text-ink">Salvar na pasta da casa</h2>
             <p className="mt-1 text-sm text-ink-muted">
-              {photos.length} {photos.length === 1 ? 'foto' : 'fotos'}, {photos.filter((photo) => photo.favorite).length} favoritas para capa.
+              {photos.length} {photos.length === 1 ? 'foto' : 'fotos'}, {photos.filter((photo) => photo.favorite).length} {mode === 'fotos' ? 'capas' : 'favoritas para capa'}.
             </p>
           </div>
           <button type="button" onClick={onClose} disabled={saving} aria-label="Fechar" className="flex h-9 w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted">
@@ -480,9 +549,9 @@ function SaveDialog({
                 key={option}
                 type="button"
                 role="radio"
-                aria-checked={mode === option}
-                onClick={() => setMode(option)}
-                className={`min-h-9 rounded-[6px] text-xs font-semibold ${mode === option ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}`}
+                aria-checked={choice === option}
+                onClick={() => setChoice(option)}
+                className={`min-h-9 rounded-[6px] text-xs font-semibold ${choice === option ? 'bg-surface text-ink shadow-xs' : 'text-ink-muted hover:text-ink'}`}
               >
                 {option === 'new' ? 'Nova pasta' : 'Pasta existente'}
               </button>
@@ -490,7 +559,7 @@ function SaveDialog({
           </div>
         )}
 
-        {mode === 'existing' ? (
+        {choice === 'existing' ? (
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold text-ink">Pasta</span>
             <select value={collectionId} onChange={(event) => setCollectionId(Number(event.target.value))} disabled={Boolean(target)} className={input}>
@@ -515,6 +584,26 @@ function SaveDialog({
               <span className="text-xs font-semibold text-ink">Bairro</span>
               <input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} placeholder="Ex.: Vila dos Coqueiros" className={input} />
             </label>
+            {askDate && (
+              <fieldset className="space-y-1.5">
+                <legend className="text-xs font-semibold text-ink">Quando planejamos publicar</legend>
+                <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+                  <input
+                    type="date"
+                    value={plannedDate}
+                    onChange={(event) => setPlannedDate(event.target.value)}
+                    aria-label="Data planejada"
+                    className={`${input} tabular-nums`}
+                  />
+                  <select value={plannedHour} onChange={(event) => setPlannedHour(Number(event.target.value))} aria-label="Horário planejado" className={`${input} tabular-nums`}>
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-ink-muted">O post já aparece na Grade do feed nessa data. Dá para mudar depois.</p>
+              </fieldset>
+            )}
           </div>
         )}
 

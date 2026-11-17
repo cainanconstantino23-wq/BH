@@ -6,6 +6,8 @@ import { createClient } from '@/utils/supabase/server';
 export interface ActiveMember {
   user: User;
   permissions: string[];
+  /** Nome para o histórico (nome completo ou e-mail). */
+  label: string;
   can: (permission: string) => boolean;
   supabase: Awaited<ReturnType<typeof createClient>>;
 }
@@ -20,13 +22,14 @@ export async function getActiveMember(): Promise<ActiveMember | null> {
 
   const { data: member } = await supabase
     .from('team_members')
-    .select('status, permissions')
+    .select('status, permissions, full_name, email')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (!member || member.status !== 'ativo') return null;
   const permissions: string[] = member.permissions ?? [];
-  return { user, permissions, can: (permission) => permissions.includes(permission), supabase };
+  const label = (member.full_name as string | null) || (member.email as string | null) || user.email || 'Usuário';
+  return { user, permissions, label, can: (permission) => permissions.includes(permission), supabase };
 }
 
 /** A conexão do Instagram da equipe (a mais recente com conta identificada). Usar com o cliente admin. */

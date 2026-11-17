@@ -3,10 +3,11 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Check, Expand, LoaderCircle, X } from 'lucide-react';
-import type { CoverPhoto, PublicCoverCollection } from '@/lib/covers';
+import { Check, Expand, LoaderCircle, Plus, Search, X } from 'lucide-react';
+import { APPROVER_NAME, type CoverPhoto, type PublicCoverCollection } from '@/lib/covers';
 
 // Link para a aprovadora: mostra só as fotos favoritadas para capa; ela escolhe a(s) capa(s) e pode comentar.
+// Se não gostar, "Encontrar mais fotos" mostra as outras fotos da pasta (as do carrossel): ela mesma põe nas capas e aprova.
 
 type LoadState = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; data: PublicCoverCollection };
 
@@ -20,6 +21,9 @@ export default function CoverApprovalLinkPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [zoom, setZoom] = useState<CoverPhoto | null>(null);
+  // fotos do carrossel que ela mesma pôs nas capas (gravadas ao enviar)
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -51,6 +55,24 @@ export default function CoverApprovalLinkPage() {
     });
   };
 
+  const toggleAdded = (id: string) => {
+    setSent(false);
+    const adding = !added.has(id);
+    setAdded((current) => {
+      const next = new Set(current);
+      if (adding) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+    // foto acrescentada já entra escolhida; tirada das capas sai da escolha
+    setChosen((current) => {
+      const next = new Set(current);
+      if (adding) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
   const send = async () => {
     if (chosen.size === 0 && !feedback.trim()) {
       setError('Escolha pelo menos uma foto ou escreva um comentário.');
@@ -62,7 +84,7 @@ export default function CoverApprovalLinkPage() {
       const response = await fetch(`/api/capa-link/${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved: [...chosen], feedback }),
+        body: JSON.stringify({ approved: [...chosen], added: [...added], feedback }),
       });
       if (!response.ok) throw new Error(String(response.status));
       setSent(true);
@@ -72,6 +94,20 @@ export default function CoverApprovalLinkPage() {
       setSending(false);
     }
   };
+
+  const morePhotos = state.status === 'ready' ? state.data.morePhotos ?? [] : [];
+  const capas = state.status === 'ready' ? [...state.data.photos, ...morePhotos.filter((photo) => added.has(photo.driveId))] : [];
+  const hasAny = capas.length > 0 || morePhotos.length > 0;
+
+  const moreButton = morePhotos.length > 0 && (
+    <button
+      type="button"
+      onClick={() => setMoreOpen(true)}
+      className="inline-flex min-h-12 items-center gap-2 rounded-full border border-bh-linha bg-bh-papel px-6 text-base font-medium text-bh-tinta transition-colors hover:border-bh-mata hover:text-bh-mata focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+    >
+      <Search size={18} aria-hidden="true" /> Encontrar mais fotos
+    </button>
+  );
 
   return (
     <main className="min-h-dvh bg-bh-cal font-display text-bh-tinta antialiased">
@@ -98,16 +134,19 @@ export default function CoverApprovalLinkPage() {
               <p className="text-[0.95rem] text-bh-tinta-suave">{state.data.label}</p>
               <h1 className="mt-1 text-[2.5rem] font-light leading-[1.05] sm:text-[3.25rem]">Escolha a capa</h1>
               <p className="mt-3 text-base leading-relaxed text-bh-tinta-suave sm:text-[1.0625rem]">
-                {state.data.photos.length === 0
-                  ? 'Ainda não há fotos separadas para capa. A equipe avisa quando estiverem prontas.'
-                  : 'Toque nas fotos que podem ser capa do feed. As fotos aparecem no formato da grade do perfil.'}
+                {capas.length > 0
+                  ? 'Toque nas fotos que podem ser capa do feed. As fotos aparecem no formato da grade do perfil.'
+                  : morePhotos.length > 0
+                    ? 'Ainda não há fotos marcadas para capa. Use “Encontrar mais fotos” para escolher entre as fotos do carrossel.'
+                    : 'Ainda não há fotos separadas para capa. A equipe avisa quando estiverem prontas.'}
               </p>
             </header>
 
-            {state.data.photos.length > 0 && (
+            {capas.length > 0 && (
               <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:gap-x-6">
-                {state.data.photos.map((photo) => {
+                {capas.map((photo) => {
                   const isChosen = chosen.has(photo.driveId);
+                  const isAdded = added.has(photo.driveId) || photo.favoritedByApprover;
                   return (
                     <li key={photo.driveId} className="relative">
                       <button
@@ -128,6 +167,11 @@ export default function CoverApprovalLinkPage() {
                         >
                           <Check size={18} strokeWidth={3} aria-hidden="true" />
                         </span>
+                        {isAdded && (
+                          <span className="absolute inset-x-3 bottom-3 rounded-full bg-bh-papel/95 px-3 py-1 text-center text-[0.8125rem] font-medium text-bh-tinta">
+                            Adicionada por {APPROVER_NAME}
+                          </span>
+                        )}
                       </button>
                       <button
                         type="button"
@@ -143,7 +187,16 @@ export default function CoverApprovalLinkPage() {
               </ul>
             )}
 
-            {state.data.photos.length > 0 && (
+            {moreButton && (
+              <section className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                {moreButton}
+                <p className="text-[0.95rem] text-bh-tinta-suave">
+                  Não gostou destas? Veja as outras {morePhotos.length} fotos do carrossel e escolha você mesma.
+                </p>
+              </section>
+            )}
+
+            {hasAny && (
               <section className="mt-12 max-w-2xl">
                 <label htmlFor="cover-feedback" className="text-[1.0625rem] font-medium">Comentário (opcional)</label>
                 <textarea
@@ -161,7 +214,7 @@ export default function CoverApprovalLinkPage() {
         )}
       </div>
 
-      {state.status === 'ready' && state.data.photos.length > 0 && (
+      {state.status === 'ready' && hasAny && (
         <div className="fixed inset-x-0 bottom-0 border-t border-bh-linha bg-bh-papel/95 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-8">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <p role="status" className="text-[0.95rem] text-bh-tinta-suave">
@@ -178,6 +231,74 @@ export default function CoverApprovalLinkPage() {
               {sending ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
               {sent ? 'Enviado' : 'Enviar escolha'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {moreOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="more-photos-title" className="fixed inset-0 z-40 flex flex-col bg-bh-cal">
+          <div className="border-b border-bh-linha bg-bh-papel/95 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] backdrop-blur sm:px-8">
+            <div className="mx-auto flex max-w-5xl items-start justify-between gap-4">
+              <div>
+                <h2 id="more-photos-title" className="text-[1.75rem] font-light leading-tight">Mais fotos do carrossel</h2>
+                <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque nas fotos que você quer como capa. Elas entram na sua escolha.</p>
+              </div>
+              <button type="button" autoFocus onClick={() => setMoreOpen(false)} aria-label="Fechar" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-bh-linha/50">
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8">
+            <ul className="mx-auto grid max-w-5xl grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:gap-x-6">
+              {morePhotos.map((photo) => {
+                const isAdded = added.has(photo.driveId);
+                return (
+                  <li key={photo.driveId} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => toggleAdded(photo.driveId)}
+                      aria-pressed={isAdded}
+                      aria-label={isAdded ? 'Tirar esta foto das capas' : 'Adicionar esta foto às capas'}
+                      className={`relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-bh-azul transition-shadow focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata ${
+                        isAdded ? 'ring-4 ring-bh-mata ring-offset-2 ring-offset-bh-cal' : ''
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
+                      <img src={image(photo, 900)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <span
+                        className={`absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white shadow ${
+                          isAdded ? 'bg-bh-mata text-white' : 'bg-black/25 text-white'
+                        }`}
+                      >
+                        {isAdded ? <Check size={18} strokeWidth={3} aria-hidden="true" /> : <Plus size={18} strokeWidth={2.5} aria-hidden="true" />}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZoom(photo)}
+                      aria-label="Ver a foto inteira"
+                      className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white hover:bg-black/50"
+                    >
+                      <Expand size={16} aria-hidden="true" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="border-t border-bh-linha bg-bh-papel/95 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-8">
+            <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+              <p className="text-[0.95rem] text-bh-tinta-suave">
+                {added.size === 0 ? 'Nenhuma foto adicionada' : `${added.size} ${added.size === 1 ? 'foto adicionada' : 'fotos adicionadas'} às capas`}
+              </p>
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full bg-bh-mata px-6 text-base font-medium text-white transition-opacity hover:opacity-90"
+              >
+                <Check size={18} aria-hidden="true" /> Pronto
+              </button>
+            </div>
           </div>
         </div>
       )}

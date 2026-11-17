@@ -10,7 +10,8 @@ import { useFileDrop } from '@/lib/useFileDrop';
 import { DropOverlay } from '@/components/media/DropOverlay';
 import { MediaLightbox } from '@/components/media/MediaLightbox';
 import { findClosestFormat, findExactFormat, type InstagramFormat } from '@/lib/instagramFormats';
-import * as tus from 'tus-js-client';
+import { uploadMedia } from '@/lib/uploadImage';
+import { useTeam } from '@/lib/team';
 import { 
   X, Camera, Smile, Hash, AtSign, MapPin, Bookmark,
   Smartphone, Monitor, Grid, Calendar, Plus, Video, Loader2, FolderOpen,
@@ -23,12 +24,34 @@ interface CreatePostModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** Recebe o id do post criado e se a pessoa pediu para publicar agora. */
-  onPostCreated?: (postId?: number, publishNow?: boolean) => void;
+  onPostCreated?: (postId?: number, publishNow?: boolean, saved?: SavedPostInfo) => void;
   /** Mostra "Publicar agora" (post que já nasce aprovado, ex.: capa aprovada na Aprovação de capa). */
   allowPublishNow?: boolean;
   /** Abre já com estas fotos (ex.: capa aprovada + fotos da pasta da casa). Mais de uma vira carrossel. */
   initialFiles?: File[];
   initialHouse?: { name: string; number: string };
+  /** Data e hora já planejadas (ex.: data planejada da pasta na Aprovação fotos). */
+  initialSchedule?: { date: string; hour: number | null };
+  /**
+   * Post já aprovado (ex.: vídeo da Aprovação vídeos): abre com a mídia dele, travada,
+   * e "Agendar"/"Publicar agora" atualizam este post em vez de criar outro.
+   */
+  approvedPost?: ApprovedPostInput;
+}
+
+export interface ApprovedPostInput {
+  id: number;
+  mediaUrl: string;
+  isVideo: boolean;
+  /** Todas as mídias na ordem (carrossel). Sem isto, só mediaUrl. */
+  media?: { url: string; isVideo: boolean }[];
+  caption: string;
+  houseName: string;
+  houseNumber: string;
+  platform?: string;
+  scheduledDate?: string; // AAAA-MM-DD
+  hour?: number | null;
+  autoPublish?: boolean;
 }
 
 type ContentType = 'REEL' | 'POST' | 'STORY' | 'CARROSSEL';
@@ -49,11 +72,27 @@ const CAROUSEL_LIMIT = 20;
 
 interface MediaItem {
   id: string;
-  file: File;
+  file: File; // vazio quando a mídia já está publicada na nuvem (remoteUrl)
+  /** Mídia que já está no R2 (post aprovado): não é enviada de novo. */
+  remoteUrl?: string;
   url: string; // objectURL local para a prévia
   isVideo: boolean;
   dims: { width: number; height: number } | null;
 }
+
+// Formatos do Instagram que aceitam vídeo (publicação de um vídeo aprovado)
+const VIDEO_CONTENT_TYPES: ContentType[] = ['REEL', 'STORY'];
+const CONTENT_TYPE_LABELS: Record<ContentType, string> = { REEL: 'REEL', POST: 'POST / FEED', STORY: 'STORY', CARROSSEL: 'CARROSSEL' };
+
+const remoteMediaItems = (post: ApprovedPostInput): MediaItem[] =>
+  (post.media?.length ? post.media : [{ url: post.mediaUrl, isVideo: post.isVideo }]).map((item, index) => ({
+    id: `post-${post.id}-${index}`,
+    file: new File([], item.isVideo ? 'video.mp4' : 'foto.jpg', { type: item.isVideo ? 'video/mp4' : 'image/jpeg' }),
+    remoteUrl: item.url,
+    url: item.url,
+    isVideo: item.isVideo,
+    dims: null,
+  }));
 
 const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
 const newMediaId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -79,13 +118,35 @@ const getErrorMessage = (error: unknown) => {
   return 'Erro inesperado.';
 };
 
-export default function CreatePostModal({ isOpen, onClose, onPostCreated, initialFiles, initialHouse, allowPublishNow = false }: CreatePostModalProps) {
-  const [contentType, setContentType] = useState<ContentType>(() =>
-    initialFiles?.length ? (initialFiles.length > 1 ? 'CARROSSEL' : 'POST') : 'REEL',
-  );
-  const [caption, setCaption] = useState('');
-  const [houseName, setHouseName] = useState(initialHouse?.name ?? '');
-  const [houseNumber, setHouseNumber] = useState(initialHouse?.number ?? '');
+/** O que foi gravado no banco, para a confirmação depois de agendar. */
+export interface SavedPostInfo {
+  scheduledDate: string;
+  hour: number;
+  /** Valor gravado de fato (sem a permissão de publicar, o banco grava falso). */
+  autoPublish: boolean;
+}
+
+export default function CreatePostModal({ isOpen, onClose, onPostCreated, initialFiles, initialHouse, initialSchedule, allowPublishNow = false, approvedPost }: CreatePostModalProps) {
+  const team = useTeam();
+  // post aprovado: a mídia é a aprovada (não troca) e, se for vídeo, só formatos que aceitam vídeo
+  const mediaLocked = Boolean(approvedPost);
+  // vídeo: só Reel/Story; fotos aprovadas: feed, carrossel ou story (Reel exige vídeo)
+  const allowedTypes: ContentType[] = approvedPost?.isVideo
+    ? VIDEO_CONTENT_TYPES
+    : approvedPost
+      ? ['CARROSSEL', 'POST', 'STORY']
+      : ['REEL', 'POST', 'STORY', 'CARROSSEL'];
+  const [contentType, setContentType] = useState<ContentType>(() => {
+    if (approvedPost) {
+      const current = (approvedPost.platform ?? '').toUpperCase() as ContentType;
+      if (allowedTypes.includes(current)) return current;
+      return !approvedPost.isVideo && (approvedPost.media?.length ?? 1) === 1 ? 'POST' : allowedTypes[0];
+    }
+    return initialFiles?.length ? (initialFiles.length > 1 ? 'CARROSSEL' : 'POST') : 'REEL';
+  });
+  const [caption, setCaption] = useState(approvedPost?.caption ?? '');
+  const [houseName, setHouseName] = useState(approvedPost?.houseName ?? initialHouse?.name ?? '');
+  const [houseNumber, setHouseNumber] = useState(approvedPost?.houseNumber ?? initialHouse?.number ?? '');
   const [notes, setNotes] = useState('');
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('mobile');
@@ -97,19 +158,21 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
   
   // Opções adicionais do Instagram
   // publicar sozinho no horário agendado (o agendador só publica posts aprovados)
-  const [autoPublish, setAutoPublish] = useState(false);
+  // ligado por padrão: o post agendado e aprovado vai sozinho para o Instagram no horário
+  // Agendar = autorizar: o post agendado vai sozinho para o Instagram no horário (depois de aprovado).
+  // "Publicar agora" publica na hora. Não há mais a opção de agendar sem publicar.
   const [showInFeed, setShowInFeed] = useState(true);
   const [isAIContent, setIsAIContent] = useState(false);
 
   // Mídias do post (uma, ou várias no carrossel), na ordem de publicação.
-  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>(() => (approvedPost ? remoteMediaItems(approvedPost) : []));
   const [activeMediaId, setActiveMediaId] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [previewSlide, setPreviewSlide] = useState(0);
   
   // Data e Horário
-  const [scheduledDate, setScheduledDate] = useState(getLocalDate);
-  const [scheduledHour, setScheduledHour] = useState(19);
+  const [scheduledDate, setScheduledDate] = useState(() => approvedPost?.scheduledDate || initialSchedule?.date || getLocalDate());
+  const [scheduledHour, setScheduledHour] = useState(() => approvedPost?.hour ?? initialSchedule?.hour ?? 19);
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
 
@@ -171,7 +234,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
   useEffect(() => {
     mediaRef.current = media;
   }, [media]);
-  useEffect(() => () => mediaRef.current.forEach((item) => URL.revokeObjectURL(item.url)), []);
+  useEffect(() => () => mediaRef.current.forEach((item) => !item.remoteUrl && URL.revokeObjectURL(item.url)), []);
 
   const readImageDimensions = (id: string, file: File) => {
     const url = URL.createObjectURL(file);
@@ -312,49 +375,14 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
     }
   };
 
-  // Envio ao Supabase com Suporte a Arquivos Grandes (>6MB via TUS)
   const handleSavePost = async (publishNow = false) => {
     setLoading(true);
     setUploadStatus('Processando...');
 
     try {
-      const uploadOne = async (item: MediaItem, label: string) => {
-        const file = item.file;
-        const fileExt = file.name.split('.').pop()?.toLowerCase() || (item.isVideo ? 'mp4' : 'jpg');
-        const filePath = `uploads/${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-        const contentTypeHeader = file.type || (item.isVideo ? 'video/mp4' : 'image/jpeg');
-
-        if (file.size > 6 * 1024 * 1024) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-          await new Promise((resolve, reject) => {
-            const upload = new tus.Upload(file, {
-              endpoint: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`,
-              retryDelays: [0, 3000, 5000, 10000, 20000],
-              headers: { authorization: `Bearer ${token}`, 'x-upsert': 'true' },
-              uploadDataDuringCreation: true,
-              removeFingerprintOnSuccess: true,
-              metadata: { bucketName: 'posts', objectName: filePath, contentType: contentTypeHeader, cacheControl: '3600' },
-              chunkSize: 6 * 1024 * 1024,
-              onError: (error) => {
-                console.error('Erro no upload TUS:', error);
-                reject(error);
-              },
-              onProgress: (bytesUploaded, bytesTotal) => {
-                setUploadStatus(`${label} (${((bytesUploaded / bytesTotal) * 100).toFixed(0)}%)...`);
-              },
-              onSuccess: () => resolve(true),
-            });
-            upload.start();
-          });
-        } else {
-          const { error: uploadError } = await supabase.storage
-            .from('posts')
-            .upload(filePath, file, { cacheControl: '3600', upsert: false, contentType: contentTypeHeader });
-          if (uploadError) throw new Error(`Erro no storage: ${uploadError.message}`);
-        }
-        return supabase.storage.from('posts').getPublicUrl(filePath).data.publicUrl;
-      };
+      // Envio direto ao Cloudflare R2 (não ocupa o Supabase Storage)
+      const uploadOne = async (item: MediaItem, label: string) =>
+        item.remoteUrl ?? uploadMedia(item.file, (percent) => setUploadStatus(`${label} (${percent}%)...`));
 
       // envia na ordem do carrossel
       const uploaded: { url: string; type: 'image' | 'video' }[] = [];
@@ -375,7 +403,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
       const dateObj = new Date(scheduledDate);
       const dayIndex = dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1;
 
-      const { data: created, error: dbError } = await supabase.from('posts').insert([{
+      const schedule = {
         title: titleVal,
         house_name: houseName.trim() || null,
         house_number: houseNumber.trim() || null,
@@ -384,25 +412,51 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
         day_index: dayIndex,
         hour: scheduledHour,
         time_string: timeStrVal,
-        image_url: finalMediaUrl,
-        media_type: uploaded[0]?.type ?? 'image',
         scheduled_date: scheduledDate,
-        // a lista completa só vai quando há mais de uma mídia (carrossel)
-        ...(uploaded.length > 1 ? { media_items: uploaded } : {}),
-        // sem a permissão de publicar, o banco grava como falso
-        auto_publish: autoPublish && !publishNow,
-      }]).select('id').single();
+      };
+      const { data: created, error: dbError } = approvedPost
+        ? // post já aprovado: define formato, legenda, data e publicação; a mídia é a aprovada
+          // (no feed/story fica só a primeira, no carrossel todas, na ordem escolhida)
+          await supabase
+            .from('posts')
+            .update({
+              ...schedule,
+              caption,
+              image_url: finalMediaUrl,
+              media_type: uploaded[0]?.type ?? 'image',
+              media_items: uploaded.length > 1 ? uploaded : null,
+              // sem a permissão de publicar, o banco recusaria a mudança
+              ...(team.can('publicar_instagram') ? { auto_publish: !publishNow } : {}),
+            })
+            .eq('id', approvedPost.id)
+            .select('id, scheduled_date, hour, auto_publish')
+            .single()
+        : await supabase.from('posts').insert([{
+            ...schedule,
+            image_url: finalMediaUrl,
+            media_type: uploaded[0]?.type ?? 'image',
+            // a lista completa só vai quando há mais de uma mídia (carrossel)
+            ...(uploaded.length > 1 ? { media_items: uploaded } : {}),
+            // sem a permissão de publicar, o banco grava como falso
+            auto_publish: !publishNow,
+          }]).select('id, scheduled_date, hour, auto_publish').single();
 
       if (dbError) throw dbError;
 
-      if (onPostCreated) onPostCreated(typeof created?.id === 'number' ? created.id : undefined, publishNow);
+      if (onPostCreated) {
+        onPostCreated(typeof created?.id === 'number' ? created.id : undefined, publishNow, {
+          scheduledDate: typeof created?.scheduled_date === 'string' ? created.scheduled_date : scheduledDate,
+          hour: typeof created?.hour === 'number' ? created.hour : scheduledHour,
+          autoPublish: created?.auto_publish === true,
+        });
+      }
       onClose();
 
       setCaption('');
       setHouseName('');
       setHouseNumber('');
       setNotes('');
-      media.forEach((item) => URL.revokeObjectURL(item.url));
+      media.forEach((item) => !item.remoteUrl && URL.revokeObjectURL(item.url));
       setMedia([]);
       setActiveMediaId(null);
       setPreviewSlide(0);
@@ -434,7 +488,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
   const fileDrop = useFileDrop(
     () => undefined,
     () => setEditorFeedback('Esse arquivo não é vídeo nem foto.'),
-    loading || isImageEditorOpen,
+    loading || isImageEditorOpen || mediaLocked,
     (files) => addFiles(files),
   );
 
@@ -463,7 +517,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
         {/* Topbar Superior */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-gray-800">Criar novo post</h1>
+            <h1 className="text-base font-bold text-gray-800">{approvedPost ? 'Publicar post aprovado' : 'Criar novo post'}</h1>
             <div className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-bold text-white">D</span>
               <span>daimefilmes</span>
@@ -491,20 +545,23 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                     onChange={(e) => changeContentType(e.target.value as ContentType)}
                     className="bg-transparent font-semibold focus:outline-none"
                   >
-                    <option value="REEL">REEL</option>
-                    <option value="POST">POST / FEED</option>
-                    <option value="STORY">STORY</option>
-                    <option value="CARROSSEL">CARROSSEL</option>
+                    {allowedTypes.map((type) => (
+                      <option key={type} value={type}>{CONTENT_TYPE_LABELS[type]}</option>
+                    ))}
                   </select>
                 </div>
 
-                <button onClick={() => fileInputRef.current?.click()} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50" title="Selecionar mídia">
-                  <Plus size={16} />
-                </button>
+                {!mediaLocked && (
+                  <>
+                    <button onClick={() => fileInputRef.current?.click()} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50" title="Selecionar mídia">
+                      <Plus size={16} />
+                    </button>
 
-                <button onClick={handleLoadDraft} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50" title="Carregar rascunho">
-                  <FolderOpen size={16} />
-                </button>
+                    <button onClick={handleLoadDraft} className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-50" title="Carregar rascunho">
+                      <FolderOpen size={16} />
+                    </button>
+                  </>
+                )}
               </div>
 
               <button onClick={() => setIsNotesOpen(!isNotesOpen)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
@@ -609,7 +666,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                             </span>
                           )}
                         </button>
-                        <button
+                        {!mediaLocked && <button
                           type="button"
                           onClick={() => removeMedia(item.id)}
                           aria-label={`Remover mídia ${i + 1}`}
@@ -617,7 +674,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                           className="absolute -right-2.5 -top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white shadow-md transition-colors duration-150 hover:bg-status-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum"
                         >
                           <X size={13} strokeWidth={2.5} aria-hidden="true" />
-                        </button>
+                        </button>}
                       </li>
                     ))}
                     {contentType === 'CARROSSEL' && media.length < CAROUSEL_LIMIT && (
@@ -639,7 +696,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                     </p>
                   )}
 
-                  {activeMedia && !activeMedia.isVideo && (
+                  {activeMedia && !activeMedia.isVideo && !activeMedia.remoteUrl && (
                     <div className="min-w-0 space-y-2">
                       {media.length > 1 && <p className="text-[11px] font-semibold text-gray-600">Mídia {media.indexOf(activeMedia) + 1}</p>}
                       {mediaDimensions && exactFormat ? (
@@ -676,8 +733,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
                 <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple={contentType === 'CARROSSEL'} onChange={handleMediaChange} className="sr-only" />
                 
                 <div className="flex items-center gap-2">
-                  <button onClick={() => fileInputRef.current?.click()} className="hover:text-gray-900" title="Selecionar mídia"><Camera size={16} /></button>
-                  {activeMedia && !activeMedia.isVideo && (
+                  {!mediaLocked && <button onClick={() => fileInputRef.current?.click()} className="hover:text-gray-900" title="Selecionar mídia"><Camera size={16} /></button>}
+                  {activeMedia && !activeMedia.isVideo && !activeMedia.remoteUrl && (
                     <button onClick={() => setIsImageEditorOpen(true)} className="text-purple-900 hover:text-purple-700" title="Editar / Cortar Mídia"><Crop size={16} /></button>
                   )}
                   <button onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)} className="hover:text-gray-900" title="Emoji"><Smile size={16} /></button>
@@ -743,13 +800,7 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
 
             {/* Predefinições Globais */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-700">Predefinições globais</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500" title="Publica sozinho no Instagram na data e hora agendadas, depois de aprovado">Publicar sozinho no horário</span>
-                  <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} className="h-4 w-4 rounded-md accent-purple-900" />
-                </div>
-              </div>
+              <span className="block text-xs font-bold text-gray-700">Predefinições globais</span>
 
               <div className="text-xs text-gray-400">
                 <label className="flex items-center gap-2 cursor-pointer hover:text-gray-600">
@@ -1055,8 +1106,8 @@ export default function CreatePostModal({ isOpen, onClose, onPostCreated, initia
           index={lightboxIndex}
           onIndex={(i) => { setLightboxIndex(i); setActiveMediaId(media[i].id); }}
           onClose={() => setLightboxIndex(null)}
-          onRemove={(id) => removeMedia(id)}
-          onCrop={(id) => { setActiveMediaId(id); setLightboxIndex(null); setIsImageEditorOpen(true); }}
+          onRemove={mediaLocked ? undefined : (id) => removeMedia(id)}
+          onCrop={mediaLocked ? undefined : (id) => { setActiveMediaId(id); setLightboxIndex(null); setIsImageEditorOpen(true); }}
         />
       )}
 

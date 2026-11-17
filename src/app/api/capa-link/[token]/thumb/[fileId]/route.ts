@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { DriveNotConnectedError, clampThumbSize, driveThumbnail } from '@/lib/google/drive';
 
-// Imagem pública do link de capa: só entrega fotos favoritas daquela pasta.
+// Imagem pública do link de capa: só entrega fotos daquela pasta (favoritas e, em "Encontrar mais fotos", as demais escolhidas).
 const TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string; fileId: string }> }) {
@@ -16,7 +16,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .select('drive_file_id')
     .eq('collection_id', collection.id)
     .eq('drive_file_id', fileId)
-    .eq('is_favorite', true)
     .maybeSingle();
   if (!photo) return new Response(null, { status: 404 });
 

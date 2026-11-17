@@ -2,8 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { captureVideoCover, isVideoMedia } from '@/lib/media';
+import { isVideoMedia } from '@/lib/media';
+import { uploadMedia } from '@/lib/uploadImage';
 import { MediaPreview } from '@/components/MediaPreview';
+import CreatePostModal, { type ApprovedPostInput } from '@/components/CreatePostModal';
+import { PublishStatusTag, publishStateOf } from '@/components/PublishStatusTag';
+import { PublishResultDialog, cancelScheduledPublish, publishToInstagram, type PublishResult } from '@/components/PublishResultDialog';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
@@ -44,6 +48,13 @@ interface ApprovalPost {
   scheduled_date?: string;
   scheduled_time?: string;
   created_at?: string;
+  // publicação no Instagram (vídeo aprovado: "Publicar" abre a tela de postagem; aí ele entra na Grade do feed)
+  platform: string;
+  hour: number | null;
+  auto_publish: boolean;
+  publish_status: '' | 'processing' | 'published' | 'error';
+  publish_error: string;
+  ig_permalink: string;
 }
 
 const getErrorMessage = (error: unknown) => {
@@ -53,60 +64,7 @@ const getErrorMessage = (error: unknown) => {
   return 'Erro inesperado.';
 };
 
-// Envia o arquivo direto do navegador para o R2 (URL assinada), com progresso real.
-async function uploadMedia(file: File, onPercent: (percent: number) => void) {
-  const res = await fetch('/api/upload-url', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileName: file.name, fileType: file.type }),
-  });
-  if (!res.ok) throw new Error(`upload-url respondeu ${res.status}`);
-  const { uploadUrl, publicUrl } = (await res.json()) as { uploadUrl: string; publicUrl: string };
-
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
-    xhr.setRequestHeader('Content-Type', file.type);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onPercent(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`envio respondeu ${xhr.status}`)));
-    xhr.onerror = () => reject(new Error('falha de rede no envio'));
-    xhr.send(file);
-  });
-
-  // Vídeo: tira um quadro e envia como capa (JPG leve para listas e grade). Se falhar, segue sem capa.
-  if (file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(file.name)) {
-    try {
-      const cover = await captureVideoCover(file);
-      if (cover) {
-        const coverRes = await fetch('/api/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: 'capa.jpg', fileType: 'image/jpeg', coverFor: publicUrl }),
-        });
-        if (coverRes.ok) {
-          const { uploadUrl: coverUploadUrl } = (await coverRes.json()) as { uploadUrl: string };
-          await fetch(coverUploadUrl, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body: cover });
-        }
-      }
-    } catch (error) {
-      console.warn('Capa do vídeo não foi gerada:', error);
-    }
-  }
-  return publicUrl;
-}
-
 const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
-
-// "Previsto para 1 dez, 19:00": aparece na fila quando o post não tem legenda.
-const queueDate = (date?: string, time?: string) => {
-  if (!date) return '';
-  const parsed = new Date(`${date}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const day = parsed.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
-  return `Previsto para ${day}${time ? `, ${time}` : ''}`;
-};
 
 const decisionLabel = (status: string) =>
   status === 'approved' ? 'Aprovado' : status === 'changes_requested' ? 'Pediu ajustes' : status === 'rejected' ? 'Reprovado' : '';
@@ -131,12 +89,13 @@ export default function ApprovalSectionOrange() {
   const [mediaDims, setMediaDims] = useState<{ width: number; height: number } | null>(null);
   const [mediaLightboxOpen, setMediaLightboxOpen] = useState(false);
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState(() => {
-    const date = new Date();
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  });
-  const [scheduledTime, setScheduledTime] = useState('19:00');
   const [submitting, setSubmitting] = useState(false);
+  // data planejada: o vídeo já aparece na Grade do feed nessa data (planejamento do mês)
+  const [plannedDate, setPlannedDate] = useState('');
+  const [plannedHour, setPlannedHour] = useState(19);
+  // "Publicar" de um vídeo aprovado: tela de postagem (formato, legenda, data, horário)
+  const [publishPost, setPublishPost] = useState<ApprovedPostInput | null>(null);
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
   const closeCreateModal = useCallback(() => setIsModalOpen(false), []);
   const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting || mediaLightboxOpen || imageEditorOpen);
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -205,7 +164,11 @@ export default function ApprovalSectionOrange() {
       versionsByPost.set(key, list);
     }
 
-    const rows = (data ?? []) as Record<string, unknown>[];
+    // Aprovação vídeos lista só vídeos; fotos e carrosséis ficam na Aprovação fotos.
+    const rows = ((data ?? []) as Record<string, unknown>[]).filter((item) => {
+      const text = (value: unknown) => (typeof value === 'string' ? value : '');
+      return isVideoMedia(text(item.image_url) || text(item.media_url), text(item.media_type));
+    });
     return rows.map((item, index) => {
       const id = typeof item.id === 'string' || typeof item.id === 'number' ? item.id : `post-${index}`;
       const stringValue = (value: unknown) => typeof value === 'string' ? value : '';
@@ -233,6 +196,14 @@ export default function ApprovalSectionOrange() {
         scheduled_date: stringValue(item.scheduled_date),
         scheduled_time: stringValue(item.scheduled_time) || stringValue(item.time_string),
         created_at: stringValue(item.created_at),
+        platform: stringValue(item.platform),
+        hour: typeof item.hour === 'number' ? item.hour : null,
+        auto_publish: item.auto_publish === true,
+        publish_status: (['processing', 'published', 'error'].includes(stringValue(item.publish_status))
+          ? stringValue(item.publish_status)
+          : '') as ApprovalPost['publish_status'],
+        publish_error: stringValue(item.publish_error),
+        ig_permalink: stringValue(item.ig_permalink),
       };
     });
   }, []);
@@ -307,6 +278,21 @@ export default function ApprovalSectionOrange() {
     };
   }, [selectedPost?.id, selectedPost?.approval_token]);
 
+  // muda a data planejada/agendada do vídeo (mesmas colunas que a Grade do feed usa)
+  const savePlanned = async (postId: ApprovalPost['id'], date: string, hour: number) => {
+    const { error } = await supabase
+      .from('posts')
+      .update({
+        scheduled_date: date,
+        hour,
+        time_string: `${String(hour).padStart(2, '0')}:00`,
+        day_index: (new Date(`${date}T12:00:00`).getDay() + 6) % 7,
+      })
+      .eq('id', postId);
+    if (error) setFeedbackMessage('Não foi possível mudar a data. Tente de novo.');
+    await refreshPosts();
+  };
+
   const refreshPosts = async () => {
     try {
       const formatted = await fetchPosts();
@@ -359,6 +345,11 @@ export default function ApprovalSectionOrange() {
   };
 
   const chooseFile = (selectedFile: File) => {
+    // Aprovação vídeos: só vídeo (fotos são aprovadas na Aprovação fotos)
+    if (!isVideoFile(selectedFile)) {
+      setFeedbackMessage('Aqui só entra vídeo (MP4, MOV ou WEBM). Fotos vão para a Aprovação fotos.');
+      return;
+    }
     setFile(selectedFile);
     readMediaDims(selectedFile);
     setFeedbackMessage('');
@@ -379,7 +370,7 @@ export default function ApprovalSectionOrange() {
   // Arrastar o vídeo ou a foto do computador direto para a janela.
   const createDrop = useFileDrop(
     chooseFile,
-    () => setFeedbackMessage('Esse arquivo não é vídeo nem foto. Arraste um vídeo (MP4, MOV) ou uma imagem.'),
+    () => setFeedbackMessage('Aqui só entra vídeo (MP4, MOV ou WEBM). Fotos vão para a Aprovação fotos.'),
     submitting || imageEditorOpen || mediaLightboxOpen,
   );
 
@@ -389,7 +380,11 @@ export default function ApprovalSectionOrange() {
       return;
     }
     if (!file) {
-      setFeedbackMessage('Selecione uma imagem ou vídeo para continuar.');
+      setFeedbackMessage('Selecione o vídeo para continuar.');
+      return;
+    }
+    if (!plannedDate) {
+      setFeedbackMessage('Escolha a data planejada para publicar.');
       return;
     }
 
@@ -419,9 +414,11 @@ export default function ApprovalSectionOrange() {
           approval_status: 'pending',
           approval_token: token,
           platform: 'REEL',
-          scheduled_date: scheduledDate,
-          time_string: scheduledTime,
-          hour: parseInt(scheduledTime.split(':')[0]) || 19,
+          // data planejada (aparece na Grade do feed); só vai sozinho para o Instagram depois de aprovado e agendado
+          scheduled_date: plannedDate,
+          hour: plannedHour,
+          time_string: `${String(plannedHour).padStart(2, '0')}:00`,
+          day_index: (new Date(`${plannedDate}T12:00:00`).getDay() + 6) % 7,
           views_count: 0
         },
       ]);
@@ -430,6 +427,8 @@ export default function ApprovalSectionOrange() {
       setIsModalOpen(false);
       setHouseName('');
       setHouseNumber('');
+      setPlannedDate('');
+      setPlannedHour(19);
       setCaption('');
       setFile(null);
       setMediaPreview(null);
@@ -516,6 +515,10 @@ export default function ApprovalSectionOrange() {
   };
 
   const chooseVersionFile = (chosen: File) => {
+    if (!isVideoFile(chosen)) {
+      setVersionError('Aqui só entra vídeo (MP4, MOV ou WEBM). Fotos vão para a Aprovação fotos.');
+      return;
+    }
     setVersionFile(chosen);
     setVersionError('');
     setVersionPreview((previous) => {
@@ -531,7 +534,7 @@ export default function ApprovalSectionOrange() {
 
   const versionDrop = useFileDrop(
     (chosen) => chooseVersionFile(chosen),
-    () => setVersionError('Esse arquivo não é vídeo nem foto. Arraste um vídeo (MP4, MOV) ou uma imagem.'),
+    () => setVersionError('Aqui só entra vídeo (MP4, MOV ou WEBM). Fotos vão para a Aprovação fotos.'),
     submitting,
   );
 
@@ -541,7 +544,7 @@ export default function ApprovalSectionOrange() {
     if (!selectedPost) return;
     const captionChanged = versionCaption.trim() !== selectedPost.caption.trim();
     if (!versionFile && !captionChanged) {
-      setVersionError('Escolha o vídeo ou a foto corrigida, ou altere a legenda.');
+      setVersionError('Escolha o vídeo corrigido, ou altere a legenda.');
       return;
     }
     const kind = versionFile ? (isVideoFile(versionFile) ? 'video' : 'foto') : selectedPost.media_type === 'video' ? 'video' : 'foto';
@@ -727,57 +730,93 @@ export default function ApprovalSectionOrange() {
             ) : posts.length === 0 ? (
               <div className="p-8 text-center text-xs text-ink-muted">Nenhum conteúdo em aprovação.</div>
             ) : (
-              posts.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={selectedPost?.id === p.id}
-                  onClick={() => setSelectedPost(p)}
-                  className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand-plum ${
-                    selectedPost?.id === p.id ? 'border-l-4 border-brand-plum bg-surface-muted/70' : 'hover:bg-canvas/70'
-                  }`}
-                >
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
-                    <MediaPreview
-                      key={p.media_url}
-                      src={p.media_url}
-                      mediaType={p.media_type}
-                      alt={`Prévia da publicação de ${p.house_name}`}
-                      className="h-full w-full object-cover"
-                      cover
-                      muted
-                      loop
-                      autoPlay
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <span title={p.house_label} className="line-clamp-2 min-w-0 break-words text-sm font-semibold leading-snug text-ink">
-                        {p.house_label}
+              <>
+                {[
+                  { key: 'aprovados', title: 'Aprovados', items: posts.filter((p) => p.approval_status === 'approved'), approved: true },
+                  { key: 'fila', title: 'Aguardando aprovação', items: posts.filter((p) => p.approval_status !== 'approved'), approved: false },
+                ].filter((group) => group.items.length > 0).map((group) => (
+                  <section key={group.key} aria-label={group.title}>
+                    <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wide ${
+                      group.approved ? 'bg-status-success-soft text-status-success' : 'bg-canvas text-ink-muted'
+                    }`}>
+                      <span className="flex items-center gap-1.5">
+                        {group.approved ? <CheckCircle2 size={13} aria-hidden="true" /> : <Clock size={13} aria-hidden="true" />}
+                        {group.title}
                       </span>
-                      <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
-                        p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
-                        p.approval_status === 'rejected' ? 'border border-status-danger-border bg-status-danger-soft text-status-danger' :
-                        'bg-canvas text-brand-plum'
-                      }`}>
-                        {p.approval_status === 'approved' ? <CheckCircle2 size={11} /> :
-                         p.approval_status === 'changes_requested' ? <AlertCircle size={11} /> :
-                         p.approval_status === 'rejected' ? <X size={11} /> : <Clock size={11} />}
-                        {p.approval_status === 'approved' ? 'Aprovado' :
-                         p.approval_status === 'changes_requested' ? 'Ajustes' :
-                         p.approval_status === 'rejected' ? 'Reprovado' : 'Pendente'}
-                      </span>
+                      <span className="tabular-nums">{group.items.length}</span>
+                    </h3>
+                    <div className="divide-y divide-border">
+                      {group.items.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={selectedPost?.id === p.id}
+                        onClick={() => setSelectedPost(p)}
+                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand-plum ${
+                          selectedPost?.id === p.id
+                            ? 'border-l-4 border-brand-plum bg-surface-muted/70'
+                            : p.approval_status === 'approved'
+                              ? 'border-l-4 border-status-success bg-status-success-soft/50 hover:bg-status-success-soft'
+                              : 'hover:bg-canvas/70'
+                        }`}
+                      >
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
+                          <MediaPreview
+                            key={p.media_url}
+                            src={p.media_url}
+                            mediaType={p.media_type}
+                            alt={`Prévia da publicação de ${p.house_name}`}
+                            className="h-full w-full object-cover"
+                            cover
+                            muted
+                            loop
+                            autoPlay
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <span title={p.house_label} className="line-clamp-2 min-w-0 break-words text-sm font-semibold leading-snug text-ink">
+                              {p.house_label}
+                            </span>
+                            <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
+                              p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
+                              p.approval_status === 'rejected' ? 'border border-status-danger-border bg-status-danger-soft text-status-danger' :
+                              'bg-canvas text-brand-plum'
+                            }`}>
+                              {p.approval_status === 'approved' ? <CheckCircle2 size={11} /> :
+                               p.approval_status === 'changes_requested' ? <AlertCircle size={11} /> :
+                               p.approval_status === 'rejected' ? <X size={11} /> : <Clock size={11} />}
+                              {p.approval_status === 'approved' ? 'Aprovado' :
+                               p.approval_status === 'changes_requested' ? 'Ajustes' :
+                               p.approval_status === 'rejected' ? 'Reprovado' : 'Pendente'}
+                            </span>
+                          </div>
+                          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
+                            {p.versions.length > 1 && (
+                              <span className="shrink-0 rounded bg-surface-muted px-1.5 py-px text-[10px] font-semibold text-ink">V{p.versions.length}</span>
+                            )}
+                            <span className="truncate">
+                              {p.scheduled_date && !p.auto_publish && p.publish_status !== 'published' ? `Planejado ${p.scheduled_date.split('-').reverse().slice(0, 2).join('/')} · ` : ''}
+                              {p.caption || 'Sem legenda'}
+                            </span>
+                          </p>
+                          {/* aprovação no selo acima; aqui a publicação no Instagram */}
+                          <div className="mt-1.5">
+                            <PublishStatusTag
+                              state={publishStateOf({ publishStatus: p.publish_status, autoPublish: p.auto_publish, scheduledDate: p.scheduled_date })}
+                              date={p.scheduled_date}
+                              hour={p.hour}
+                              noneLabel={p.approval_status === 'approved' ? 'Pronto para publicar' : 'Não publicado'}
+                            />
+                          </div>
+                        </div>
+                      </button>
+                      ))}
                     </div>
-                    <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-                      {p.versions.length > 1 && (
-                        <span className="shrink-0 rounded bg-surface-muted px-1.5 py-px text-[10px] font-semibold text-ink">V{p.versions.length}</span>
-                      )}
-                      <span className="truncate">{p.caption || queueDate(p.scheduled_date, p.scheduled_time) || 'Sem legenda'}</span>
-                    </p>
-                  </div>
-                </button>
-              ))
+                  </section>
+                ))}
+              </>
             )}
           </div>
         </div>
@@ -810,13 +849,39 @@ export default function ApprovalSectionOrange() {
                   </div>
 
                   <h3 className="mt-2 break-words text-base font-semibold leading-snug text-ink">{selectedPost.house_label}</h3>
-                  {(selectedPost.scheduled_date || selectedPost.scheduled_time) && (
+                  {/* data planejada (ou agendada): muda aqui, na tela de Publicar ou arrastando na Grade do feed */}
+                  {selectedPost.publish_status !== 'published' && selectedPost.publish_status !== 'processing' && team.can('reagendar_publicacoes') ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-ink">
+                        <Calendar aria-hidden="true" size={13} /> {selectedPost.auto_publish ? 'Agendado para' : 'Planejado para'}
+                      </span>
+                      <input
+                        type="date"
+                        value={selectedPost.scheduled_date ?? ''}
+                        onChange={(event) => event.target.value && void savePlanned(selectedPost.id, event.target.value, selectedPost.hour ?? 19)}
+                        aria-label="Data planejada"
+                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                      />
+                      <select
+                        value={selectedPost.hour ?? 19}
+                        onChange={(event) => selectedPost.scheduled_date && void savePlanned(selectedPost.id, selectedPost.scheduled_date, Number(event.target.value))}
+                        disabled={!selectedPost.scheduled_date}
+                        aria-label="Horário planejado"
+                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                      >
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                        ))}
+                      </select>
+                      {!selectedPost.scheduled_date && <span className="text-status-warning">Defina a data para aparecer na Grade do feed.</span>}
+                    </div>
+                  ) : selectedPost.scheduled_date ? (
                     <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
                       <Calendar aria-hidden="true" size={13} />
-                      {selectedPost.scheduled_date ?? 'Data não definida'}
-                      {selectedPost.scheduled_time ? ` às ${selectedPost.scheduled_time}` : ''}
+                      {selectedPost.scheduled_date.split('-').reverse().join('/')}
+                      {selectedPost.hour !== null ? ` às ${String(selectedPost.hour).padStart(2, '0')}:00` : ''}
                     </p>
-                  )}
+                  ) : null}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -840,6 +905,79 @@ export default function ApprovalSectionOrange() {
                   </button>}
                 </div>
               </div>
+
+              {/* Destaque: vídeo aprovado logo no topo, com publicar / agendado / cancelar */}
+              {selectedPost.media_type === 'video' && selectedPost.approval_status === 'approved' && (
+                <div className="space-y-3 rounded-panel border-2 border-status-success-border bg-status-success-soft p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="flex items-center gap-2 text-base font-semibold text-status-success">
+                        <CheckCircle2 size={18} aria-hidden="true" />
+                        {selectedPost.publish_status === 'published' ? 'Vídeo publicado no Instagram' : selectedPost.auto_publish ? 'Vídeo aprovado e agendado' : 'Vídeo aprovado'}
+                      </h4>
+                      <p className="mt-1 text-sm text-ink">
+                        {selectedPost.publish_status === 'published'
+                          ? 'Publicado.'
+                          : selectedPost.publish_status === 'processing'
+                            ? 'Publicação em andamento (o Instagram está processando o vídeo).'
+                            : selectedPost.auto_publish && Boolean(selectedPost.scheduled_date)
+                              ? `Vai para o Instagram em ${(selectedPost.scheduled_date ?? '').split('-').reverse().join('/')}${selectedPost.hour !== null ? ` às ${String(selectedPost.hour).padStart(2, '0')}:00` : selectedPost.scheduled_time ? ` às ${selectedPost.scheduled_time}` : ''}.`
+                              : 'Pronto para publicar. Defina formato, legenda, data e horário.'}
+                      </p>
+                      {selectedPost.publish_status === 'error' && selectedPost.publish_error && (
+                        <p className="mt-1 text-xs text-status-danger">Última tentativa: {selectedPost.publish_error}</p>
+                      )}
+                    </div>
+                    {selectedPost.publish_status === 'published' ? (
+                      selectedPost.ig_permalink && (
+                        <a href={selectedPost.ig_permalink} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-plum underline underline-offset-2">Ver no Instagram</a>
+                      )
+                    ) : (
+                      team.can('editar_publicacoes') && team.can('reagendar_publicacoes') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPublishPost({
+                              id: Number(selectedPost.id),
+                              mediaUrl: selectedPost.media_url,
+                              isVideo: true,
+                              caption: selectedPost.caption,
+                              houseName: selectedPost.house_name,
+                              houseNumber: selectedPost.house_number,
+                              platform: selectedPost.platform,
+                              // abre com a data planejada (ou a agendada)
+                              scheduledDate: selectedPost.scheduled_date || undefined,
+                              hour: selectedPost.hour,
+                            });
+                          }}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                        >
+                          <Send size={14} aria-hidden="true" />
+                          {selectedPost.auto_publish && Boolean(selectedPost.scheduled_date) ? 'Editar publicação' : 'Publicar'}
+                        </button>
+                      )
+                    )}
+                  </div>
+                  {selectedPost.auto_publish && Boolean(selectedPost.scheduled_date) && selectedPost.publish_status !== 'published' && selectedPost.publish_status !== 'processing'
+                    && (team.can('publicar_instagram') || team.can('reagendar_publicacoes')) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm('Cancelar o agendamento deste vídeo? Ele não vai mais ser publicado sozinho; continua aprovado e planejado na mesma data.')) return;
+                        const postId = selectedPost.id;
+                        void (async () => {
+                          setPublishResult({ state: 'working', text: 'Cancelando o agendamento…' });
+                          setPublishResult(await cancelScheduledPublish(postId));
+                          await refreshPosts();
+                        })();
+                      }}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-control border border-status-danger-border bg-surface px-4 text-xs font-semibold text-status-danger hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    >
+                      <XCircle size={14} aria-hidden="true" /> Cancelar agendamento
+                    </button>
+                  )}
+                </div>
+              )}
 
               {team.can('aprovar_publicacoes') && (
                 <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
@@ -955,7 +1093,7 @@ export default function ApprovalSectionOrange() {
       {isModalOpen && (
         <div {...createDismiss} {...createDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
-            {createDrop.dragging && <DropOverlay />}
+            {createDrop.dragging && <DropOverlay title="Solte o vídeo aqui" hint="MP4, MOV ou WEBM" />}
             
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
@@ -996,16 +1134,29 @@ export default function ApprovalSectionOrange() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="space-y-1.5">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Calendar size={14} className="text-brand-plum" /> Data prevista</span>
-                  <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} className="min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum" />
-                </label>
-                <label className="space-y-1.5">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Clock size={14} className="text-brand-plum" /> Horário previsto</span>
-                  <input type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} className="min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum" />
-                </label>
-              </div>
+              <fieldset className="space-y-1.5">
+                <legend className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Calendar size={14} className="text-brand-plum" aria-hidden="true" /> Quando planejamos publicar</legend>
+                <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
+                  <input
+                    type="date"
+                    value={plannedDate}
+                    onChange={(event) => { setPlannedDate(event.target.value); setFeedbackMessage(''); }}
+                    aria-label="Data planejada"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  />
+                  <select
+                    value={plannedHour}
+                    onChange={(event) => setPlannedHour(Number(event.target.value))}
+                    aria-label="Horário planejado"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-ink-muted">O vídeo já aparece na Grade do feed nessa data. Só é publicado depois de aprovado e agendado.</p>
+              </fieldset>
 
               <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
                 <textarea
@@ -1088,8 +1239,8 @@ export default function ApprovalSectionOrange() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-ink-muted">
                   <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-xs font-semibold transition-colors hover:bg-canvas hover:text-brand-plum focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
                     <ImageIcon size={16} />
-                    <span>{file ? 'Substituir mídia' : 'Selecionar mídia'}</span>
-                    <input type="file" accept="video/*,image/*" onChange={handleFileChange} className="sr-only" aria-label="Selecionar imagem ou vídeo" />
+                    <span>{file ? 'Substituir vídeo' : 'Selecionar vídeo'}</span>
+                    <input type="file" accept="video/*" onChange={handleFileChange} className="sr-only" aria-label="Selecionar vídeo" />
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px]">{caption.length}/2200 caracteres</span>
@@ -1126,7 +1277,7 @@ export default function ApprovalSectionOrange() {
                   ) : (
                     <div className="p-4 text-center">
                       <ImageIcon size={32} className="mx-auto mb-2 text-brand-lime" />
-                      <p className="text-[11px] font-medium text-white/70">Arraste o vídeo ou a foto para cá,<br />ou use &ldquo;Selecionar mídia&rdquo;.</p>
+                      <p className="text-[11px] font-medium text-white/70">Arraste o vídeo para cá,<br />ou use &ldquo;Selecionar vídeo&rdquo;.</p>
                     </div>
                   )}
                 </div>
@@ -1182,7 +1333,7 @@ export default function ApprovalSectionOrange() {
       {versionModalOpen && selectedPost && (
         <div {...versionDismiss} {...versionDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
-            {versionDrop.dragging && <DropOverlay />}
+            {versionDrop.dragging && <DropOverlay title="Solte o vídeo aqui" hint="MP4, MOV ou WEBM" />}
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                 <div>
@@ -1209,8 +1360,8 @@ export default function ApprovalSectionOrange() {
 
               <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-border bg-canvas px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
                 <ImageIcon size={16} aria-hidden="true" />
-                {versionFile ? 'Trocar arquivo' : 'Escolher ou arrastar o vídeo/foto corrigida'}
-                <input type="file" accept="video/*,image/*" onChange={handleVersionFile} className="sr-only" />
+                {versionFile ? 'Trocar arquivo' : 'Escolher ou arrastar o vídeo corrigido'}
+                <input type="file" accept="video/*" onChange={handleVersionFile} className="sr-only" />
               </label>
               {versionFile && <p className="truncate text-xs text-ink-muted">{versionFile.name}</p>}
 
@@ -1276,6 +1427,30 @@ export default function ApprovalSectionOrange() {
             </div>
           </div>
         </div>
+      )}
+
+      {publishPost && (
+        <CreatePostModal
+          isOpen
+          approvedPost={publishPost}
+          allowPublishNow={team.can('publicar_instagram')}
+          onClose={() => setPublishPost(null)}
+          onPostCreated={(postId, publishNow, saved) => {
+            void (async () => {
+              if (publishNow && postId) {
+                setPublishResult({ state: 'working', text: 'Publicando no Instagram… vídeos podem levar alguns minutos.' });
+                setPublishResult(await publishToInstagram(postId));
+              } else if (saved) {
+                setPublishResult({ state: 'scheduled', ...saved });
+              }
+              await refreshPosts();
+            })();
+          }}
+        />
+      )}
+
+      {publishResult && (
+        <PublishResultDialog result={publishResult} label={selectedPost?.house_label} onClose={() => setPublishResult(null)} />
       )}
 
       {sendState && (

@@ -22,9 +22,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import { MediaPreview } from '@/components/MediaPreview';
+import { InstagramPublishPanel } from '@/components/InstagramPublishPanel';
 import { isVideoMedia } from '@/lib/media';
 import { useTeam } from '@/lib/team';
-import { houseLabel } from '@/lib/house';
+import { coverFolderLabel, houseLabel } from '@/lib/house';
+import type { CoverCollectionSummary } from '@/lib/covers';
 
 type FeedStatusFilter = 'all' | 'pending' | 'approved';
 
@@ -48,6 +50,10 @@ interface ScheduledTile {
   publishStatus: '' | 'processing' | 'published' | 'error';
   publishError: string;
   permalink: string;
+  /** Pasta da Aprovação fotos ainda sem post: aparece na data planejada (planejamento do mês). */
+  folderId?: number;
+  /** Quantas fotos o carrossel planejado tem (pasta). */
+  count?: number;
 }
 
 interface PublishedTile {
@@ -126,6 +132,7 @@ function InstagramFeedPreview() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isLive, setIsLive] = useState(false);
   const [selectedId, setSelectedId] = useState<ScheduledTile['id'] | null>(null);
+  const [openedPost, setOpenedPost] = useState<ScheduledTile | null>(null);
   const [notice, setNotice] = useState<{ text: string; undo?: [ScheduledTile['id'], ScheduledTile['id']] } | null>(null);
   const [drag, setDrag] = useState<{ id: ScheduledTile['id']; x: number; y: number; overId: ScheduledTile['id'] | null; touch: boolean } | null>(null);
 
@@ -142,18 +149,21 @@ function InstagramFeedPreview() {
 
   const loadPosts = useCallback(async () => {
     const base = 'id, title, house_name, house_number, content, caption, image_url, media_type, media_items, platform, scheduled_date, time_string, hour, approval_status';
-    const withPublish = await supabase
+    // Entram na grade (planejamento do mês):
+    // - fotos programadas a partir de uma capa aprovada (cover_collection_id); as pastas ainda sem post entram à parte;
+    // - vídeos com data planejada, em qualquer etapa da aprovação (menos reprovados).
+    const { data, error } = await supabase
       .from('posts')
-      .select(`${base}, auto_publish, publish_status, publish_error, ig_permalink`)
-      .not('scheduled_date', 'is', null);
-    // antes da migração da publicação as colunas novas não existem: segue sem elas
-    const { data, error } =
-      withPublish.error && /column/i.test(withPublish.error.message)
-        ? await supabase.from('posts').select(base).not('scheduled_date', 'is', null)
-        : withPublish;
+      .select(`${base}, auto_publish, publish_status, publish_error, ig_permalink, cover_collection_id`)
+      .not('scheduled_date', 'is', null)
+      .or('cover_collection_id.not.is.null,media_type.eq.video,auto_publish.eq.true,publish_status.not.is.null');
     if (error) throw error;
 
-    return (data ?? []).map(
+    return (data ?? []).filter((row) =>
+      isVideoMedia(row.image_url || '', row.media_type || '')
+        ? row.approval_status !== 'rejected' || row.auto_publish === true || Boolean(row.publish_status)
+        : row.cover_collection_id != null,
+    ).map(
       (row): ScheduledTile => ({
         kind: 'scheduled',
         id: row.id,
@@ -202,13 +212,58 @@ function InstagramFeedPreview() {
     );
   }, []);
 
+  // Pastas da Aprovação fotos com data planejada e ainda sem post: entram na grade como planejadas.
+  const loadPlannedFolders = useCallback(async (): Promise<ScheduledTile[]> => {
+    const response = await fetch('/api/capa?tipo=fotos', { cache: 'no-store' }).catch(() => null);
+    if (!response?.ok) return [];
+    const { collections } = (await response.json().catch(() => ({}))) as { collections?: CoverCollectionSummary[] };
+    return (collections ?? [])
+      .filter((c) => c.plannedDate && !c.post)
+      .map((c): ScheduledTile => {
+        const approved = c.responded && c.approvedCount > 0;
+        const hour = c.plannedHour ?? 19;
+        const cover = c.coverEditedUrl ?? (c.coverDriveId ? `/api/drive/thumb/${encodeURIComponent(c.coverDriveId)}?s=600` : '');
+        return {
+          kind: 'scheduled',
+          id: `pasta-${c.id}`,
+          folderId: c.id,
+          count: c.photoCount,
+          title: 'Carrossel planejado',
+          house: coverFolderLabel(c.houseName, c.neighborhood, c.houseNumber),
+          caption: '',
+          imageUrl: cover,
+          mediaType: 'image',
+          items: [{ url: cover, type: 'image' }],
+          format: 'CARROSSEL',
+          scheduledDate: c.plannedDate as string,
+          hour,
+          timeString: `${String(hour).padStart(2, '0')}:00`,
+          approvalStatus: approved ? 'approved' : c.responded ? 'changes_requested' : c.shareToken ? 'pending' : '',
+          autoPublish: false,
+          publishStatus: '',
+          publishError: '',
+          permalink: '',
+        };
+      });
+  }, []);
+
   const refresh = useCallback(async () => {
     if (busyRef.current) return;
-    const [scheduled, live] = await Promise.all([loadPosts(), loadPublished()]);
+    const [scheduled, live, planned] = await Promise.all([loadPosts(), loadPublished(), loadPlannedFolders()]);
     if (busyRef.current) return;
-    setPosts(scheduled);
+    setPosts([...scheduled, ...planned]);
     setPublished(live);
-  }, [loadPosts, loadPublished]);
+  }, [loadPosts, loadPublished, loadPlannedFolders]);
+
+  // Confere no Instagram o que foi apagado lá (sai da grade). Falha aqui não impede a grade de carregar.
+  const reconcileWithInstagram = useCallback(
+    () => fetch('/api/instagram/reconcile', { method: 'POST' }).catch(() => undefined),
+    [],
+  );
+
+  useEffect(() => {
+    void reconcileWithInstagram().then(() => refresh().catch(() => undefined));
+  }, [reconcileWithInstagram, refresh]);
 
   useEffect(() => {
     let active = true;
@@ -250,6 +305,7 @@ function InstagramFeedPreview() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
+      await reconcileWithInstagram();
       await refresh();
       setErrorMessage('');
     } catch (error) {
@@ -273,7 +329,12 @@ function InstagramFeedPreview() {
     [ordered, filter],
   );
   const canReorder = filter === 'all' && team.can('reagendar_publicacoes');
-  const selected = selectedId === null ? null : ordered.find((post) => post.id === selectedId) ?? null;
+  // Se o post aberto sair da grade (ex.: vídeo com agendamento cancelado), a prévia segue aberta
+  // com a última versão dele até a pessoa fechar, para o aviso de confirmação não sumir junto.
+  const selected =
+    selectedId === null
+      ? null
+      : ordered.find((post) => post.id === selectedId) ?? (openedPost?.id === selectedId ? openedPost : null);
 
   // Troca data e horário entre duas publicações (as datas do calendário continuam as mesmas).
   const swap = useCallback(async (aId: ScheduledTile['id'], bId: ScheduledTile['id'], { isUndo = false } = {}) => {
@@ -296,13 +357,28 @@ function InstagramFeedPreview() {
       day_index: mondayIndex(slot.scheduledDate),
     });
 
+    // post: tabela posts; pasta planejada: data planejada da pasta (pelo servidor)
+    const save = async (tile: ScheduledTile, slot: Slot) => {
+      if (tile.folderId) {
+        const response = await fetch(`/api/capa/${tile.folderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plannedDate: slot.scheduledDate, plannedHour: slot.hour }),
+        }).catch(() => null);
+        if (!response?.ok) throw new Error('Falha ao mudar a data planejada');
+        return;
+      }
+      const { error } = await supabase.from('posts').update(toRow(slot)).eq('id', tile.id);
+      if (error) throw error;
+    };
+
     try {
-      const first = await supabase.from('posts').update(toRow(slotB)).eq('id', a.id);
-      if (first.error) throw first.error;
-      const second = await supabase.from('posts').update(toRow(slotA)).eq('id', b.id);
-      if (second.error) {
-        await supabase.from('posts').update(toRow(slotA)).eq('id', a.id);
-        throw second.error;
+      await save(a, slotB);
+      try {
+        await save(b, slotA);
+      } catch (error) {
+        await save(a, slotA).catch(() => undefined);
+        throw error;
       }
       setNotice(
         isUndo
@@ -550,7 +626,7 @@ function InstagramFeedPreview() {
               {filter === 'all' ? 'Nenhuma publicação agendada' : `Nenhuma publicação ${filter === 'approved' ? 'aprovada' : 'pendente'}`}
             </h4>
             <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-muted">
-              Programe posts pela Aprovação de capa para ver aqui como o perfil vai ficar.
+              Programe posts pela Aprovação fotos ou agende vídeos na Aprovação vídeos para ver aqui como o perfil vai ficar.
             </p>
           </div>
         ) : (
@@ -574,6 +650,7 @@ function InstagramFeedPreview() {
                         return;
                       }
                       setSelectedId(post.id);
+                      setOpenedPost(post);
                     }}
                     className={`group relative block aspect-[3/4] w-full select-none overflow-hidden bg-surface-muted text-left transition-[opacity,filter] duration-150 ease-out [-webkit-touch-callout:none] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
                       canReorder ? 'cursor-grab active:cursor-grabbing' : ''
@@ -590,8 +667,16 @@ function InstagramFeedPreview() {
                           <Send size={11} aria-hidden="true" />
                         </span>
                       )}
-                      {post.items.length > 1 && (
-                        <span title={`Carrossel com ${post.items.length} mídias`} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
+                      {(post.folderId || (!post.autoPublish && !post.publishStatus)) && (
+                        <span
+                          title={post.folderId ? 'Planejado: fotos em aprovação, ainda não é post' : 'Planejado: ainda não agendado no Instagram'}
+                          className="flex h-6 items-center rounded-full bg-surface/90 px-1.5 text-[10px] font-semibold text-brand-plum"
+                        >
+                          Planejado
+                        </span>
+                      )}
+                      {(post.count ?? post.items.length) > 1 && (
+                        <span title={`Carrossel com ${post.count ?? post.items.length} mídias`} className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
                           <Layers size={12} aria-hidden="true" />
                         </span>
                       )}
@@ -724,7 +809,18 @@ function InstagramFeedPreview() {
                 </p>
               )}
 
-              <PublishPanel post={selected} canPublish={team.can('publicar_instagram')} onChanged={() => void refresh()} />
+              {selected.folderId ? (
+                <div className="mt-auto space-y-1 border-t border-border px-4 py-3">
+                  <p className="text-xs font-semibold text-ink">Carrossel planejado · {selected.count ?? 0} fotos</p>
+                  <p className="text-xs leading-relaxed text-ink-muted">
+                    {selected.approvalStatus === 'approved'
+                      ? 'Capa aprovada. Programe o post na Aprovação fotos para agendar no Instagram.'
+                      : 'Fotos em aprovação na Aprovação fotos. Vira post depois que a capa for aprovada.'}
+                  </p>
+                </div>
+              ) : (
+                <InstagramPublishPanel key={selected.id} inlineDialog post={selected} canPublish={team.can('publicar_instagram')} onChanged={() => void refresh()} />
+              )}
 
               <div className="space-y-2 border-t border-border px-4 py-3">
                 <p className="text-xs font-semibold text-ink">Mudar posição no feed</p>
@@ -874,101 +970,6 @@ function FeedCarousel({ items, title }: { items: { url: string; type: string }[]
             ))}
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-// Publicar no Instagram: agora ou sozinho no horário agendado. Só posts aprovados.
-function PublishPanel({ post, canPublish, onChanged }: { post: ScheduledTile; canPublish: boolean; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error' | 'info'; text: string } | null>(null);
-  const [auto, setAuto] = useState(post.autoPublish);
-
-  const approved = post.approvalStatus === 'approved';
-  const published = post.publishStatus === 'published';
-
-  const publishNow = async () => {
-    if (!window.confirm('Publicar este post agora no Instagram? Depois de publicado, só dá para apagar pelo app do Instagram.')) return;
-    setBusy(true);
-    setMessage({ tone: 'info', text: 'Publicando no Instagram… vídeos podem levar alguns minutos.' });
-    try {
-      const response = await fetch('/api/instagram/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id }),
-      });
-      const result = (await response.json().catch(() => ({}))) as { status?: string; message?: string };
-      if (result.status === 'published') setMessage({ tone: 'ok', text: 'Publicado no Instagram.' });
-      else if (result.status === 'processing') setMessage({ tone: 'info', text: 'O Instagram ainda está processando o vídeo. Clique de novo em instantes para concluir.' });
-      else setMessage({ tone: 'error', text: result.message ?? 'Não foi possível publicar.' });
-    } catch {
-      setMessage({ tone: 'error', text: 'Sem conexão com o servidor. Tente de novo.' });
-    } finally {
-      setBusy(false);
-      onChanged();
-    }
-  };
-
-  const toggleAuto = async (next: boolean) => {
-    setAuto(next);
-    const response = await fetch('/api/instagram/publish', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId: post.id, auto: next }),
-    }).catch(() => null);
-    if (!response?.ok) {
-      setAuto(!next);
-      setMessage({ tone: 'error', text: 'Não foi possível mudar a publicação automática. A migração da publicação foi rodada?' });
-    } else onChanged();
-  };
-
-  return (
-    <div className="mt-auto space-y-2 border-t border-border px-4 py-3">
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-ink"><Send size={13} aria-hidden="true" /> Instagram</p>
-
-      {published ? (
-        <p className="text-xs text-status-success">
-          Publicado.{' '}
-          {post.permalink && (
-            <a href={post.permalink} target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">Ver no Instagram</a>
-          )}
-        </p>
-      ) : !approved ? (
-        <p className="text-xs text-ink-muted">Só posts aprovados podem ser publicados.</p>
-      ) : !canPublish ? (
-        <p className="text-xs text-ink-muted">Você não tem a permissão &ldquo;Publicar no Instagram&rdquo;.</p>
-      ) : (
-        <>
-          {post.publishStatus === 'error' && post.publishError && !message && (
-            <p className="text-xs text-status-danger">Última tentativa: {post.publishError}</p>
-          )}
-          {post.publishStatus === 'processing' && !message && (
-            <p className="text-xs text-ink-muted">Publicação em andamento (o Instagram está processando a mídia).</p>
-          )}
-          <label className="flex cursor-pointer items-start gap-2 text-xs text-ink">
-            <input type="checkbox" checked={auto} onChange={(event) => void toggleAuto(event.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-plum" />
-            <span>
-              Publicar sozinho no horário agendado
-              <span className="block text-ink-muted">{formatLongDay(post.scheduledDate)}, {post.timeString}</span>
-            </span>
-          </label>
-          <button
-            type="button"
-            onClick={() => void publishNow()}
-            disabled={busy}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-60"
-          >
-            {busy ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
-            {busy ? 'Publicando…' : post.publishStatus === 'processing' ? 'Concluir publicação' : 'Publicar agora'}
-          </button>
-        </>
-      )}
-
-      {message && (
-        <p role="status" className={`text-xs ${message.tone === 'ok' ? 'text-status-success' : message.tone === 'error' ? 'text-status-danger' : 'text-ink-muted'}`}>
-          {message.text}
-        </p>
       )}
     </div>
   );

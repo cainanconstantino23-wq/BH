@@ -7,7 +7,10 @@ import { useTeam } from '@/lib/team';
 import { describeActivity, type ActivityRow } from '@/components/team/TeamPanel';
 
 // Ações que geram notificação para quem acompanha o histórico.
-const NOTIFY_ACTIONS = ['post.criado', 'post.aprovado', 'post.ajustes_solicitados', 'post.reprovado', 'equipe.cadastro'];
+const NOTIFY_ACTIONS = [
+  'post.criado', 'post.aprovado', 'post.ajustes_solicitados', 'post.reprovado', 'equipe.cadastro',
+  'capa.respondido', 'capa.capas_adicionadas_aprovadora',
+];
 
 function relative(iso: string) {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -19,7 +22,7 @@ function relative(iso: string) {
   return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
 }
 
-export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'approval' | 'equipe' | 'historico') => void }) {
+export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'approval' | 'equipe' | 'historico' | 'capa' | 'fotos') => void }) {
   const me = useTeam();
   const enabled = me.can('ver_historico');
   const [items, setItems] = useState<ActivityRow[]>([]);
@@ -147,7 +150,7 @@ export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'app
 
           {items.length === 0 ? (
             <p className="px-4 py-8 text-center text-xs text-ink-muted">
-              Nenhuma notificação ainda. Você é avisado quando alguém cria uma publicação, aprova ou reprova, ou se cadastra.
+              Nenhuma notificação ainda. Você é avisado quando alguém cria uma publicação, aprova ou reprova (posts e capas), ou se cadastra.
             </p>
           ) : (
             <ol className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
@@ -160,7 +163,11 @@ export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'app
                       type="button"
                       onClick={() => {
                         setOpen(false);
-                        onOpenTarget(row.entity_type === 'equipe' ? 'equipe' : 'approval');
+                        onOpenTarget(
+                          row.entity_type === 'equipe' ? 'equipe'
+                            : row.entity_type === 'capa' ? (row.details?.tipo === 'fotos' ? 'fotos' : 'capa')
+                            : 'approval',
+                        );
                       }}
                       className={`flex w-full gap-3 px-4 py-3 text-left transition-colors duration-150 ease-out hover:bg-surface-muted ${isNew ? 'bg-status-info-soft/60' : ''}`}
                     >

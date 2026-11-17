@@ -24,8 +24,10 @@ export function MediaLightbox({
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
-  onRemove: (id: string) => void;
-  onCrop: (id: string) => void;
+  /** Sem onRemove, o botão Remover não aparece (mídia travada). */
+  onRemove?: (id: string) => void;
+  /** Sem onCrop, o botão Ajustar recorte não aparece (mídia já aprovada). */
+  onCrop?: (id: string) => void;
 }) {
   const item = items[index];
   const many = items.length > 1;
@@ -53,16 +55,18 @@ export function MediaLightbox({
       className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-black/85 p-4 backdrop-blur-sm"
     >
       <div className="flex w-full max-w-5xl items-center justify-between gap-3 text-white">
-        <span className="min-w-0 truncate text-sm font-medium tabular-nums">{many ? `${index + 1} de ${items.length}` : item.file.name}</span>
+        <span className="min-w-0 truncate text-sm font-medium tabular-nums">{many ? `${index + 1} de ${items.length}` : item.file.name || ''}</span>
         <div className="flex shrink-0 items-center gap-2">
-          {!item.isVideo && (
+          {!item.isVideo && onCrop && (
             <button type="button" onClick={() => onCrop(item.id)} className="flex min-h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold hover:bg-white/20">
               <Crop size={15} aria-hidden="true" /> Ajustar recorte
             </button>
           )}
-          <button type="button" onClick={() => onRemove(item.id)} className="flex min-h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold hover:bg-status-danger">
-            <Trash2 size={15} aria-hidden="true" /> Remover
-          </button>
+          {onRemove && (
+            <button type="button" onClick={() => onRemove(item.id)} className="flex min-h-10 items-center gap-2 rounded-lg bg-white/10 px-3 text-xs font-semibold hover:bg-status-danger">
+              <Trash2 size={15} aria-hidden="true" /> Remover
+            </button>
+          )}
           <button type="button" onClick={onClose} aria-label="Fechar" className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 hover:bg-white/20">
             <X size={18} aria-hidden="true" />
           </button>

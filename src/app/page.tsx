@@ -15,7 +15,7 @@ import { AccountMenu, type AccountPage } from '@/components/team/AccountMenu';
 import { NotificationBell } from '@/components/team/NotificationBell';
 import { HomeHub, type HubTarget } from '@/components/home/HomeHub';
 import { HistoryPanel, MyAccountPanel, PeoplePanel } from '@/components/team/TeamPanel';
-import { CoverApprovalPanel } from '@/components/drive/CoverApprovalPanel';
+import { CoverApprovalPanel, DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 import {
   BarChart2,
   Inbox,
@@ -26,11 +26,11 @@ import {
   Clock3,
   CalendarDays,
   CheckCircle2,
+  Images,
   Menu,
   X,
   MapPin,
   Users,
-  Star,
 } from 'lucide-react';
 
 const SectionLoading = () => (
@@ -96,7 +96,7 @@ const instagramErrorMessages: Record<string, string> = {
   admin_only: 'Você não tem permissão para conectar o Instagram da empresa. Peça a quem administra a equipe.',
 };
 
-type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'planner' | 'capa' | AccountPage;
+type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | AccountPage;
 
 const driveErrorMessages: Record<string, string> = {
   not_configured: 'Faltam as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).',
@@ -261,7 +261,13 @@ export default function Home() {
             }
             const driveResult = url.searchParams.get('drive');
             if (driveResult) {
-              setActiveTab('capa');
+              // depois do login do Google volta para a Aprovação fotos (única aba que usa o Drive)
+              try {
+                sessionStorage.removeItem(DRIVE_RETURN_KEY);
+              } catch {
+                // sem sessionStorage
+              }
+              setActiveTab('fotos');
               setShowHub(false);
               setDriveNotice(
                 driveResult === 'connected'
@@ -596,7 +602,8 @@ export default function Home() {
                   {[
                     { label: 'Analytics', icon: BarChart2, tab: 'comunidade' as const },
                     { label: 'Inbox', icon: Inbox, tab: 'inbox' as const },
-                    { label: 'Aprovação', icon: CheckCircle2, tab: 'approval' as const },
+                    { label: 'Aprovação vídeos', icon: CheckCircle2, tab: 'approval' as const },
+                    { label: 'Aprovação fotos', icon: Images, tab: 'fotos' as const },
                     { label: 'Calendário de posts', icon: CalendarDays, tab: 'planner' as const },
                   ].map((item) => {
                     const Icon = item.icon;
@@ -632,22 +639,6 @@ export default function Home() {
                     >
                       <FolderPlus size={16} />
                       Grade do feed
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      aria-current={activeTab === 'capa' ? 'page' : undefined}
-                      onClick={() => {
-                        setActiveTab('capa');
-                        closeMobileMenu();
-                      }}
-                      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
-                        activeTab === 'capa' ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
-                      }`}
-                    >
-                      <Star size={16} />
-                      Aprovação de capa
                     </button>
                   </li>
                 </ul>
@@ -712,7 +703,15 @@ export default function Home() {
               aria-current={activeTab === 'approval' ? 'page' : undefined}
               className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'approval' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
             >
-              <CheckCircle2 size={15} /> Aprovação
+              <CheckCircle2 size={15} /> Aprovação vídeos
+            </button>
+
+            <button 
+              onClick={() => setActiveTab('fotos')} 
+              aria-current={activeTab === 'fotos' ? 'page' : undefined}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'fotos' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+            >
+              <Images size={15} /> Aprovação fotos
             </button>
 
             <button 
@@ -727,17 +726,10 @@ export default function Home() {
               <FolderPlus size={15} /> Grade do feed
             </button>
 
-            <button
-              onClick={() => setActiveTab('capa')}
-              aria-current={activeTab === 'capa' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'capa' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
-            >
-              <Star size={15} /> Aprovação de capa
-            </button>
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
-            <NotificationBell onOpenTarget={(target) => setActiveTab(target)} />
+            <NotificationBell onOpenTarget={(target) => setActiveTab(target === 'capa' ? 'fotos' : target)} />
             <AccountMenu
               pendingCount={pendingCount}
               current={activeTab}
@@ -921,9 +913,9 @@ export default function Home() {
               </div>
             )}
 
-            {activeTab === 'capa' && (
-              <div key="cover-approval" className={sectionEntranceClass}>
-                <CoverApprovalPanel notice={driveNotice} />
+            {activeTab === 'fotos' && (
+              <div key="photo-approval" className={sectionEntranceClass}>
+                <CoverApprovalPanel mode="fotos" notice={driveNotice} onOpenCalendar={() => setActiveTab('planner')} />
               </div>
             )}
 
