@@ -30,6 +30,7 @@ import {
   Images,
   Menu,
   Table2,
+  ImageUp,
   X,
   MapPin,
   Users,
@@ -83,7 +84,7 @@ const instagramErrorMessages: Record<string, string> = {
   admin_only: 'Você não tem permissão para conectar o Instagram da empresa. Peça a quem administra a equipe.',
 };
 
-type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | AccountPage;
+type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | 'capa' | AccountPage;
 
 const driveErrorMessages: Record<string, string> = {
   not_configured: 'Faltam as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).',
@@ -248,13 +249,16 @@ export default function Home() {
             }
             const driveResult = url.searchParams.get('drive');
             if (driveResult) {
-              // depois do login do Google volta para a Aprovação fotos (única aba que usa o Drive)
+              // depois do login do Google volta para a aba que o abriu (Aprovação fotos, de capa ou Tabela de postagens)
+              let returnTab: DashboardTab = 'fotos';
               try {
+                const saved = sessionStorage.getItem(DRIVE_RETURN_KEY);
+                if (saved === 'capa' || saved === 'postagens') returnTab = saved;
                 sessionStorage.removeItem(DRIVE_RETURN_KEY);
               } catch {
                 // sem sessionStorage
               }
-              setActiveTab('fotos');
+              setActiveTab(returnTab);
               setShowHub(false);
               setDriveNotice(
                 driveResult === 'connected'
@@ -635,6 +639,22 @@ export default function Home() {
                       Grade do feed
                     </button>
                   </li>
+                  <li>
+                    <button
+                      type="button"
+                      aria-current={activeTab === 'capa' ? 'page' : undefined}
+                      onClick={() => {
+                        setActiveTab('capa');
+                        closeMobileMenu();
+                      }}
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
+                        activeTab === 'capa' ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
+                      }`}
+                    >
+                      <ImageUp size={16} />
+                      Aprovação de capa
+                    </button>
+                  </li>
                 </ul>
               </div>
             </nav>
@@ -720,10 +740,18 @@ export default function Home() {
               <FolderPlus size={15} /> Grade do feed
             </button>
 
+            <button
+              onClick={() => setActiveTab('capa')}
+              aria-current={activeTab === 'capa' ? 'page' : undefined}
+              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'capa' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+            >
+              <ImageUp size={15} /> Aprovação de capa
+            </button>
+
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
-            <NotificationBell onOpenTarget={(target) => setActiveTab(target === 'capa' ? 'fotos' : target)} />
+            <NotificationBell onOpenTarget={(target) => setActiveTab(target)} />
             <AccountMenu
               pendingCount={pendingCount}
               current={activeTab}
@@ -916,6 +944,12 @@ export default function Home() {
             {activeTab === 'fotos' && (
               <div key="photo-approval" className={sectionEntranceClass}>
                 <CoverApprovalPanel mode="fotos" notice={driveNotice} onOpenCalendar={() => setActiveTab('planner')} />
+              </div>
+            )}
+
+            {activeTab === 'capa' && (
+              <div key="cover-approval" className={sectionEntranceClass}>
+                <CoverApprovalPanel mode="capa" notice={driveNotice} onOpenCalendar={() => setActiveTab('planner')} />
               </div>
             )}
 

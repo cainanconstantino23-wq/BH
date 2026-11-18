@@ -9,7 +9,8 @@ export const LEGACY_COLLECTION_COLUMNS = 'id, house_name, neighborhood, house_nu
 export const COLLECTION_COLUMNS = `${LEGACY_COLLECTION_COLUMNS}, planned_date, planned_hour`;
 /** Coluna ainda não criada (migração não rodada). */
 export const isMissingColumn = (error: { code?: string } | null) => error?.code === '42703';
-export const PHOTO_COLUMNS = 'collection_id, drive_file_id, name, width, height, is_favorite, approved, position, edited_url, edited_width, edited_height, edited_label, created_at, added_by, favorited_by, favorited_at, favorited_by_approver, approved_by, approved_at';
+// '*': colunas novas (edited_by/at, migração 20261118_capa_thereza.sql) entram quando existirem, sem quebrar antes da migração
+export const PHOTO_COLUMNS = '*';
 
 type Row = Record<string, unknown>;
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -32,6 +33,8 @@ export const toPhoto = (row: Row): CoverPhoto => ({
   favoritedByApprover: row.favorited_by_approver === true,
   approvedBy: orNull(row.approved_by),
   approvedAt: orNull(row.approved_at),
+  editedBy: orNull(row.edited_by),
+  editedAt: orNull(row.edited_at),
 });
 
 /** Só aceita corte salvo no R2 do app. */
@@ -71,8 +74,8 @@ export function toSummary(row: Row, photos: CoverPhoto[]): CoverCollectionSummar
 }
 
 export async function loadCollection(admin: SupabaseClient, id: number): Promise<CoverCollectionDetail | null> {
-  let { data: row, error } = await admin.from('cover_collections').select(COLLECTION_COLUMNS).eq('id', id).maybeSingle();
-  if (isMissingColumn(error)) ({ data: row, error } = await admin.from('cover_collections').select(LEGACY_COLLECTION_COLUMNS).eq('id', id).maybeSingle());
+  // '*': confirmed_by/at (migração 20261118_capa_thereza.sql) entram quando existirem
+  const { data: row, error } = await admin.from('cover_collections').select('*').eq('id', id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!row) return null;
   const { data: photoRows, error: photoError } = await admin
@@ -103,6 +106,8 @@ export async function loadCollection(admin: SupabaseClient, id: number): Promise
     photos,
     linkCreatedBy: orNull(row.link_created_by),
     linkCreatedAt: orNull(row.link_created_at),
+    confirmedBy: orNull(row.confirmed_by),
+    confirmedAt: orNull(row.confirmed_at),
     history,
   };
 }

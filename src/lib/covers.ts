@@ -25,6 +25,9 @@ export interface CoverPhoto {
   favoritedByApprover: boolean;
   approvedBy: string | null;
   approvedAt: string | null;
+  /** Quem cortou (edited) e quando; a aprovadora aparece como APPROVER_LABEL. */
+  editedBy: string | null;
+  editedAt: string | null;
 }
 
 /** Data e hora curtas para o registro: "16/11 14:32". */
@@ -106,6 +109,9 @@ export interface CoverCollectionDetail extends CoverCollectionSummary {
   photos: CoverPhoto[];
   linkCreatedBy: string | null;
   linkCreatedAt: string | null;
+  /** O social media confirmou as capas escolhidas pela aprovadora. */
+  confirmedBy: string | null;
+  confirmedAt: string | null;
   history: CoverActivity[];
 }
 
