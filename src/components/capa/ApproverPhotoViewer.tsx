@@ -42,7 +42,7 @@ export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, orig
   const favorite = isFavorite(photo);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Foto da casa" className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white">
+    <div role="dialog" aria-modal="true" aria-label="Foto da casa" className="fixed inset-0 z-50 flex flex-col bg-black text-white">
       <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6">
         <p className="text-[0.95rem] tabular-nums text-white/70">
           {index + 1} de {photos.length}
@@ -139,7 +139,9 @@ function SimpleCropper({
     const area = areaRef.current;
     if (!area) return;
     const measure = () => {
-      const { clientWidth: w, clientHeight: h } = area;
+      // 85% da área: sobra espaço em volta para ver, escurecido, o que fica fora do corte
+      const w = area.clientWidth * 0.85;
+      const h = area.clientHeight * 0.85;
       const target = ratio.width / ratio.height;
       const fw = Math.min(w, h * target);
       setFrame({ w: Math.floor(fw), h: Math.floor(fw / target) });
@@ -216,7 +218,7 @@ function SimpleCropper({
           </button>
         ))}
       </div>
-      <div ref={areaRef} className="flex min-h-0 flex-1 items-center justify-center px-4">
+      <div ref={areaRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4">
         {failed ? (
           <p className="text-white/80">Não foi possível abrir esta foto.</p>
         ) : !image ? (
@@ -228,7 +230,7 @@ function SimpleCropper({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
             style={{ width: frame.w, height: frame.h }}
-            className="relative cursor-grab touch-none overflow-hidden rounded-md outline outline-2 outline-white active:cursor-grabbing"
+            className="relative cursor-grab touch-none active:cursor-grabbing"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- já carregada acima */}
             <img
@@ -238,6 +240,8 @@ function SimpleCropper({
               style={{ width: shownW, height: shownH, transform: `translate(${position.x}px, ${position.y}px)` }}
               className="pointer-events-none absolute left-0 top-0 max-w-none select-none"
             />
+            {/* fora da moldura: a foto continua visível, só escurecida (o que não entra no Instagram) */}
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] outline outline-2 outline-white" />
           </div>
         )}
       </div>
