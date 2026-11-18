@@ -3,10 +3,11 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Check, Crop, Expand, LoaderCircle, Plus, Search, Undo2, X } from 'lucide-react';
+import { Check, Crop, Expand, LoaderCircle, Search, Star, Undo2, X } from 'lucide-react';
 import { APPROVER_LABEL, APPROVER_NAME, formatLongStamp, type CoverPhoto, type EditedImage, type PublicCoverCollection } from '@/lib/covers';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { OnScreen } from '@/components/drive/OnScreen';
+import { ApproverPhotoViewer } from '@/components/capa/ApproverPhotoViewer';
 import { formatPlaceLabel } from '@/lib/instagramFormats';
 
 // Link para a aprovadora: mostra só as fotos favoritadas para capa; ela escolhe a(s) capa(s) e pode comentar.
@@ -49,6 +50,8 @@ export default function CoverApprovalLinkPage() {
   const [cropping, setCropping] = useState<CoverPhoto | null>(null);
   const [cropBusy, setCropBusy] = useState<string | null>(null);
   const [cropError, setCropError] = useState('');
+  // tela grande em "Encontrar mais fotos": índice da foto aberta
+  const [viewing, setViewing] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -99,7 +102,7 @@ export default function CoverApprovalLinkPage() {
     }
   };
 
-  const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>) => {
+  const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>): Promise<boolean> => {
     setCropping(null);
     setCropBusy(photo.driveId);
     setCropError('');
@@ -114,8 +117,10 @@ export default function CoverApprovalLinkPage() {
       if (!response.ok) throw new Error(String(response.status));
       const body = (await response.json()) as { edited: EditedImage; editedAt: string };
       setEdited(photo.driveId, body.edited, body.editedAt);
+      return true;
     } catch {
       setCropError('Não foi possível salvar o corte. Tente de novo.');
+      return false;
     } finally {
       setCropBusy(null);
     }
@@ -369,7 +374,7 @@ export default function CoverApprovalLinkPage() {
             <div className="mx-auto flex max-w-5xl items-start justify-between gap-4">
               <div>
                 <h2 id="more-photos-title" className="text-[1.75rem] font-light leading-tight">Mais fotos da casa</h2>
-                <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque nas fotos que você quer como capa. Elas entram na sua escolha.</p>
+                <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque numa foto para ver grande, passar as fotos, cortar e favoritar. As favoritas entram na sua escolha.</p>
               </div>
               <button type="button" autoFocus onClick={() => setMoreOpen(false)} aria-label="Fechar" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-bh-linha/50">
                 <X size={20} aria-hidden="true" />
@@ -389,36 +394,34 @@ export default function CoverApprovalLinkPage() {
               <p className="mx-auto mb-6 max-w-5xl text-[0.95rem] text-bh-tinta-suave">Não há outras fotos na pasta desta casa.</p>
             )}
             <ul className="mx-auto grid max-w-5xl grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:gap-x-6">
-              {morePhotos.map((photo) => {
+              {morePhotos.map((photo, photoIndex) => {
                 const isAdded = added.has(photo.driveId);
                 return (
                   <li key={photo.driveId} className="relative">
                     <button
                       type="button"
-                      onClick={() => toggleAdded(photo.driveId)}
-                      aria-pressed={isAdded}
-                      aria-label={isAdded ? 'Tirar esta foto das capas' : 'Adicionar esta foto às capas'}
+                      onClick={() => setViewing(photoIndex)}
+                      aria-label="Ver a foto em tela grande"
                       className={`relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-bh-azul transition-shadow focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata ${
                         isAdded ? 'ring-4 ring-bh-mata ring-offset-2 ring-offset-bh-cal' : ''
                       }`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                       <img src={image(photo, 900)} alt="" loading="lazy" className="h-full w-full object-cover" />
-                      <span
-                        className={`absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white shadow ${
-                          isAdded ? 'bg-bh-mata text-white' : 'bg-black/25 text-white'
-                        }`}
-                      >
-                        {isAdded ? <Check size={18} strokeWidth={3} aria-hidden="true" /> : <Plus size={18} strokeWidth={2.5} aria-hidden="true" />}
-                      </span>
+                      {photo.edited && (
+                        <span className="absolute inset-x-3 bottom-3 rounded-full bg-bh-papel/95 px-3 py-1 text-center text-[0.8125rem] font-medium text-bh-tinta">Cortada</span>
+                      )}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setZoom(photo)}
-                      aria-label="Ver a foto inteira"
-                      className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white hover:bg-black/50"
+                      onClick={() => toggleAdded(photo.driveId)}
+                      aria-pressed={isAdded}
+                      aria-label={isAdded ? 'Tirar dos favoritos' : 'Favoritar esta foto'}
+                      className={`absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border-2 border-white shadow ${
+                        isAdded ? 'bg-bh-mata text-white' : 'bg-black/30 text-white hover:bg-black/50'
+                      }`}
                     >
-                      <Expand size={16} aria-hidden="true" />
+                      <Star size={18} aria-hidden="true" fill={isAdded ? 'currentColor' : 'none'} />
                     </button>
                   </li>
                 );
@@ -428,7 +431,7 @@ export default function CoverApprovalLinkPage() {
           <div className="border-t border-bh-linha bg-bh-papel/95 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur sm:px-8">
             <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
               <p className="text-[0.95rem] text-bh-tinta-suave">
-                {added.size === 0 ? 'Nenhuma foto adicionada' : `${added.size} ${added.size === 1 ? 'foto adicionada' : 'fotos adicionadas'} às capas`}
+                {cropError ? <span className="text-bh-madeira">{cropError}</span> : added.size === 0 ? 'Nenhuma foto favoritada' : `${added.size} ${added.size === 1 ? 'foto favoritada' : 'fotos favoritadas'}`}
               </p>
               <button
                 type="button"
@@ -440,6 +443,27 @@ export default function CoverApprovalLinkPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {viewing !== null && morePhotos[viewing] && (
+        <OnScreen>
+          <ApproverPhotoViewer
+            photos={morePhotos}
+            index={viewing}
+            onIndex={setViewing}
+            onClose={() => setViewing(null)}
+            src={image}
+            originalSrc={(photo) => `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=2000`}
+            isFavorite={(photo) => added.has(photo.driveId)}
+            onToggleFavorite={(photo) => toggleAdded(photo.driveId)}
+            saving={cropBusy !== null}
+            onSaveCrop={async (photo, file, size) => {
+              const ok = await saveCrop(photo, file, size);
+              // foto cortada entra nas favoritas (o servidor já a pôs na pasta de capa)
+              if (ok && !added.has(photo.driveId)) toggleAdded(photo.driveId);
+            }}
+          />
+        </OnScreen>
       )}
 
       {cropping && (
