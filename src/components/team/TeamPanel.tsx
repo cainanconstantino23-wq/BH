@@ -660,6 +660,8 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
         note: note || undefined,
       };
     }
+    case 'capa.capas_confirmadas':
+      return { icon: CheckCircle2, tone: 'text-status-success', text: `${who} confirmou ${names(d.capas).length} ${names(d.capas).length === 1 ? 'capa' : 'capas'} de ${folderOf(d)}`, note: nameList(d.capas) || undefined };
     case 'capa.post_criado':
       return { icon: FilePlus2, tone: 'text-ink-muted', text: `${who} criou o post a partir de ${folderOf(d)}, já aprovado` };
     case 'equipe.removido':

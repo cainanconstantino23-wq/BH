@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
-import { cleanEdited, collectionKind, collectionName, loadCollection, logCoverActivity, saveEdited, touchCollection } from '@/lib/covers-server';
+import { cleanEdited, collectionKind, collectionName, isMissingColumn, loadCollection, logCoverActivity, saveEdited, touchCollection } from '@/lib/covers-server';
 import { parsePlanned } from '@/lib/covers';
 
 // Uma pasta de capa: ver, editar (nome, estrela, remover foto) e apagar.
@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const id = await idFrom(params);
   const body = (await request.json().catch(() => ({}))) as {
     houseName?: string; neighborhood?: string; houseNumber?: string; photo?: string; favorite?: boolean; remove?: boolean; edited?: unknown;
-    plannedDate?: unknown; plannedHour?: unknown;
+    plannedDate?: unknown; plannedHour?: unknown; confirm?: unknown;
   };
   const onlyDate = 'plannedDate' in body && Object.keys(body).every((key) => key === 'plannedDate' || key === 'plannedHour');
   const canEdit = member.can('editar_publicacoes') || member.can('criar_publicacoes');
@@ -43,7 +43,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       details: { pasta: await collectionName(admin, id), tipo: await collectionKind(admin, id), ...details },
     });
 
-  if (onlyDate) {
+  if (body.confirm === true) {
+    // o social media confirma as capas que a aprovadora escolheu (só depois da resposta)
+    const current = await loadCollection(admin, id);
+    if (!current) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
+    const capas = current.photos.filter((photo) => photo.approved);
+    if (!current.respondedAt || capas.length === 0) return NextResponse.json({ error: 'not_answered' }, { status: 409, headers: noStore });
+    const { error } = await admin
+      .from('cover_collections')
+      .update({ confirmed_by: member.label, confirmed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (isMissingColumn(error)) return NextResponse.json({ error: 'migration_pending' }, { status: 409, headers: noStore });
+    if (error) return NextResponse.json({ error: 'save_failed' }, { status: 500, headers: noStore });
+    await log('capa.capas_confirmadas', { capas: capas.map((photo) => photo.name) });
+  } else if (onlyDate) {
     const planned = parsePlanned(body.plannedDate, body.plannedHour);
     if (!planned) return NextResponse.json({ error: 'invalid_date' }, { status: 400, headers: noStore });
     const { error } = await admin.from('cover_collections').update(planned).eq('id', id);

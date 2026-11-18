@@ -5,7 +5,7 @@ import { PublishStatusTag } from '@/components/PublishStatusTag';
 import { PublishResultDialog, cancelScheduledPublish, publishToInstagram, type PublishResult } from '@/components/PublishResultDialog';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, Check, ChevronLeft, Clock3, Copy, FolderOpen, FolderPlus, Link2, Loader2, RefreshCw, Trash2, Unplug, XCircle } from 'lucide-react';
-import { APPROVER_NAME, formatStamp, photoLimit, photoStamp, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type CoverPhoto, type CollectionPostInfo } from '@/lib/covers';
+import { APPROVER_NAME, approverLines, formatLongStamp, formatStamp, photoLimit, photoStamp, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type CoverPhoto, type CollectionPostInfo } from '@/lib/covers';
 import { describeActivity } from '@/components/team/TeamPanel';
 import { coverFolderLabel } from '@/lib/house';
 import { useTeam } from '@/lib/team';
@@ -871,6 +871,20 @@ function FolderDetail({
         );
       })()}
 
+      {/* Resposta da aprovadora (Aprovação de capa): o que ela escolheu, cortou ou acrescentou, com data, e a confirmação da equipe */}
+      {mode === 'capa' && collection.responded && (
+        <ApproverAnswer
+          collection={collection}
+          canConfirm={team.can('editar_publicacoes') || team.can('criar_publicacoes')}
+          onConfirm={async () => {
+            const response = await fetch(`/api/capa/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok && data.collection) setCollection(data.collection);
+            else setError(data.error === 'migration_pending' ? 'Falta rodar a migração 20261118_capa_thereza.sql no Supabase para registrar a confirmação.' : 'Não foi possível confirmar as capas.');
+          }}
+        />
+      )}
+
       {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
 
       {/* 1. Todas as fotos escolhidas no Drive */}
@@ -1123,5 +1137,62 @@ function SectionTitle({ id, step, title, hint }: { id: string; step: number; tit
         <p className="mt-0.5 text-xs text-ink-muted">{hint}</p>
       </div>
     </div>
+  );
+}
+
+function ApproverAnswer({ collection, canConfirm, onConfirm }: { collection: CoverCollectionDetail; canConfirm: boolean; onConfirm: () => Promise<void> }) {
+  const [confirming, setConfirming] = useState(false);
+  const touched = collection.photos.filter((photo) => approverLines(photo).length > 0);
+  const chosen = collection.photos.filter((photo) => photo.approved);
+  return (
+    <section aria-labelledby="approver-answer" className="space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 id="approver-answer" className="text-base font-semibold text-ink">Resposta da {APPROVER_NAME}</h3>
+          <p className="mt-1 text-sm text-ink-muted">
+            Enviada em {formatLongStamp(collection.respondedAt)}
+            {chosen.length > 0 ? ` · ${chosen.length} ${chosen.length === 1 ? 'capa escolhida' : 'capas escolhidas'}` : ' · nenhuma capa escolhida'}
+          </p>
+          {collection.feedback && <p className="mt-2 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">&ldquo;{collection.feedback}&rdquo;</p>}
+        </div>
+        {collection.confirmedAt ? (
+          <p className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-success-soft px-3 py-1.5 text-xs font-semibold text-status-success">
+            <Check size={14} strokeWidth={2.5} aria-hidden="true" /> Confirmado por {collection.confirmedBy} em {formatLongStamp(collection.confirmedAt)}
+          </p>
+        ) : (
+          canConfirm && (
+            <button
+              type="button"
+              disabled={chosen.length === 0 || confirming}
+              onClick={async () => {
+                setConfirming(true);
+                await onConfirm();
+                setConfirming(false);
+              }}
+              className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+            >
+              {confirming ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
+              Confirmar capas
+            </button>
+          )
+        )}
+      </div>
+      {touched.length > 0 && (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {touched.map((photo) => (
+            <li key={photo.driveId} className="flex gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
+              <img src={photoSrc(photo, 200)} alt="" className="h-20 w-16 shrink-0 rounded-control object-cover" />
+              <div className="min-w-0 text-xs">
+                <p className="truncate font-medium text-ink">{photo.name}</p>
+                <ul className="mt-1 space-y-0.5 text-ink-muted">
+                  {approverLines(photo).map((line) => <li key={line}>{line}</li>)}
+                </ul>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

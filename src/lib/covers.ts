@@ -39,8 +39,19 @@ export const formatStamp = (iso: string | null) =>
 /** Data e hora completas: "18/11/2026 às 14:32". */
 export const formatLongStamp = (iso: string | null) =>
   iso
-    ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')
+    ? new Date(iso)
+        .toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bahia' })
+        .replace(',', ' às')
     : '';
+
+/** O que a aprovadora fez nesta foto pelo link, com data e hora (para a resposta na pasta). */
+export function approverLines(photo: CoverPhoto): string[] {
+  const lines: string[] = [];
+  if (photo.favoritedByApprover && photo.favoritedAt) lines.push(`Adicionada às capas por ${APPROVER_NAME} em ${formatLongStamp(photo.favoritedAt)}`);
+  if (photo.edited && photo.editedBy === APPROVER_LABEL && photo.editedAt) lines.push(`Cortada por ${APPROVER_NAME} em ${formatLongStamp(photo.editedAt)}`);
+  if (photo.approved && photo.approvedBy === APPROVER_LABEL && photo.approvedAt) lines.push(`Escolhida por ${APPROVER_NAME} em ${formatLongStamp(photo.approvedAt)}`);
+  return lines;
+}
 
 /** Quem fez o quê e quando, numa linha, para a miniatura da foto. */
 export function photoStamp(photo: CoverPhoto) {
