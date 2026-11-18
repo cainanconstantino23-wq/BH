@@ -5,6 +5,7 @@ import { cleanEdited, collectionKind, logCoverActivity, saveEdited, touchCollect
 import { APPROVER_LABEL } from '@/lib/covers';
 import { checkCropUpload } from '@/lib/coverCrop';
 import { putR2Object } from '@/lib/r2';
+import { ensureApproverPhoto } from '@/lib/coverFolder-server';
 
 // Corte feito pela aprovadora no link público (/capa/[token]).
 // POST (multipart: fileId, file JPEG, width, height, label) envia o corte ao R2 e grava na foto.
@@ -15,7 +16,7 @@ const TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 const noStore = { 'Cache-Control': 'private, no-store' };
 type Params = { params: Promise<{ token: string }> };
 
-async function findPhoto(token: string, fileId: unknown) {
+async function findPhoto(token: string, fileId: unknown, fromFolder = false) {
   if (!TOKEN.test(token) || typeof fileId !== 'string' || !fileId) return null;
   const admin = createAdminClient();
   const { data: collection } = await admin
@@ -24,6 +25,8 @@ async function findPhoto(token: string, fileId: unknown) {
     .eq('share_token', token)
     .maybeSingle();
   if (!collection) return null;
+  // foto da pasta da casa no Drive que ainda não estava na pasta de capa: entra como capa posta pela aprovadora
+  if (fromFolder && !(await ensureApproverPhoto(admin, collection.id, fileId))) return null;
   const { data: photo } = await admin
     .from('cover_collection_photos')
     .select('drive_file_id, name')
@@ -53,7 +56,7 @@ async function finish(found: NonNullable<Awaited<ReturnType<typeof findPhoto>>>,
 export async function POST(request: NextRequest, { params }: Params) {
   const form = await request.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: 'invalid' }, { status: 400, headers: noStore });
-  const found = await findPhoto((await params).token, form.get('fileId'));
+  const found = await findPhoto((await params).token, form.get('fileId'), true);
   if (!found) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 
   const file = form.get('file');

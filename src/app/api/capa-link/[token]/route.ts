@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { coverFolderLabel } from '@/lib/house';
 import { PHOTO_COLUMNS, collectionKind, logCoverActivity, toPhoto } from '@/lib/covers-server';
 import { APPROVER_LABEL, type PublicCoverCollection } from '@/lib/covers';
+import { ensureApproverPhoto } from '@/lib/coverFolder-server';
 
 // Rota pública do link de capa: quem tem o link vê as favoritas e escolhe a capa (sem login).
 // Em "Encontrar mais fotos" a aprovadora vê as outras fotos da pasta (as do carrossel) e pode promover algumas a capa.
@@ -59,6 +60,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const admin = createAdminClient();
   const now = new Date().toISOString();
+  // fotos da pasta da casa no Drive que ela pôs nas capas: entram na pasta de capa (só se forem mesmo da casa)
+  const known = new Set((await allPhotos(collection.id)).map((photo) => photo.driveId));
+  const fromFolder: string[] = [];
+  for (const id of [...added].filter((id) => !known.has(id)).slice(0, 30)) {
+    const result = await ensureApproverPhoto(admin, collection.id, id);
+    if (result?.inserted) fromFolder.push(result.name);
+  }
   // só fotos desta pasta: as favoritas e as que ela mesma acrescentou às capas
   const photos = await allPhotos(collection.id);
   const promoted = photos.filter((photo) => !photo.favorite && added.has(photo.driveId));
@@ -96,13 +104,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const pasta = coverFolderLabel(collection.house_name, collection.neighborhood, collection.house_number) || 'Sem nome';
   const tipo = await collectionKind(admin, collection.id);
-  if (promoted.length) {
+  if (promoted.length || fromFolder.length) {
     await logCoverActivity(admin, {
       collectionId: collection.id,
       actorId: null,
       actorLabel: APPROVER_LABEL,
       action: 'capa.capas_adicionadas_aprovadora',
-      details: { pasta, tipo, fotos: promoted.map((photo) => photo.name) },
+      details: { pasta, tipo, fotos: [...fromFolder, ...promoted.map((photo) => photo.name)] },
     });
   }
   await logCoverActivity(admin, {

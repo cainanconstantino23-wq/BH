@@ -12,6 +12,22 @@ import { formatPlaceLabel } from '@/lib/instagramFormats';
 // Link para a aprovadora: mostra só as fotos favoritadas para capa; ela escolhe a(s) capa(s) e pode comentar.
 // Se não gostar, "Encontrar mais fotos" mostra as outras fotos da pasta (as do carrossel): ela mesma põe nas capas e aprova.
 
+const folderPhoto = (image: { driveId: string; name: string; width: number | null; height: number | null }): CoverPhoto => ({
+  ...image,
+  favorite: false,
+  approved: false,
+  edited: null,
+  addedBy: null,
+  addedAt: null,
+  favoritedBy: null,
+  favoritedAt: null,
+  favoritedByApprover: false,
+  approvedBy: null,
+  approvedAt: null,
+  editedBy: null,
+  editedAt: null,
+});
+
 type LoadState = { status: 'loading' } | { status: 'missing' } | { status: 'ready'; data: PublicCoverCollection };
 
 export default function CoverApprovalLinkPage() {
@@ -27,6 +43,8 @@ export default function CoverApprovalLinkPage() {
   // fotos do carrossel que ela mesma pôs nas capas (gravadas ao enviar)
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [moreOpen, setMoreOpen] = useState(false);
+  // pasta da casa no Drive (carregada ao abrir "Encontrar mais fotos")
+  const [folder, setFolder] = useState<{ status: 'idle' | 'loading' | 'error' } | { status: 'ready'; photos: CoverPhoto[] }>({ status: 'idle' });
   // corte: foto aberta no editor, envio em andamento e aviso
   const [cropping, setCropping] = useState<CoverPhoto | null>(null);
   const [cropBusy, setCropBusy] = useState<string | null>(null);
@@ -53,13 +71,33 @@ export default function CoverApprovalLinkPage() {
     `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=${size}`;
 
   // atualiza o corte de uma foto na tela (capas e "mais fotos")
-  const setEdited = (id: string, edited: EditedImage | null, editedAt: string | null) =>
+  const setEdited = (id: string, edited: EditedImage | null, editedAt: string | null) => {
     setState((current) => {
       if (current.status !== 'ready') return current;
       const update = (photo: CoverPhoto) =>
         photo.driveId === id ? { ...photo, edited, editedBy: edited ? APPROVER_LABEL : null, editedAt: edited ? editedAt : null } : photo;
       return { status: 'ready', data: { ...current.data, photos: current.data.photos.map(update), morePhotos: (current.data.morePhotos ?? []).map(update) } };
     });
+    setFolder((current) =>
+      current.status === 'ready'
+        ? { status: 'ready', photos: current.photos.map((photo) => (photo.driveId === id ? { ...photo, edited, editedBy: edited ? APPROVER_LABEL : null, editedAt: edited ? editedAt : null } : photo)) }
+        : current,
+    );
+  };
+
+  const openMore = async () => {
+    setMoreOpen(true);
+    if (folder.status === 'ready' || folder.status === 'loading') return;
+    setFolder({ status: 'loading' });
+    try {
+      const response = await fetch(`/api/capa-link/${encodeURIComponent(token)}/folder`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = (await response.json()) as { photos: { driveId: string; name: string; width: number | null; height: number | null }[] };
+      setFolder({ status: 'ready', photos: body.photos.map(folderPhoto) });
+    } catch {
+      setFolder({ status: 'error' });
+    }
+  };
 
   const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>) => {
     setCropping(null);
@@ -151,14 +189,17 @@ export default function CoverApprovalLinkPage() {
     }
   };
 
-  const morePhotos = state.status === 'ready' ? state.data.morePhotos ?? [] : [];
+  const carouselPhotos = state.status === 'ready' ? state.data.morePhotos ?? [] : [];
+  // "mais fotos" = as outras da pasta de capa + as da pasta da casa no Drive
+  const folderPhotos = folder.status === 'ready' ? folder.photos.filter((photo) => !carouselPhotos.some((other) => other.driveId === photo.driveId)) : [];
+  const morePhotos = [...carouselPhotos, ...folderPhotos];
   const capas = state.status === 'ready' ? [...state.data.photos, ...morePhotos.filter((photo) => added.has(photo.driveId))] : [];
-  const hasAny = capas.length > 0 || morePhotos.length > 0;
+  const hasAny = state.status === 'ready' && (state.data.photos.length > 0 || carouselPhotos.length > 0);
 
-  const moreButton = morePhotos.length > 0 && (
+  const moreButton = hasAny && (
     <button
       type="button"
-      onClick={() => setMoreOpen(true)}
+      onClick={() => void openMore()}
       className="inline-flex min-h-12 items-center gap-2 rounded-full border border-bh-linha bg-bh-papel px-6 text-base font-medium text-bh-tinta transition-colors hover:border-bh-mata hover:text-bh-mata focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
     >
       <Search size={18} aria-hidden="true" /> Encontrar mais fotos
@@ -192,8 +233,8 @@ export default function CoverApprovalLinkPage() {
               <p className="mt-3 text-base leading-relaxed text-bh-tinta-suave sm:text-[1.0625rem]">
                 {capas.length > 0
                   ? 'Toque nas fotos que podem ser capa do feed. As fotos aparecem no formato da grade do perfil.'
-                  : morePhotos.length > 0
-                    ? 'Ainda não há fotos marcadas para capa. Use “Encontrar mais fotos” para escolher entre as fotos do carrossel.'
+                  : carouselPhotos.length > 0
+                    ? 'Ainda não há fotos marcadas para capa. Use “Encontrar mais fotos” para escolher entre as fotos da casa.'
                     : 'Ainda não há fotos separadas para capa. A equipe avisa quando estiverem prontas.'}
               </p>
             </header>
@@ -278,7 +319,7 @@ export default function CoverApprovalLinkPage() {
               <section className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 {moreButton}
                 <p className="text-[0.95rem] text-bh-tinta-suave">
-                  Não gostou destas? Veja as outras {morePhotos.length} fotos do carrossel e escolha você mesma.
+                  Não gostou destas? Veja as outras fotos da casa e escolha você mesma.
                 </p>
               </section>
             )}
@@ -327,7 +368,7 @@ export default function CoverApprovalLinkPage() {
           <div className="border-b border-bh-linha bg-bh-papel/95 px-5 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] backdrop-blur sm:px-8">
             <div className="mx-auto flex max-w-5xl items-start justify-between gap-4">
               <div>
-                <h2 id="more-photos-title" className="text-[1.75rem] font-light leading-tight">Mais fotos do carrossel</h2>
+                <h2 id="more-photos-title" className="text-[1.75rem] font-light leading-tight">Mais fotos da casa</h2>
                 <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque nas fotos que você quer como capa. Elas entram na sua escolha.</p>
               </div>
               <button type="button" autoFocus onClick={() => setMoreOpen(false)} aria-label="Fechar" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-bh-linha/50">
@@ -336,6 +377,17 @@ export default function CoverApprovalLinkPage() {
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-8">
+            {folder.status === 'loading' && (
+              <p role="status" className="mx-auto mb-6 flex max-w-5xl items-center gap-2 text-[0.95rem] text-bh-tinta-suave">
+                <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> Abrindo a pasta da casa no Drive…
+              </p>
+            )}
+            {folder.status === 'error' && (
+              <p className="mx-auto mb-6 max-w-5xl text-[0.95rem] text-bh-madeira">Não foi possível abrir a pasta da casa agora. Feche e tente de novo.</p>
+            )}
+            {folder.status === 'ready' && morePhotos.length === 0 && (
+              <p className="mx-auto mb-6 max-w-5xl text-[0.95rem] text-bh-tinta-suave">Não há outras fotos na pasta desta casa.</p>
+            )}
             <ul className="mx-auto grid max-w-5xl grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:gap-x-6">
               {morePhotos.map((photo) => {
                 const isAdded = added.has(photo.driveId);

@@ -18,29 +18,53 @@ interface DriveFile {
   name: string;
   mimeType: string;
   modifiedTime?: string;
+  shortcutDetails?: { targetId: string; targetMimeType: string };
 }
 
-const FILE_FIELDS = 'id,name,mimeType,modifiedTime';
+const FILE_FIELDS = 'id,name,mimeType,modifiedTime,shortcutDetails';
 const ALL_DRIVES = { supportsAllDrives: 'true' };
+const SHORTCUT = 'application/vnd.google-apps.shortcut';
+// .xlsx enviado ao Drive às vezes fica como octet-stream ou ms-excel
+const SPREADSHEET_TYPES = [GOOGLE_SHEET, XLSX, 'application/vnd.ms-excel', 'application/octet-stream'];
+const wanted = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').includes(FILE_NAME.toLowerCase());
+
+async function getFile(id: string) {
+  const response = await driveFetch(`/files/${encodeURIComponent(id)}`, { fields: FILE_FIELDS, ...ALL_DRIVES });
+  return (await response.json()) as DriveFile;
+}
+
+/** Atalho ("Adicionar atalho ao Drive") aponta para o arquivo de verdade. */
+async function resolve(file: DriveFile): Promise<DriveFile> {
+  if (file.mimeType !== SHORTCUT || !file.shortcutDetails?.targetId) return file;
+  const target = await getFile(file.shortcutDetails.targetId);
+  return { ...target, name: file.name };
+}
 
 async function findFile(): Promise<DriveFile | null> {
   const fixed = process.env.POSTAGENS_SHEET_ID?.trim();
-  if (fixed && DRIVE_ID.test(fixed)) {
-    const response = await driveFetch(`/files/${encodeURIComponent(fixed)}`, { fields: FILE_FIELDS, ...ALL_DRIVES });
-    return (await response.json()) as DriveFile;
-  }
+  if (fixed && DRIVE_ID.test(fixed)) return resolve(await getFile(fixed));
+
+  // procura em Meu Drive, "Compartilhados comigo" e drives compartilhados; o filtro fino é feito aqui
   const response = await driveFetch('/files', {
-    q: `name contains '${FILE_NAME}' and trashed = false and (mimeType = '${GOOGLE_SHEET}' or mimeType = '${XLSX}')`,
+    q: "name contains 'POSTAGENS' and trashed = false",
     fields: `files(${FILE_FIELDS})`,
     orderBy: 'modifiedTime desc',
-    pageSize: '5',
+    pageSize: '50',
     corpora: 'allDrives',
     includeItemsFromAllDrives: 'true',
     ...ALL_DRIVES,
   });
   const { files = [] } = (await response.json()) as { files?: DriveFile[] };
+  const candidates = files.filter(
+    (file) => wanted(file.name) && (SPREADSHEET_TYPES.includes(file.mimeType) || (file.mimeType === SHORTCUT && SPREADSHEET_TYPES.includes(file.shortcutDetails?.targetMimeType ?? ''))),
+  );
+  if (candidates.length === 0) {
+    console.warn('Tabela de postagens: planilha não encontrada. Arquivos com "POSTAGENS" no nome:', files.map((file) => `${file.name} (${file.mimeType})`));
+    return null;
+  }
   // a Planilha Google ganha de uma cópia .xlsx com o mesmo nome
-  return files.find((file) => file.mimeType === GOOGLE_SHEET) ?? files[0] ?? null;
+  const best = candidates.find((file) => file.mimeType === GOOGLE_SHEET || file.shortcutDetails?.targetMimeType === GOOGLE_SHEET) ?? candidates[0];
+  return resolve(best);
 }
 
 async function download(file: DriveFile) {
