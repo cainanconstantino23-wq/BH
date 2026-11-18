@@ -453,7 +453,7 @@ export default function CoverApprovalLinkPage() {
             onIndex={setViewing}
             onClose={() => setViewing(null)}
             src={image}
-            originalSrc={(photo) => `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=2000`}
+            originalSrc={(photo) => `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=4000`}
             isFavorite={(photo) => added.has(photo.driveId)}
             onToggleFavorite={(photo) => toggleAdded(photo.driveId)}
             saving={cropBusy !== null}
@@ -469,7 +469,7 @@ export default function CoverApprovalLinkPage() {
       {cropping && (
         <OnScreen>
           <InstagramImageEditor
-            src={`/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(cropping.driveId)}?s=2000`}
+            src={`/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(cropping.driveId)}?s=4000`}
             fileName={cropping.name || 'capa'}
             contentType="CARROSSEL"
             initialFormatId="ig-carrossel-4x5"

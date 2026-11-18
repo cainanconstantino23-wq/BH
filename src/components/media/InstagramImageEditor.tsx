@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { maxZoom } from '@/lib/simpleCrop';
 import { AlertTriangle, FlipHorizontal, LoaderCircle, RotateCcw, RotateCw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   FORMATS_BY_CONTENT_TYPE,
@@ -188,7 +189,13 @@ export function InstagramImageEditor({
     return { width: Math.floor(width), height: Math.floor(width / ratio) };
   })();
 
-  const geometry = image ? computeGeometry(image, rotation, format, zoom, center) : null;
+  // zoom máximo sem perder qualidade: o recorte precisa ter pelo menos os pixels do arquivo final
+  const turned = rotation === 90 || rotation === 270;
+  const zoomLimit = image
+    ? Math.min(MAX_ZOOM, maxZoom(turned ? image.naturalHeight : image.naturalWidth, turned ? image.naturalWidth : image.naturalHeight, format.width, format.height))
+    : 1;
+  const shownZoom = Math.min(zoom, zoomLimit);
+  const geometry = image ? computeGeometry(image, rotation, format, shownZoom, center) : null;
 
   // Desenha a prévia com o mesmo código da exportação.
   useEffect(() => {
@@ -223,7 +230,7 @@ export function InstagramImageEditor({
   };
 
   const changeZoom = (next: number) => {
-    setZoom(Math.min(Math.max(next, 1), MAX_ZOOM));
+    setZoom(Math.min(Math.max(next, 1), zoomLimit));
     if (geometry) setCenter(geometry.center);
   };
 
@@ -243,7 +250,7 @@ export function InstagramImageEditor({
     setIsDragging(true);
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      pinchStart.current = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom };
+      pinchStart.current = { distance: Math.hypot(a.x - b.x, a.y - b.y), zoom: shownZoom };
     }
   };
 
@@ -280,10 +287,10 @@ export function InstagramImageEditor({
       panBy(...moves[event.key]);
     } else if (event.key === '+' || event.key === '=') {
       event.preventDefault();
-      changeZoom(zoom + 0.1);
+      changeZoom(shownZoom + 0.1);
     } else if (event.key === '-') {
       event.preventDefault();
-      changeZoom(zoom - 0.1);
+      changeZoom(shownZoom - 0.1);
     }
   };
 
@@ -384,7 +391,7 @@ export function InstagramImageEditor({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
-                onWheel={(event) => changeZoom(zoom * (event.deltaY < 0 ? 1.06 : 1 / 1.06))}
+                onWheel={(event) => changeZoom(shownZoom * (event.deltaY < 0 ? 1.06 : 1 / 1.06))}
                 onKeyDown={handleFrameKeyDown}
                 className={`relative z-10 touch-none select-none overflow-hidden bg-white shadow-[0_0_0_2px_rgb(255_255_255/0.9),0_8px_30px_rgb(0_0_0/0.35)] outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-plum ${
                   isDragging ? 'cursor-grabbing' : 'cursor-grab'
@@ -504,22 +511,27 @@ export function InstagramImageEditor({
 
             <div>
               <label htmlFor="image-editor-zoom" className="text-xs font-semibold text-ink">Aproximação</label>
+              {image && (
+                <p className="mt-0.5 text-[11px] text-ink-muted">
+                  {zoomLimit <= 1 ? 'Sem zoom: esta foto já está no limite de qualidade para este formato.' : `Até ${zoomLimit.toFixed(1).replace('.', ',')}× sem perder qualidade.`}
+                </p>
+              )}
               <div className="mt-2 flex items-center gap-2">
-                <button type="button" aria-label="Afastar" onClick={() => changeZoom(zoom - 0.25)} disabled={!image || zoom <= 1} className="flex min-h-9 min-w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-40">
+                <button type="button" aria-label="Afastar" onClick={() => changeZoom(shownZoom - 0.25)} disabled={!image || shownZoom <= 1} className="flex min-h-9 min-w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-40">
                   <ZoomOut size={16} />
                 </button>
                 <input
                   id="image-editor-zoom"
                   type="range"
                   min={1}
-                  max={MAX_ZOOM}
+                  max={zoomLimit}
                   step={0.01}
-                  value={zoom}
-                  disabled={!image}
+                  value={shownZoom}
+                  disabled={!image || zoomLimit <= 1}
                   onChange={(event) => changeZoom(Number(event.target.value))}
                   className="h-1.5 flex-1 cursor-pointer accent-brand-plum"
                 />
-                <button type="button" aria-label="Aproximar" onClick={() => changeZoom(zoom + 0.25)} disabled={!image || zoom >= MAX_ZOOM} className="flex min-h-9 min-w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-40">
+                <button type="button" aria-label="Aproximar" onClick={() => changeZoom(shownZoom + 0.25)} disabled={!image || shownZoom >= zoomLimit} className="flex min-h-9 min-w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-40">
                   <ZoomIn size={16} />
                 </button>
               </div>

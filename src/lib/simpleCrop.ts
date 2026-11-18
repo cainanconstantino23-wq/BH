@@ -26,3 +26,17 @@ export const sourceRect = (offset: Point, scale: number, frameW: number, frameH:
   sw: frameW / scale,
   sh: frameH / scale,
 });
+
+/** Largura da foto (px originais) que cabe na proporção da saída, sem zoom. */
+const usableWidth = (imageW: number, imageH: number, outW: number, outH: number) => Math.min(imageW, (imageH * outW) / outH);
+
+/**
+ * Zoom máximo sem perder qualidade: o pedaço da foto dentro da moldura precisa ter
+ * pelo menos os pixels da imagem final (ex.: 1080 de largura). Nunca menos que 1.
+ */
+export const maxZoom = (imageW: number, imageH: number, outW: number, outH: number) =>
+  Math.max(1, usableWidth(imageW, imageH, outW, outH) / outW);
+
+/** A foto já é menor que a imagem final, mesmo sem zoom. */
+export const lowResolution = (imageW: number, imageH: number, outW: number, outH: number) =>
+  usableWidth(imageW, imageH, outW, outH) < outW;

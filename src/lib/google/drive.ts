@@ -164,4 +164,5 @@ export async function driveThumbnail(fileId: string, size: number, cacheControl 
   });
 }
 
-export const clampThumbSize = (value: string | null) => Math.min(Math.max(Number(value) || 400, 100), 2000);
+// até 4000: o corte usa a foto grande para não perder qualidade no zoom
+export const clampThumbSize = (value: string | null) => Math.min(Math.max(Number(value) || 400, 100), 4000);

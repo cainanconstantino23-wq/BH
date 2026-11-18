@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CROP_RATIOS, clampOffset, coverScale, sourceRect } from './simpleCrop.ts';
+import { CROP_RATIOS, clampOffset, coverScale, lowResolution, maxZoom, sourceRect } from './simpleCrop.ts';
 
 test('CROP_RATIOS tem só os do carrossel do Instagram', () => {
   assert.deepEqual(CROP_RATIOS.map((r) => [r.id, r.width, r.height]), [['4x5', 1080, 1350], ['1x1', 1080, 1080]]);
@@ -21,4 +21,17 @@ test('clampOffset não deixa borda vazia', () => {
 
 test('sourceRect converte a moldura para pixels da foto', () => {
   assert.deepEqual(sourceRect({ x: -100, y: 0 }, 0.25, 400, 500), { sx: 400, sy: 0, sw: 1600, sh: 2000 });
+});
+
+test('maxZoom: até onde o corte ainda tem pixels de sobra para a saída', () => {
+  // foto 3200x2135 → corte 4:5 de 1080x1350: altura manda (2135*0.8 = 1708 de largura útil)
+  assert.equal(Math.round(maxZoom(3200, 2135, 1080, 1350) * 100) / 100, 1.58);
+  // foto 6000x4000 em quadrado 1080: 4000/1080
+  assert.equal(Math.round(maxZoom(6000, 4000, 1080, 1080) * 100) / 100, 3.7);
+});
+
+test('maxZoom nunca fica abaixo de 1 e lowResolution avisa foto pequena', () => {
+  assert.equal(maxZoom(1000, 800, 1080, 1350), 1);
+  assert.equal(lowResolution(1000, 800, 1080, 1350), true);
+  assert.equal(lowResolution(3200, 2135, 1080, 1350), false);
 });

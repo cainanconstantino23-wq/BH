@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Check, ChevronLeft, ChevronRight, Crop, LoaderCircle, Star, X } from 'lucide-react';
 import type { CoverPhoto } from '@/lib/covers';
-import { CROP_RATIOS, clampOffset, coverScale, sourceRect, type CropRatio, type Point } from '@/lib/simpleCrop';
+import { CROP_RATIOS, clampOffset, coverScale, lowResolution, maxZoom, sourceRect, type CropRatio, type Point } from '@/lib/simpleCrop';
 
 // Tela grande do link da aprovadora: setas para passar as fotos da casa, Favoritar e um corte simples
 // (só 4:5 ou 1:1 do carrossel, arrastar e zoom). Sem as opções do editor da equipe.
@@ -152,7 +152,11 @@ function SimpleCropper({
     return () => observer.disconnect();
   }, [ratio]);
 
-  const scale = image && frame.w ? coverScale(image.naturalWidth, image.naturalHeight, frame.w, frame.h, zoom) : 0;
+  // zoom só até onde o corte ainda tem os pixels da imagem final (sem perder qualidade)
+  const zoomLimit = image ? maxZoom(image.naturalWidth, image.naturalHeight, ratio.width, ratio.height) : 1;
+  const small = image ? lowResolution(image.naturalWidth, image.naturalHeight, ratio.width, ratio.height) : false;
+  const shownZoom = Math.min(zoom, zoomLimit);
+  const scale = image && frame.w ? coverScale(image.naturalWidth, image.naturalHeight, frame.w, frame.h, shownZoom) : 0;
   const shownW = image ? image.naturalWidth * scale : 0;
   const shownH = image ? image.naturalHeight * scale : 0;
   // sem posição escolhida: centralizada
@@ -170,7 +174,8 @@ function SimpleCropper({
     drag.current = null;
   };
 
-  const changeZoom = (value: number) => {
+  const changeZoom = (wanted: number) => {
+    const value = Math.min(Math.max(wanted, 1), zoomLimit);
     // mantém o centro da moldura no mesmo ponto da foto
     if (!image || !scale) return setZoom(value);
     const center = { x: (frame.w / 2 - position.x) / scale, y: (frame.h / 2 - position.y) / scale };
@@ -246,19 +251,24 @@ function SimpleCropper({
         )}
       </div>
       <p className="px-4 pt-2 text-center text-[0.875rem] text-white/60">Arraste a foto para posicionar o corte.</p>
+      {small ? (
+        <p className="px-4 pt-3 text-center text-[0.875rem] text-white/70">Esta foto não tem resolução para zoom neste formato.</p>
+      ) : (
       <div className="mx-auto flex w-full max-w-md items-center gap-3 px-4 pt-3">
         <span className="text-[0.875rem] text-white/70">Zoom</span>
         <input
           type="range"
           min={1}
-          max={3}
+          max={zoomLimit}
           step={0.01}
-          value={zoom}
+          value={shownZoom}
+          disabled={!image || zoomLimit <= 1}
           onChange={(event) => changeZoom(Number(event.target.value))}
           aria-label="Zoom"
-          className="flex-1 accent-white"
+          className="flex-1 accent-white disabled:opacity-40"
         />
       </div>
+      )}
       <div className="flex items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
         <button type="button" onClick={onCancel} disabled={saving} className="inline-flex min-h-12 items-center rounded-full border border-white/40 px-6 text-base font-medium text-white hover:bg-white/10 disabled:opacity-50">
           Cancelar
