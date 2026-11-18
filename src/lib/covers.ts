@@ -36,6 +36,12 @@ export const formatStamp = (iso: string | null) =>
     ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '')
     : '';
 
+/** Data e hora completas: "18/11/2026 às 14:32". */
+export const formatLongStamp = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ' às')
+    : '';
+
 /** Quem fez o quê e quando, numa linha, para a miniatura da foto. */
 export function photoStamp(photo: CoverPhoto) {
   if (photo.approved) return `Aprovada por ${shortName(photo.approvedBy)}${photo.approvedAt ? ` · ${formatStamp(photo.approvedAt)}` : ''}`;

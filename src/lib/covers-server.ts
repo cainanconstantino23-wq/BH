@@ -151,3 +151,15 @@ export async function collectionKind(admin: SupabaseClient, id: number): Promise
   if (error) throw new Error(error.message);
   return data ? parseKind(data.kind) : null;
 }
+
+/**
+ * Grava (ou desfaz, com edited null) o corte de uma foto com quem cortou e quando.
+ * Sem a migração 20261118_capa_thereza.sql, grava só o corte.
+ */
+export async function saveEdited(admin: SupabaseClient, collectionId: number, driveId: string, edited: NonNullable<ReturnType<typeof cleanEdited>>, by: string) {
+  const stamp = edited.edited_url ? { edited_by: by, edited_at: new Date().toISOString() } : { edited_by: null, edited_at: null };
+  const update = (values: Record<string, unknown>) =>
+    admin.from('cover_collection_photos').update(values).eq('collection_id', collectionId).eq('drive_file_id', driveId);
+  const result = await update({ ...edited, ...stamp });
+  return isMissingColumn(result.error) ? update(edited) : result;
+}

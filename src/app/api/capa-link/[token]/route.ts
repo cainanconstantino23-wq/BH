@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   };
   for (const photo of await allPhotos(collection.id)) {
     // o link é público: não expõe os nomes da equipe, só se foi a aprovadora que pôs nas capas
-    const shown = { ...photo, addedBy: null, favoritedBy: null, approvedBy: null };
+    const shown = { ...photo, addedBy: null, favoritedBy: null, approvedBy: null, editedBy: photo.editedBy === APPROVER_LABEL ? APPROVER_LABEL : null };
     (photo.favorite ? body.photos : body.morePhotos).push(shown);
   }
   return NextResponse.json(body, { headers: noStore });

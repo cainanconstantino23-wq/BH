@@ -3,8 +3,11 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Check, Expand, LoaderCircle, Plus, Search, X } from 'lucide-react';
-import { APPROVER_NAME, type CoverPhoto, type PublicCoverCollection } from '@/lib/covers';
+import { Check, Crop, Expand, LoaderCircle, Plus, Search, Undo2, X } from 'lucide-react';
+import { APPROVER_LABEL, APPROVER_NAME, formatLongStamp, type CoverPhoto, type EditedImage, type PublicCoverCollection } from '@/lib/covers';
+import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
+import { OnScreen } from '@/components/drive/OnScreen';
+import { formatPlaceLabel } from '@/lib/instagramFormats';
 
 // Link para a aprovadora: mostra só as fotos favoritadas para capa; ela escolhe a(s) capa(s) e pode comentar.
 // Se não gostar, "Encontrar mais fotos" mostra as outras fotos da pasta (as do carrossel): ela mesma põe nas capas e aprova.
@@ -24,6 +27,10 @@ export default function CoverApprovalLinkPage() {
   // fotos do carrossel que ela mesma pôs nas capas (gravadas ao enviar)
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [moreOpen, setMoreOpen] = useState(false);
+  // corte: foto aberta no editor, envio em andamento e aviso
+  const [cropping, setCropping] = useState<CoverPhoto | null>(null);
+  const [cropBusy, setCropBusy] = useState<string | null>(null);
+  const [cropError, setCropError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,6 +51,55 @@ export default function CoverApprovalLinkPage() {
   const image = (photo: CoverPhoto, size: number) =>
     photo.edited?.url ??
     `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=${size}`;
+
+  // atualiza o corte de uma foto na tela (capas e "mais fotos")
+  const setEdited = (id: string, edited: EditedImage | null, editedAt: string | null) =>
+    setState((current) => {
+      if (current.status !== 'ready') return current;
+      const update = (photo: CoverPhoto) =>
+        photo.driveId === id ? { ...photo, edited, editedBy: edited ? APPROVER_LABEL : null, editedAt: edited ? editedAt : null } : photo;
+      return { status: 'ready', data: { ...current.data, photos: current.data.photos.map(update), morePhotos: current.data.morePhotos.map(update) } };
+    });
+
+  const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>) => {
+    setCropping(null);
+    setCropBusy(photo.driveId);
+    setCropError('');
+    try {
+      const form = new FormData();
+      form.set('fileId', photo.driveId);
+      form.set('file', file);
+      form.set('width', String(edited.width));
+      form.set('height', String(edited.height));
+      form.set('label', edited.label);
+      const response = await fetch(`/api/capa-link/${encodeURIComponent(token)}/crop`, { method: 'POST', body: form });
+      if (!response.ok) throw new Error(String(response.status));
+      const body = (await response.json()) as { edited: EditedImage; editedAt: string };
+      setEdited(photo.driveId, body.edited, body.editedAt);
+    } catch {
+      setCropError('Não foi possível salvar o corte. Tente de novo.');
+    } finally {
+      setCropBusy(null);
+    }
+  };
+
+  const undoCrop = async (photo: CoverPhoto) => {
+    setCropBusy(photo.driveId);
+    setCropError('');
+    try {
+      const response = await fetch(`/api/capa-link/${encodeURIComponent(token)}/crop`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: photo.driveId }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      setEdited(photo.driveId, null, null);
+    } catch {
+      setCropError('Não foi possível voltar à foto original. Tente de novo.');
+    } finally {
+      setCropBusy(null);
+    }
+  };
 
   const toggle = (id: string) => {
     setSent(false);
@@ -181,11 +237,42 @@ export default function CoverApprovalLinkPage() {
                       >
                         <Expand size={16} aria-hidden="true" />
                       </button>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.875rem]">
+                        {cropBusy === photo.driveId ? (
+                          <span className="inline-flex min-h-9 items-center gap-1.5 text-bh-tinta-suave">
+                            <LoaderCircle size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> Salvando…
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setCropping(photo)}
+                              className="inline-flex min-h-9 items-center gap-1.5 font-medium text-bh-mata hover:underline"
+                            >
+                              <Crop size={15} aria-hidden="true" /> {photo.edited ? 'Cortar de novo' : 'Cortar'}
+                            </button>
+                            {photo.edited && photo.editedBy === APPROVER_LABEL && (
+                              <button
+                                type="button"
+                                onClick={() => void undoCrop(photo)}
+                                className="inline-flex min-h-9 items-center gap-1.5 text-bh-tinta-suave hover:text-bh-tinta"
+                              >
+                                <Undo2 size={15} aria-hidden="true" /> Original
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {photo.edited && photo.editedBy === APPROVER_LABEL && photo.editedAt && (
+                        <p className="text-[0.8125rem] text-bh-tinta-suave">Cortada por você em {formatLongStamp(photo.editedAt)}</p>
+                      )}
                     </li>
                   );
                 })}
               </ul>
             )}
+
+            {cropError && <p role="alert" className="mt-4 text-[0.95rem] text-bh-madeira">{cropError}</p>}
 
             {moreButton && (
               <section className="mt-10 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -301,6 +388,24 @@ export default function CoverApprovalLinkPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {cropping && (
+        <OnScreen>
+          <InstagramImageEditor
+            src={`/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(cropping.driveId)}?s=2000`}
+            fileName={cropping.name || 'capa'}
+            contentType="CARROSSEL"
+            initialFormatId="ig-carrossel-4x5"
+            title="Cortar para a capa do carrossel"
+            applyLabel="Salvar corte"
+            cancelLabel="Cancelar"
+            onCancel={() => setCropping(null)}
+            onApply={({ file, format }) =>
+              void saveCrop(cropping, file, { width: format.width, height: format.height, label: `${formatPlaceLabel(format)} ${format.ratioLabel}` })
+            }
+          />
+        </OnScreen>
       )}
 
       {zoom && (

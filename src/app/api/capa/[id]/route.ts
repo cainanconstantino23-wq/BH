@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
-import { cleanEdited, collectionKind, collectionName, loadCollection, logCoverActivity, touchCollection } from '@/lib/covers-server';
+import { cleanEdited, collectionKind, collectionName, loadCollection, logCoverActivity, saveEdited, touchCollection } from '@/lib/covers-server';
 import { parsePlanned } from '@/lib/covers';
 
 // Uma pasta de capa: ver, editar (nome, estrela, remover foto) e apagar.
@@ -60,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { error } = body.remove
       ? await target.delete().eq('collection_id', id).eq('drive_file_id', body.photo)
       : edited
-        ? await target.update(edited).eq('collection_id', id).eq('drive_file_id', body.photo)
+        ? await saveEdited(admin, id, body.photo, edited, member.label)
         : await target
             .update(
               favorite
