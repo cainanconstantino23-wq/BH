@@ -91,6 +91,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .update({ client_feedback: feedback, responded_at: now, updated_at: now })
     .eq('id', collection.id);
   if (promote.error || reset.error || mark.error || save.error) return NextResponse.json({ error: 'save_failed' }, { status: 500, headers: noStore });
+  // nova resposta: a equipe precisa confirmar de novo (sem a migração 20261118 a coluna não existe e isso é ignorado)
+  await admin.from('cover_collections').update({ confirmed_by: null, confirmed_at: null }).eq('id', collection.id);
 
   const pasta = coverFolderLabel(collection.house_name, collection.neighborhood, collection.house_number) || 'Sem nome';
   const tipo = await collectionKind(admin, collection.id);

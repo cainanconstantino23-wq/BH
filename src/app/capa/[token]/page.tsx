@@ -58,7 +58,7 @@ export default function CoverApprovalLinkPage() {
       if (current.status !== 'ready') return current;
       const update = (photo: CoverPhoto) =>
         photo.driveId === id ? { ...photo, edited, editedBy: edited ? APPROVER_LABEL : null, editedAt: edited ? editedAt : null } : photo;
-      return { status: 'ready', data: { ...current.data, photos: current.data.photos.map(update), morePhotos: current.data.morePhotos.map(update) } };
+      return { status: 'ready', data: { ...current.data, photos: current.data.photos.map(update), morePhotos: (current.data.morePhotos ?? []).map(update) } };
     });
 
   const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>) => {
