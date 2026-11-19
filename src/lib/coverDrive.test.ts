@@ -45,3 +45,17 @@ test('approvalRecord registra quando cada capa foi aprovada e cortada', () => {
   assert.match(text, /2\. IMG_11 - corte Thereza\.jpg[\s\S]*Cortada por Thereza em 18\/11\/2026 às 14:30 \(Instagram · Feed 4:5\)/);
   assert.doesNotMatch(text, /fora\.jpg/);
 });
+
+test('cortes da grade: nome da pasta, capa marcada no nome e registro', async () => {
+  const { cropsFolderName, cropFileName, cropsRecord } = await import('./coverDrive.ts');
+  assert.equal(cropsFolderName('2026-11-19T17:32:00Z'), 'Cortes das capas aprovados por Thereza em 19-11-2026 14h32');
+  const cut: CoverPhoto = { ...photo, name: 'IMG_20.jpg', edited: { url: 'https://r2/uploads/z.jpg', width: 1080, height: 1350, label: 'Carrossel 4:5' }, editedBy: APPROVER_LABEL, editedAt: '2026-11-19T17:00:00Z' };
+  assert.equal(cropFileName(cut), 'IMG_20 - corte Thereza (capa aprovada).jpg');
+  assert.equal(cropFileName({ ...cut, approved: false }), 'IMG_20 - corte Thereza.jpg');
+  const text = cropsRecord([cut, { ...photo, approved: false, name: 'sem-corte.jpg' }], 'Casa 06 · Mussurunga', '20/11 a 04/12', '2026-11-21', '2026-11-19T17:32:00Z');
+  assert.match(text, /Grade do feed de 20\/11 a 04\/12 aprovada por Thereza em 19\/11\/2026 às 14:32/);
+  assert.match(text, /Dia do post na grade: 21\/11\/2026/);
+  assert.match(text, /Capa aprovada: IMG_20\.jpg \(cortada\)/);
+  assert.match(text, /1 corte:/);
+  assert.doesNotMatch(text, /sem-corte\.jpg/);
+});

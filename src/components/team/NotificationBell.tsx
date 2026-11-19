@@ -9,7 +9,7 @@ import { describeActivity, type ActivityRow } from '@/components/team/TeamPanel'
 // Ações que geram notificação para quem acompanha o histórico.
 const NOTIFY_ACTIONS = [
   'post.criado', 'post.aprovado', 'post.ajustes_solicitados', 'post.reprovado', 'equipe.cadastro',
-  'capa.respondido', 'capa.capas_adicionadas_aprovadora',
+  'capa.respondido', 'capa.capas_adicionadas_aprovadora', 'grade.aprovada', 'grade.casa_recusada', 'grade.cortes_salvos', 'grade.cortes_drive_falhou',
 ];
 
 function relative(iso: string) {
@@ -22,7 +22,7 @@ function relative(iso: string) {
   return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
 }
 
-export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'approval' | 'equipe' | 'historico' | 'capa' | 'fotos') => void }) {
+export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'approval' | 'equipe' | 'historico' | 'capa' | 'fotos' | 'grade') => void }) {
   const me = useTeam();
   const enabled = me.can('ver_historico');
   const [items, setItems] = useState<ActivityRow[]>([]);
@@ -166,6 +166,7 @@ export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'app
                         onOpenTarget(
                           row.entity_type === 'equipe' ? 'equipe'
                             : row.entity_type === 'capa' ? (row.details?.tipo === 'fotos' ? 'fotos' : 'capa')
+                            : row.entity_type === 'grade' ? 'grade'
                             : 'approval',
                         );
                       }}

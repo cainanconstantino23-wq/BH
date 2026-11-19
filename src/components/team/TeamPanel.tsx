@@ -525,7 +525,7 @@ export interface ActivityRow {
   details: Record<string, unknown>;
 }
 
-type HistoryFilter = 'all' | 'post' | 'capa' | 'equipe';
+type HistoryFilter = 'all' | 'post' | 'capa' | 'grade' | 'equipe';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'pendente',
@@ -677,6 +677,54 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
     }
     case 'capa.post_criado':
       return { icon: FilePlus2, tone: 'text-ink-muted', text: `${who} criou o post a partir de ${folderOf(d)}, já aprovado` };
+    case 'capa.aprovada_na_grade': {
+      const [, m, dd] = str(d.data).split('-');
+      return { icon: CheckCircle2, tone: 'text-status-success', text: `${who} aprovou “${str(d.foto)}” como capa de ${folderOf(d)} na grade${dd && m ? `, para ${dd}/${m}` : ''}` };
+    }
+    case 'grade.casa_recusada': {
+      const [, m, dd] = str(d.dia).split('-');
+      return {
+        icon: MessageSquareWarning,
+        tone: 'text-status-warning',
+        text: `${who} tirou ${str(d.casa) || 'uma casa'} da grade de ${str(d.periodo)}${dd && m ? ` (dia ${dd}/${m} ficou livre)` : ''} e pediu outra casa`,
+        note: str(d.motivo) ? `Motivo: ${str(d.motivo)}` : undefined,
+      };
+    }
+    case 'capa.recusada_na_grade':
+      return { icon: MessageSquareWarning, tone: 'text-status-warning', text: `${who} recusou ${folderOf(d)} na grade de ${str(d.periodo)}`, note: str(d.motivo) ? `Motivo: ${str(d.motivo)}` : undefined };
+    case 'capa.cortes_salvos_no_drive':
+      return { icon: FolderPlus, tone: 'text-status-success', text: `Cortes das capas de ${folderOf(d)} salvos no Google Drive`, note: [str(d.pasta_drive) && `Pasta: ${str(d.pasta_drive)}`, nameList(d.falharam) && `Não salvos: ${nameList(d.falharam)}`].filter(Boolean).join('. ') || undefined };
+    case 'grade.cortes_salvos':
+      return {
+        icon: FolderPlus,
+        tone: 'text-status-success',
+        text: `Cortes das capas da grade de ${str(d.periodo)} salvos no Google Drive (${names(d.casas).length} ${names(d.casas).length === 1 ? 'casa' : 'casas'})`,
+        note: [nameList(d.casas), names(d.sem_corte).length ? `Sem corte: ${nameList(d.sem_corte)}` : ''].filter(Boolean).join('. ') || undefined,
+      };
+    case 'grade.cortes_drive_falhou':
+      return {
+        icon: MessageSquareWarning,
+        tone: 'text-status-danger',
+        text: str(d.motivo) === 'drive_sem_permissao'
+          ? `Os cortes da grade de ${str(d.periodo)} não foram salvos no Drive: reconecte o Google Drive (permissão para criar)`
+          : `Alguns cortes da grade de ${str(d.periodo)} não foram salvos no Drive`,
+        note: [names(d.falhas).length ? `Falharam: ${nameList(d.falhas)}` : '', names(d.casas).length ? `Salvas: ${nameList(d.casas)}` : ''].filter(Boolean).join('. ') || undefined,
+      };
+    case 'grade.criada':
+      return { icon: CalendarDays, tone: 'text-ink-muted', text: `${who} montou a grade de ${str(d.periodo)} com ${Number(d.casas) || 0} casas` };
+    case 'grade.link_gerado':
+      return { icon: Link2, tone: 'text-status-info', text: `${who} gerou o link da grade de ${str(d.periodo)}` };
+    case 'grade.link_renovado':
+      return { icon: Link2, tone: 'text-status-info', text: `${who} trocou o link da grade de ${str(d.periodo)} (o anterior parou de funcionar)` };
+    case 'grade.apagada':
+      return { icon: Trash2, tone: 'text-status-danger', text: `${who} apagou a grade de ${str(d.periodo)}` };
+    case 'grade.aprovada':
+      return {
+        icon: CheckCircle2,
+        tone: 'text-status-success',
+        text: `${who} aprovou a grade de ${str(d.periodo)}`,
+        note: [names(d.casas).join(' · '), str(d.comentario) && `Comentário: ${str(d.comentario)}`].filter(Boolean).join('. ') || undefined,
+      };
     case 'equipe.removido':
       return { icon: UserX, tone: 'text-status-danger', text: `${who} removeu ${str(d.pessoa)} da equipe` };
     default:
@@ -759,6 +807,7 @@ export function HistoryPanel() {
                   ['all', 'Tudo'],
                   ['post', 'Publicações'],
                   ['capa', 'Fotos e capas'],
+                  ['grade', 'Grade'],
                   ['equipe', 'Equipe'],
                 ] as const
               ).map(([value, label]) => (

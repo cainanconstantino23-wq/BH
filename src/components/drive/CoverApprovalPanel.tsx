@@ -3,15 +3,18 @@
 import { OnScreen } from '@/components/drive/OnScreen';
 import { PublishStatusTag } from '@/components/PublishStatusTag';
 import { PublishResultDialog, cancelScheduledPublish, publishToInstagram, type PublishResult } from '@/components/PublishResultDialog';
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Clock3, Copy, FolderOpen, FolderPlus, Link2, Loader2, RefreshCw, Trash2, Unplug, XCircle } from 'lucide-react';
-import { APPROVER_NAME, approverLines, formatLongStamp, formatStamp, photoLimit, photoStamp, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type CoverPhoto, type CollectionPostInfo } from '@/lib/covers';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { BellRing, CalendarPlus, Check, Crop, ChevronLeft, ChevronRight, Clock3, Copy, FolderOpen, FolderPlus, Link2, Maximize2, Loader2, RefreshCw, Trash2, Unplug, X, XCircle } from 'lucide-react';
+import { APPROVER_LABEL, APPROVER_NAME, approverLines, formatLongStamp, formatStamp, photoLimit, photoStamp, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type CoverPhoto, type CollectionPostInfo } from '@/lib/covers';
 import { describeActivity } from '@/components/team/TeamPanel';
-import { SAVED_TO_DRIVE_ACTION } from '@/lib/coverDrive';
+import { CROPS_SAVED_ACTION, SAVED_TO_DRIVE_ACTION } from '@/lib/coverDrive';
 import { coverFolderLabel, houseLabel } from '@/lib/house';
 import { useTeam } from '@/lib/team';
 import { DriveBrowser, PhotoTile, driveThumb } from '@/components/drive/DriveBrowser';
 import { DrivePhotoViewer } from '@/components/drive/DrivePhotoViewer';
+import { ApprovedPhotoLightbox } from '@/components/drive/ApprovedPhotoLightbox';
+import type { CropSize } from '@/components/capa/ApproverPhotoViewer';
+import { uploadImage } from '@/lib/uploadImage';
 import CreatePostModal, { type ApprovedPostInput, type SavedPostInfo } from '@/components/CreatePostModal';
 import { supabase } from '@/lib/supabase';
 
@@ -881,6 +884,11 @@ function FolderDetail({
 
       {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
 
+      {/* Passos 1, 2 e 3: depois que a Thereza responde, ficam juntos e fechados num só lugar (a resposta está no botão acima) */}
+      <StepsGroup
+        collapsed={mode === 'capa' && collection.responded}
+        summary={`${collection.photos.length} ${collection.photos.length === 1 ? 'foto enviada' : 'fotos enviadas'} · link · ${approved.length} ${approved.length === 1 ? 'aprovada' : 'aprovadas'}`}
+      >
       {/* 1. Todas as fotos escolhidas no Drive */}
       <section aria-labelledby="cover-all" className="space-y-3">
         <SectionTitle
@@ -1013,6 +1021,7 @@ function FolderDetail({
           <blockquote className="max-w-2xl border-l-2 border-status-success pl-3 text-sm leading-relaxed text-ink">&ldquo;{collection.feedback}&rdquo;</blockquote>
         )}
       </section>
+      </StepsGroup>
 
       {/* 4. Registro: quem fez o quê e quando, para conferência */}
       <section aria-labelledby="cover-history" className="space-y-3 border-t border-border pt-6">
@@ -1138,6 +1147,25 @@ function SectionTitle({ id, step, title, hint }: { id: string; step: number; tit
   );
 }
 
+/** Passos 1, 2 e 3 da pasta. collapsed = a aprovação já voltou: tudo fica num bloco fechado, que abre ao clicar. */
+function StepsGroup({ collapsed, summary, children }: { collapsed: boolean; summary: string; children: ReactNode }) {
+  if (!collapsed) return <>{children}</>;
+  return (
+    <details className="group rounded-panel border border-border bg-surface">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-panel px-4 py-3 hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={18} className="shrink-0 text-ink-muted transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-ink">Preparação e envio (passos 1, 2 e 3)</span>
+          <span className="block text-xs text-ink-muted">{summary}</span>
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-ink-muted group-open:hidden">Mostrar</span>
+        <span className="hidden shrink-0 text-xs font-semibold text-ink-muted group-open:inline">Esconder</span>
+      </summary>
+      <div className="space-y-6 border-t border-border px-4 pb-5 pt-5">{children}</div>
+    </details>
+  );
+}
+
 const SAVE_ERRORS: Record<string, string> = {
   drive_write_missing: 'O Google Drive está conectado só para leitura. Um administrador precisa reconectar o Drive (Desconectar → Conectar) para permitir salvar.',
   drive_not_connected: 'O acesso ao Google Drive expirou. Reconecte o Drive e tente de novo.',
@@ -1159,10 +1187,69 @@ function ApproverAnswer({
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-  const touched = collection.photos.filter((photo) => approverLines(photo).length > 0);
+  // foto aberta em tela grande (índice em `touched`), para ver antes de salvar no Drive
+  const [viewing, setViewing] = useState<number | null>(null);
+  // a resposta abre numa janela por cima da pasta (a página da casa já tem os passos 1, 2, 3)
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && viewing === null) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [open, viewing]);
+  // linhas da resposta + corte refeito pela equipe (a foto continua na lista mesmo depois de recortada)
+  const answerLines = (photo: CoverPhoto) => [
+    ...approverLines(photo),
+    ...(photo.edited && photo.editedBy && photo.editedBy !== APPROVER_LABEL && photo.editedAt
+      ? [`Corte ajustado por ${photo.editedBy} em ${formatLongStamp(photo.editedAt)}`]
+      : []),
+  ];
+  const touched = collection.photos.filter((photo) => photo.approved || approverLines(photo).length > 0);
+  const [cropSaving, setCropSaving] = useState(false);
+  const [cropError, setCropError] = useState<string | null>(null);
+  const patchPhoto = async (body: Record<string, unknown>) => {
+    const response = await fetch(`/api/capa/${collection.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const data = response ? await response.json().catch(() => ({})) : {};
+    if (response?.ok && data.collection) {
+      onChange(data.collection);
+      return true;
+    }
+    return false;
+  };
+  const saveCrop = async (photo: CoverPhoto, file: File, size: CropSize) => {
+    setCropSaving(true);
+    setCropError(null);
+    try {
+      const url = await uploadImage(file);
+      const ok = await patchPhoto({ photo: photo.driveId, edited: { url, width: size.width, height: size.height, label: size.label } });
+      if (!ok) setCropError('Não foi possível salvar o corte. Tente de novo.');
+      return ok;
+    } catch (error) {
+      console.error('Falha ao salvar o corte:', error);
+      setCropError('Não foi possível salvar o corte. Tente de novo.');
+      return false;
+    } finally {
+      setCropSaving(false);
+    }
+  };
+  const undoCrop = async (photo: CoverPhoto) => {
+    setCropSaving(true);
+    if (!(await patchPhoto({ photo: photo.driveId, edited: null }))) setCropError('Não foi possível voltar para a original.');
+    setCropSaving(false);
+  };
   const chosen = collection.photos.filter((photo) => photo.approved);
   // cada vez que salvou no Drive (registro da pasta), do mais recente para o mais antigo
-  const savedToDrive = collection.history.filter((entry) => entry.action === SAVED_TO_DRIVE_ACTION);
+  const savedToDrive = collection.history.filter((entry) => entry.action === SAVED_TO_DRIVE_ACTION || entry.action === CROPS_SAVED_ACTION);
+  // destaque "Nova" até as capas aprovadas irem para o Drive
+  const isNew = savedToDrive.length === 0;
 
   const saveToDrive = async () => {
     setSaving(true);
@@ -1183,15 +1270,66 @@ function ApproverAnswer({
     }
   };
   return (
-    <section aria-labelledby="approver-answer" className="space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+    <>
+      {/* Botão de destaque na pasta: abre a resposta com as fotos aprovadas e as ações */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        className={`group flex w-full items-center gap-3 rounded-panel border-2 p-3 text-left shadow-md transition hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:p-4 ${
+          isNew ? 'border-amber-400 bg-status-warning-soft' : 'border-status-success-border bg-status-success-soft'
+        }`}
+      >
+        <span className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${isNew ? 'bg-amber-400' : 'bg-status-success'}`}>
+          {isNew ? <BellRing size={20} aria-hidden="true" /> : <Check size={20} strokeWidth={2.5} aria-hidden="true" />}
+          {isNew && <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-ping rounded-full bg-amber-500 motion-reduce:animate-none" aria-hidden="true" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2 text-base font-semibold text-ink">
+            {isNew ? `A ${APPROVER_NAME} respondeu` : `Resposta da ${APPROVER_NAME}`}
+            {isNew && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Nova</span>}
+          </span>
+          <span className="mt-0.5 block text-sm text-ink-muted">
+            {chosen.length > 0 ? `${chosen.length} ${chosen.length === 1 ? 'capa aprovada' : 'capas aprovadas'}` : 'Nenhuma capa escolhida'} · {formatLongStamp(collection.respondedAt)}
+            {savedToDrive.length > 0 ? ' · já salva no Drive' : ''}
+          </span>
+        </span>
+        {/* miniaturas das aprovadas */}
+        <span className="hidden shrink-0 -space-x-3 sm:flex" aria-hidden="true">
+          {chosen.slice(0, 4).map((photo) => (
+            // eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor
+            <img key={photo.driveId} src={photoSrc(photo, 200)} alt="" className="h-12 w-10 rounded-control object-cover ring-2 ring-surface" />
+          ))}
+        </span>
+        <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white group-hover:bg-brand-plum-hover">
+          Ver resposta <ChevronRight size={15} aria-hidden="true" />
+        </span>
+      </button>
+
+      {open && (
+        <OnScreen>
+          <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 sm:items-center sm:p-6" onClick={(event) => event.target === event.currentTarget && setOpen(false)}>
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="approver-answer"
+      className="max-h-[92vh] w-full max-w-3xl space-y-4 overflow-y-auto rounded-t-panel bg-surface p-4 shadow-2xl sm:rounded-panel sm:p-6"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 id="approver-answer" className="text-base font-semibold text-ink">Resposta da {APPROVER_NAME}</h3>
+        <div className="flex min-w-0 gap-3">
+          <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="order-last ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-muted sm:hidden">
+            <X size={20} aria-hidden="true" />
+          </button>
+          <div className="min-w-0">
+          <h3 id="approver-answer" className="text-lg font-semibold text-ink">
+            Resposta da {APPROVER_NAME}
+          </h3>
           <p className="mt-1 text-sm text-ink-muted">
             Enviada em {formatLongStamp(collection.respondedAt)}
             {chosen.length > 0 ? ` · ${chosen.length} ${chosen.length === 1 ? 'capa escolhida' : 'capas escolhidas'}` : ' · nenhuma capa escolhida'}
           </p>
           {collection.feedback && <p className="mt-2 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink">&ldquo;{collection.feedback}&rdquo;</p>}
+          </div>
         </div>
         {collection.confirmedAt ? (
           <p className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-status-success-soft px-3 py-1.5 text-xs font-semibold text-status-success">
@@ -1214,6 +1352,9 @@ function ApproverAnswer({
             </button>
           )
         )}
+        <button type="button" onClick={() => setOpen(false)} aria-label="Fechar" className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-muted sm:flex">
+          <X size={20} aria-hidden="true" />
+        </button>
       </div>
       {/* Salvar no Drive: sempre cria uma pasta nova "Capas aprovadas por Thereza em ..." na pasta da casa */}
       {chosen.length > 0 && (
@@ -1260,20 +1401,60 @@ function ApproverAnswer({
       )}
       {touched.length > 0 && (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {touched.map((photo) => (
+          {touched.map((photo, i) => (
             <li key={photo.driveId} className="flex gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
-              <img src={photoSrc(photo, 200)} alt="" className="h-20 w-16 shrink-0 rounded-control object-cover" />
+              <button
+                type="button"
+                onClick={() => setViewing(i)}
+                aria-label={`Ver ${photo.name} em tela grande`}
+                className="group relative h-32 w-24 shrink-0 overflow-hidden rounded-control ring-1 ring-border transition hover:ring-2 hover:ring-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
+                <img src={photoSrc(photo, 400)} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100" aria-hidden="true">
+                  <Maximize2 size={16} />
+                </span>
+              </button>
               <div className="min-w-0 text-xs">
                 <p className="truncate font-medium text-ink">{photo.name}</p>
                 <ul className="mt-1 space-y-0.5 text-ink-muted">
-                  {approverLines(photo).map((line) => <li key={line}>{line}</li>)}
+                  {answerLines(photo).map((line) => <li key={line}>{line}</li>)}
                 </ul>
+                <div className="mt-1 flex gap-3">
+                  <button type="button" onClick={() => setViewing(i)} className="font-semibold text-ink underline-offset-2 hover:underline">
+                    Ver foto
+                  </button>
+                  {canConfirm && (
+                    <button type="button" onClick={() => setViewing(i)} className="inline-flex items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline">
+                      <Crop size={12} aria-hidden="true" /> Ajustar corte
+                    </button>
+                  )}
+                </div>
               </div>
             </li>
           ))}
         </ul>
       )}
+      {viewing !== null && touched[viewing] && (
+        <ApprovedPhotoLightbox
+          photos={touched}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => {
+            setViewing(null);
+            setCropError(null);
+          }}
+          details={answerLines}
+          onSaveCrop={canConfirm ? saveCrop : undefined}
+          onUndoCrop={canConfirm ? undoCrop : undefined}
+          saving={cropSaving}
+          error={cropError}
+        />
+      )}
     </section>
+          </div>
+        </OnScreen>
+      )}
+    </>
   );
 }

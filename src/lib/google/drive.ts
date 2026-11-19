@@ -160,9 +160,14 @@ export class DriveWriteMissingError extends Error {}
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const ALL_DRIVES = 'supportsAllDrives=true';
 
-async function driveWrite(url: string, init: { method: string; body: BodyInit; contentType: string }) {
+// REGRA DO PROJETO: nunca alterar, mover nem excluir fotos/pastas do Drive. Só CRIAR (pasta nova, cópia, envio).
+// Por isso a escrita aceita só POST em /files (criar), /files/{id}/copy (copiar) e no envio de arquivo novo.
+const CREATE_ONLY = /^https:\/\/www\.googleapis\.com\/(upload\/)?drive\/v3\/files(\/[A-Za-z0-9_-]+\/copy)?\?/;
+
+async function driveWrite(url: string, init: { body: BodyInit; contentType: string }) {
+  if (!CREATE_ONLY.test(url)) throw new Error('Drive: só é permitido criar (pasta, cópia ou envio), nunca alterar, mover ou excluir.');
   const response = await fetch(url, {
-    method: init.method,
+    method: 'POST',
     headers: { Authorization: `Bearer ${await getDriveAccessToken()}`, 'Content-Type': init.contentType },
     body: init.body,
     cache: 'no-store',
@@ -177,7 +182,6 @@ async function driveWrite(url: string, init: { method: string; body: BodyInit; c
 /** Cria uma pasta dentro de outra. */
 export const driveCreateFolder = (name: string, parent: string, description = '') =>
   driveWrite(`${DRIVE_API}/files?${ALL_DRIVES}&fields=id,webViewLink`, {
-    method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify({ name, parents: [parent], description, mimeType: 'application/vnd.google-apps.folder' }),
   });
@@ -185,7 +189,6 @@ export const driveCreateFolder = (name: string, parent: string, description = ''
 /** Copia um arquivo do Drive para uma pasta, com outro nome e descrição. */
 export const driveCopyFile = (fileId: string, name: string, parent: string, description = '') =>
   driveWrite(`${DRIVE_API}/files/${encodeURIComponent(fileId)}/copy?${ALL_DRIVES}&fields=id`, {
-    method: 'POST',
     contentType: 'application/json',
     body: JSON.stringify({ name, parents: [parent], description }),
   });
@@ -196,7 +199,6 @@ export function driveUploadFile(name: string, parent: string, bytes: Uint8Array,
   const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], description })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
   const body = Buffer.concat([Buffer.from(head, 'utf8'), Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`, 'utf8')]);
   return driveWrite(`${UPLOAD_API}/files?uploadType=multipart&${ALL_DRIVES}&fields=id`, {
-    method: 'POST',
     contentType: `multipart/related; boundary=${boundary}`,
     body,
   });

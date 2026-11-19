@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Crop, LoaderCircle, Star, Undo2, X } from 'lucide-react';
 import type { CoverPhoto } from '@/lib/covers';
 import { CROP_RATIOS, clampOffset, coverScale, lowResolution, maxZoom, sourceRect, type CropRatio, type Point } from '@/lib/simpleCrop';
@@ -9,7 +9,7 @@ import { CROP_RATIOS, clampOffset, coverScale, lowResolution, maxZoom, sourceRec
 // corte simples ali mesmo (4:5 ou 1:1 do carrossel, arrastar e zoom), "Salvar e próxima",
 // voltar à original e pôr/tirar da seleção. Sem as opções do editor da equipe.
 
-type CropSize = { width: number; height: number; label: string };
+export type CropSize = { width: number; height: number; label: string };
 
 interface Props {
   photos: CoverPhoto[];
@@ -25,8 +25,14 @@ interface Props {
   /** Volta à foto original (só quando o corte é da aprovadora). */
   onUndoCrop?: (photo: CoverPhoto) => Promise<void>;
   canUndo?: (photo: CoverPhoto) => boolean;
-  /** Textos do botão de seleção: 'selecao' (✓ Na seleção) ou 'favorita' (★ Favoritar). */
-  toggleKind?: 'selecao' | 'favorita';
+  /** Textos do botão: 'selecao' (✓ Na seleção), 'favorita' (★ Favoritar) ou 'capa' (✓ Usar como capa, link da grade). */
+  toggleKind?: 'selecao' | 'favorita' | 'capa';
+  /** Camada (z-index): por cima de outra janela, ex.: a casa aberta no link da grade. */
+  layerClass?: string;
+  /** Nome mostrado no topo (ex.: a casa). */
+  title?: string;
+  /** Abre direto no corte (ex.: "Ver grande e cortar" no link da grade); "Salvar e próxima" segue cortando. */
+  startCropping?: boolean;
   saving: boolean;
 }
 
@@ -43,9 +49,12 @@ export function ApproverPhotoViewer({
   onUndoCrop,
   canUndo,
   toggleKind = 'favorita',
+  layerClass = 'z-50',
+  title,
+  startCropping = false,
   saving,
 }: Props) {
-  const [cropping, setCropping] = useState(false);
+  const [cropping, setCropping] = useState(startCropping);
   const photo = photos[index];
   const go = useCallback((step: number) => onIndex((index + step + photos.length) % photos.length), [index, onIndex, photos.length]);
   const hasNext = photos.length > 1;
@@ -63,13 +72,17 @@ export function ApproverPhotoViewer({
 
   if (!photo) return null;
   const favorite = isFavorite(photo);
-  const selection = toggleKind === 'selecao';
-  const toggleText = selection ? (favorite ? 'Na seleção' : 'Incluir na seleção') : favorite ? 'Favoritada' : 'Favoritar';
+  const selection = toggleKind !== 'favorita';
+  const toggleText =
+    toggleKind === 'capa' ? (favorite ? 'Capa escolhida' : 'Usar como capa')
+      : selection ? (favorite ? 'Na seleção' : 'Incluir na seleção')
+        : favorite ? 'Favoritada' : 'Favoritar';
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Foto da casa" className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+    <div role="dialog" aria-modal="true" aria-label="Foto da casa" className={`fixed inset-0 ${layerClass} flex flex-col bg-black text-white`}>
       <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6">
-        <p className="text-[0.95rem] tabular-nums text-white/70">
+        <p className="min-w-0 truncate text-[0.95rem] tabular-nums text-white/70">
+          {title && <span className="mr-2 font-medium text-white">{title}</span>}
           {index + 1} de {photos.length}
           {photo.edited && !cropping && <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[0.8125rem] text-white">Cortada{photo.edited.label ? ` · ${photo.edited.label}` : ''}</span>}
         </p>
@@ -89,7 +102,8 @@ export function ApproverPhotoViewer({
           onSave={async (file, size, next) => {
             const ok = await onSaveCrop(photo, file, size);
             if (ok === false) return;
-            setCropping(false);
+            // abriu direto no corte: a próxima foto também abre no corte
+            setCropping(next && startCropping);
             if (next) go(1);
           }}
         />
@@ -154,7 +168,8 @@ export function ApproverPhotoViewer({
   );
 }
 
-function SimpleCropper({
+/** Corte simples (4:5 ou 1:1, arrastar + zoom). Também usado pela equipe na resposta da aprovadora. */
+export function SimpleCropper({
   imageSrc,
   fileName,
   saving,
@@ -191,9 +206,9 @@ function SimpleCropper({
     const area = areaRef.current;
     if (!area) return;
     const measure = () => {
-      // 85% da área: sobra espaço em volta para ver, escurecido, o que fica fora do corte
-      const w = area.clientWidth * 0.85;
-      const h = area.clientHeight * 0.85;
+      // quase toda a área (para ver os detalhes); sobra uma faixa em volta para ver, escurecido, o que fica fora do corte
+      const w = area.clientWidth - 24;
+      const h = area.clientHeight - 16;
       const target = ratio.width / ratio.height;
       const fw = Math.min(w, h * target);
       setFrame({ w: Math.floor(fw), h: Math.floor(fw / target) });
@@ -256,26 +271,31 @@ function SimpleCropper({
     }, next);
   };
 
+  // rodinha do mouse / trackpad: zoom (até o limite sem perder qualidade)
+  const onWheel = (event: ReactWheelEvent) => {
+    if (!image || zoomLimit <= 1) return;
+    changeZoom(shownZoom * Math.exp(-event.deltaY * 0.002));
+  };
+
+  const ratioButtons = CROP_RATIOS.map((option) => (
+    <button
+      key={option.id}
+      type="button"
+      aria-pressed={ratio.id === option.id}
+      onClick={() => {
+        setRatio(option);
+        setOffset(null);
+        setZoom(1);
+      }}
+      className={`min-h-10 rounded-full px-3.5 text-[0.875rem] font-medium ${ratio.id === option.id ? 'bg-white text-bh-tinta' : 'bg-white/10 text-white hover:bg-white/20'}`}
+    >
+      {option.label}
+    </button>
+  ));
+
   return (
     <>
-      <div className="flex justify-center gap-2 px-4 pb-3">
-        {CROP_RATIOS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={ratio.id === option.id}
-            onClick={() => {
-              setRatio(option);
-              setOffset(null);
-              setZoom(1);
-            }}
-            className={`min-h-10 rounded-full px-4 text-[0.95rem] font-medium ${ratio.id === option.id ? 'bg-white text-bh-tinta' : 'bg-white/10 text-white hover:bg-white/20'}`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      <div ref={areaRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4">
+      <div ref={areaRef} onWheel={onWheel} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
         {failed ? (
           <p className="text-white/80">Não foi possível abrir esta foto.</p>
         ) : !image ? (
@@ -301,49 +321,55 @@ function SimpleCropper({
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] outline outline-2 outline-white" />
           </div>
         )}
+        {image && (
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-[0.8125rem] text-white/70 [text-shadow:0_1px_3px_rgb(0_0_0/0.8)]">
+            Arraste para posicionar{small ? ' · foto sem resolução para zoom' : ' · zoom na barra ou na rodinha do mouse'}
+          </p>
+        )}
       </div>
-      <p className="px-4 pt-2 text-center text-[0.875rem] text-white/60">Arraste a foto para posicionar o corte.</p>
-      {small ? (
-        <p className="px-4 pt-3 text-center text-[0.875rem] text-white/70">Esta foto não tem resolução para zoom neste formato.</p>
-      ) : (
-      <div className="mx-auto flex w-full max-w-md items-center gap-3 px-4 pt-3">
-        <span className="text-[0.875rem] text-white/70">Zoom</span>
-        <input
-          type="range"
-          min={1}
-          max={zoomLimit}
-          step={0.01}
-          value={shownZoom}
-          disabled={!image || zoomLimit <= 1}
-          onChange={(event) => changeZoom(Number(event.target.value))}
-          aria-label="Zoom"
-          className="flex-1 accent-white disabled:opacity-40"
-        />
-      </div>
-      )}
-      <div className="flex flex-wrap items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
-        <button type="button" onClick={onCancel} disabled={saving} className="inline-flex min-h-12 items-center rounded-full border border-white/40 px-6 text-base font-medium text-white hover:bg-white/10 disabled:opacity-50">
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={!image || saving}
-          className={`inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-base font-medium disabled:opacity-50 ${hasNext ? 'border border-white/40 text-white hover:bg-white/10' : 'bg-bh-mata text-white hover:opacity-90'}`}
-        >
-          {saving ? <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
-          Salvar corte
-        </button>
-        {hasNext && (
+      {/* controles numa faixa só, para sobrar mais altura para a foto */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+        <div className="flex gap-1.5">{ratioButtons}</div>
+        {!small && (
+          <label className="flex w-full max-w-[13rem] items-center gap-2 sm:w-44">
+            <span className="text-[0.8125rem] text-white/70">Zoom</span>
+            <input
+              type="range"
+              min={1}
+              max={zoomLimit}
+              step={0.01}
+              value={shownZoom}
+              disabled={!image || zoomLimit <= 1}
+              onChange={(event) => changeZoom(Number(event.target.value))}
+              aria-label="Zoom"
+              className="min-w-0 flex-1 accent-white disabled:opacity-40"
+            />
+          </label>
+        )}
+        <div className="flex flex-wrap justify-center gap-2">
+          <button type="button" onClick={onCancel} disabled={saving} className="inline-flex min-h-11 items-center rounded-full border border-white/40 px-5 text-[0.95rem] font-medium text-white hover:bg-white/10 disabled:opacity-50">
+            Cancelar
+          </button>
           <button
             type="button"
-            onClick={() => void save(true)}
+            onClick={() => void save()}
             disabled={!image || saving}
-            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-bh-mata px-6 text-base font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className={`inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-[0.95rem] font-medium disabled:opacity-50 ${hasNext ? 'border border-white/40 text-white hover:bg-white/10' : 'bg-bh-mata text-white hover:opacity-90'}`}
           >
-            Salvar e próxima <ArrowRight size={18} aria-hidden="true" />
+            {saving ? <LoaderCircle size={17} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check size={17} aria-hidden="true" />}
+            Salvar corte
           </button>
-        )}
+          {hasNext && (
+            <button
+              type="button"
+              onClick={() => void save(true)}
+              disabled={!image || saving}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-bh-mata px-5 text-[0.95rem] font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              Salvar e próxima <ArrowRight size={17} aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

@@ -62,3 +62,35 @@ export function approvalRecord(collection: CoverCollectionDetail, house: string,
     '',
   ].join('\n');
 }
+
+// ---- Aprovação da grade: cortes das capas salvos no Drive ----
+
+/** Ação do registro quando a aprovação da grade salva os cortes de uma casa no Drive. */
+export const CROPS_SAVED_ACTION = 'capa.cortes_salvos_no_drive';
+
+/** Nome da pasta nova: "Cortes das capas aprovados por Thereza em 19-11-2026 14h32" (data da aprovação da grade). */
+export const cropsFolderName = (approvedAt: string) => `Cortes das capas aprovados por ${APPROVER_NAME} em ${fileStamp(approvedAt)}`;
+
+/** Nome do arquivo do corte; a capa aprovada na grade é marcada no nome. */
+export const cropFileName = (photo: CoverPhoto) => {
+  const name = savedFileName(photo);
+  return photo.approved ? name.replace(/(\.[a-z]+)$/i, ' (capa aprovada)$1') : name;
+};
+
+/** Texto do "Registro da aprovação.txt" da pasta de cortes de uma casa. */
+export function cropsRecord(photos: CoverPhoto[], house: string, period: string, day: string | null, approvedAt: string) {
+  const crops = photos.filter((photo) => photo.edited);
+  const cover = photos.find((photo) => photo.approved);
+  const dayText = day ? day.split('-').reverse().join('/') : '';
+  return [
+    `Cortes das capas — ${house}`,
+    '',
+    `Grade do feed de ${period} aprovada por ${APPROVER_NAME} em ${formatLongStamp(approvedAt)} pelo link de aprovação.`,
+    ...(dayText ? [`Dia do post na grade: ${dayText}.`] : []),
+    ...(cover ? [`Capa aprovada: ${cover.name}${cover.edited ? ' (cortada)' : ' (sem corte)'}.`] : []),
+    '',
+    `${crops.length} ${crops.length === 1 ? 'corte' : 'cortes'}:`,
+    ...crops.flatMap((photo, index) => ['', `${index + 1}. ${cropFileName(photo)}`, ...photoRecordLines(photo).map((line) => `   ${line}`)]),
+    '',
+  ].join('\n');
+}

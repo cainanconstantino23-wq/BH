@@ -17,6 +17,7 @@ import { HomeHub, type HubTarget } from '@/components/home/HomeHub';
 import { HistoryPanel, MyAccountPanel, PeoplePanel } from '@/components/team/TeamPanel';
 import { CoverApprovalPanel, DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 import { PostagensTable } from '@/components/postagens/PostagensTable';
+import { FeedPlanPanel } from '@/components/grade/FeedPlanPanel';
 import {
   BarChart2,
   Inbox,
@@ -30,6 +31,7 @@ import {
   Images,
   Menu,
   Table2,
+  LayoutGrid,
   ImageUp,
   X,
   MapPin,
@@ -84,7 +86,7 @@ const instagramErrorMessages: Record<string, string> = {
   admin_only: 'Você não tem permissão para conectar o Instagram da empresa. Peça a quem administra a equipe.',
 };
 
-type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | 'capa' | AccountPage;
+type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | 'grade' | 'capa' | AccountPage;
 
 const driveErrorMessages: Record<string, string> = {
   not_configured: 'Faltam as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).',
@@ -369,13 +371,14 @@ export default function Home() {
       id: 'instagram',
       label: 'Instagram',
       icon: InstagramIcon,
-      active: platform === 'instagram' && activeTab !== 'postagens',
+      active: platform === 'instagram' && activeTab !== 'postagens' && activeTab !== 'grade',
       select: () => {
         setPlatform('instagram');
-        if (activeTab === 'postagens') setActiveTab('comunidade');
+        if (activeTab === 'postagens' || activeTab === 'grade') setActiveTab('comunidade');
       },
     },
     { id: 'postagens', label: 'Tabela de postagens', icon: Table2, active: activeTab === 'postagens', select: () => setActiveTab('postagens') },
+    { id: 'grade', label: 'Aprovação da grade', icon: LayoutGrid, active: activeTab === 'grade', select: () => setActiveTab('grade') },
   ];
 
   if (!currentUser) {
@@ -932,6 +935,12 @@ export default function Home() {
             {activeTab === 'postagens' && (
               <div key="postagens" className={`min-w-0 ${sectionEntranceClass}`}>
                 <PostagensTable />
+              </div>
+            )}
+
+            {activeTab === 'grade' && (
+              <div key="grade" className={`min-w-0 ${sectionEntranceClass}`}>
+                <FeedPlanPanel />
               </div>
             )}
 
