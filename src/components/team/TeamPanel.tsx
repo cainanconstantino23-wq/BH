@@ -662,6 +662,19 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
     }
     case 'capa.capas_confirmadas':
       return { icon: CheckCircle2, tone: 'text-status-success', text: `${who} confirmou ${names(d.capas).length} ${names(d.capas).length === 1 ? 'capa' : 'capas'} de ${folderOf(d)}`, note: nameList(d.capas) || undefined };
+    case 'capa.salvas_no_drive': {
+      const capas = names(d.capas).length;
+      const aprovadas = str(d.aprovadas_em) ? new Date(str(d.aprovadas_em)).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bahia' }).replace(',', ' às') : '';
+      const note = [str(d.pasta_drive) && `Pasta no Drive: ${str(d.pasta_drive)}`, aprovadas && `Aprovadas em ${aprovadas}`, nameList(d.falharam) && `Não salvas: ${nameList(d.falharam)}`]
+        .filter(Boolean)
+        .join('. ');
+      return {
+        icon: FolderPlus,
+        tone: 'text-status-success',
+        text: `${who} salvou ${capas} ${capas === 1 ? 'capa aprovada' : 'capas aprovadas'} de ${folderOf(d)} no Google Drive`,
+        note: note || undefined,
+      };
+    }
     case 'capa.post_criado':
       return { icon: FilePlus2, tone: 'text-ink-muted', text: `${who} criou o post a partir de ${folderOf(d)}, já aprovado` };
     case 'equipe.removido':

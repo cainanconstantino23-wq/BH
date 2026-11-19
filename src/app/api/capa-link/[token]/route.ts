@@ -5,8 +5,9 @@ import { PHOTO_COLUMNS, collectionKind, logCoverActivity, toPhoto } from '@/lib/
 import { APPROVER_LABEL, type PublicCoverCollection } from '@/lib/covers';
 import { ensureApproverPhoto } from '@/lib/coverFolder-server';
 
-// Rota pública do link de capa: quem tem o link vê as favoritas e escolhe a capa (sem login).
-// Em "Encontrar mais fotos" a aprovadora vê as outras fotos da pasta (as do carrossel) e pode promover algumas a capa.
+// Rota pública do link de capa: quem tem o link vê as fotos candidatas e aprova a seleção (sem login).
+// Aprovação de capa (kind 'capa'): todas as fotos da pasta são candidatas. Aprovação fotos: só as capas marcadas (★).
+// Em "Encontrar mais fotos" a aprovadora vê as outras fotos da pasta e da casa no Drive e pode pôr na seleção.
 const TOKEN = /^[A-Za-z0-9_-]{16,128}$/;
 const noStore = { 'Cache-Control': 'private, no-store' };
 
@@ -39,10 +40,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     photos: [],
     morePhotos: [],
   };
+  const everyPhoto = (await collectionKind(createAdminClient(), collection.id)) !== 'fotos';
   for (const photo of await allPhotos(collection.id)) {
     // o link é público: não expõe os nomes da equipe, só se foi a aprovadora que pôs nas capas
     const shown = { ...photo, addedBy: null, favoritedBy: null, approvedBy: null, editedBy: photo.editedBy === APPROVER_LABEL ? APPROVER_LABEL : null };
-    (photo.favorite ? body.photos : body.morePhotos).push(shown);
+    (everyPhoto || photo.favorite ? body.photos : body.morePhotos).push(shown);
   }
   return NextResponse.json(body, { headers: noStore });
 }
@@ -69,8 +71,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   // só fotos desta pasta: as favoritas e as que ela mesma acrescentou às capas
   const photos = await allPhotos(collection.id);
+  const everyPhoto = (await collectionKind(admin, collection.id)) !== 'fotos';
   const promoted = photos.filter((photo) => !photo.favorite && added.has(photo.driveId));
-  const capas = [...photos.filter((photo) => photo.favorite), ...promoted];
+  // Aprovação de capa: qualquer foto da pasta pode ser aprovada; Aprovação fotos: as capas marcadas + as que ela acrescentou
+  const capas = everyPhoto ? photos : [...photos.filter((photo) => photo.favorite), ...promoted];
   const chosen = capas.filter((photo) => approved.has(photo.driveId));
   const newlyApproved = chosen.filter((photo) => !photo.approved).map((photo) => photo.driveId);
   const unapproved = photos.filter((photo) => photo.approved && !approved.has(photo.driveId));

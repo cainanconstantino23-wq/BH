@@ -4,10 +4,11 @@ import { OnScreen } from '@/components/drive/OnScreen';
 import { PublishStatusTag } from '@/components/PublishStatusTag';
 import { PublishResultDialog, cancelScheduledPublish, publishToInstagram, type PublishResult } from '@/components/PublishResultDialog';
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarPlus, Check, ChevronLeft, Clock3, Copy, FolderOpen, FolderPlus, Link2, Loader2, RefreshCw, Trash2, Unplug, XCircle } from 'lucide-react';
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Clock3, Copy, FolderOpen, FolderPlus, Link2, Loader2, RefreshCw, Trash2, Unplug, XCircle } from 'lucide-react';
 import { APPROVER_NAME, approverLines, formatLongStamp, formatStamp, photoLimit, photoStamp, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type CoverPhoto, type CollectionPostInfo } from '@/lib/covers';
 import { describeActivity } from '@/components/team/TeamPanel';
-import { coverFolderLabel } from '@/lib/house';
+import { SAVED_TO_DRIVE_ACTION } from '@/lib/coverDrive';
+import { coverFolderLabel, houseLabel } from '@/lib/house';
 import { useTeam } from '@/lib/team';
 import { DriveBrowser, PhotoTile, driveThumb } from '@/components/drive/DriveBrowser';
 import { DrivePhotoViewer } from '@/components/drive/DrivePhotoViewer';
@@ -188,7 +189,6 @@ export function CoverApprovalPanel({
 
       {mode !== 'fotos' && view.name === 'folders' && (
         <FolderGrid
-          mode={mode}
           collections={collections}
           error={collectionsError}
           canAdd={connected}
@@ -242,9 +242,9 @@ function HowItWorks({ mode }: { mode: CollectionKind }) {
     { title: 'Marque as capas', text: 'Entre as 15 escolhidas, marque com ★ as fotos que podem ser capa. Tudo fica numa pasta por casa: nome, bairro e número.' },
     { title: 'Envie para aprovação', text: 'Com o carrossel organizado, gere o link das capas e mande para a Thereza. A resposta aparece aqui.' },
   ] : [
-    { title: 'Escolha no Drive', text: 'O social media abre as pastas do Google Drive e escolhe as fotos do feed e do story. Ex.: de 50 fotos, separa 15.' },
-    { title: 'Favorite a capa', text: 'Entre as escolhidas, marque com ★ as candidatas a capa. Tudo fica numa pasta por casa: nome, bairro e número.' },
-    { title: 'Envie o link', text: 'Gere o link da pasta e mande para a Thereza. Ela vê só as favoritas e escolhe a capa. A resposta aparece aqui.' },
+    { title: 'Escolha no Drive', text: 'Abra a pasta da casa no Google Drive e marque com ✓ as fotos candidatas a capa. Salve com nome, número e bairro da casa.' },
+    { title: 'Envie o link', text: 'Gere o link e mande para a Thereza. Ela vê cada foto em tela grande, corta, passa para a próxima e aprova a seleção.' },
+    { title: 'Salve no Drive', text: 'Quando ela aprovar, chega uma notificação. Abra a casa e salve as capas aprovadas numa pasta nova no Drive, com o registro.' },
   ];
   return (
     <section aria-label="Como funciona" className="rounded-panel border border-border bg-surface p-4 sm:p-5">
@@ -273,7 +273,7 @@ function ConnectCard({ status, mode }: { status: Extract<Status, { state: 'ready
           ? 'Falta configurar as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).'
           : status.expired
             ? 'O acesso ao Drive expirou ou foi removido. Conecte de novo para continuar escolhendo fotos.'
-            : 'Para escolher fotos, conecte o Drive. O BH Analytics só lê: não altera, não apaga e não envia nada. A conexão vale para toda a equipe.'}
+            : 'Para escolher fotos, conecte o Drive. O BH Analytics lê as fotos e só grava quando você pede para salvar as capas aprovadas numa pasta nova da casa: não altera nem apaga nada. A conexão vale para toda a equipe.'}
       </p>
       {status.configured && status.canConnect && (
         <a
@@ -303,14 +303,12 @@ function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
 }
 
 function FolderGrid({
-  mode,
   collections,
   error,
   canAdd,
   onOpen,
   onAdd,
 }: {
-  mode: CollectionKind;
   collections: CoverCollectionSummary[] | null;
   error: boolean;
   canAdd: boolean;
@@ -349,42 +347,35 @@ function FolderGrid({
                 {title}
                 <span className="tabular-nums">· {items.length}</span>
               </h3>
-              <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {items.map((collection) => (
-                <li key={collection.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpen(collection.id)}
-                    className="group block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-plum"
-                  >
-                    <div className={`relative aspect-square overflow-hidden rounded-panel border bg-surface-muted ${
-                      approved ? 'border-status-success ring-2 ring-status-success/30' : 'border-border'
-                    }`}>
-                      {collection.coverDriveId ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- miniatura do Drive pelo servidor
-                        <img src={collection.coverEditedUrl ?? driveThumb(collection.coverDriveId, 500)} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                      ) : (
-                        <FolderOpen size={32} className="absolute inset-0 m-auto text-ink-muted" aria-hidden="true" />
-                      )}
-                      {collection.responded ? (
-                        <span className="absolute left-2 top-2 rounded-full bg-status-success px-2 py-0.5 text-[11px] font-semibold text-white">
-                          {collection.approvedCount ? 'Capa escolhida' : 'Respondido'}
+              {/* uma linha por casa, só o nome (sem foto) */}
+              <ul className={`divide-y overflow-hidden rounded-panel border bg-surface ${approved ? 'divide-status-success-border border-status-success-border' : 'divide-border border-border'}`}>
+                {items.map((collection) => {
+                  const house = houseLabel(collection.houseName, collection.houseNumber) || 'Sem nome';
+                  const status = collection.responded
+                    ? { text: collection.approvedCount ? 'Aprovada' : 'Respondida', className: 'bg-status-success-soft text-status-success' }
+                    : collection.shareToken
+                      ? { text: 'Aguardando', className: 'bg-surface-muted text-ink' }
+                      : { text: 'Sem link', className: 'text-ink-muted' };
+                  return (
+                    <li key={collection.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(collection.id)}
+                        className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-plum"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ink">{house}</span>
+                          {collection.neighborhood && <span className="block truncate text-xs text-ink-muted">{collection.neighborhood}</span>}
                         </span>
-                      ) : collection.shareToken ? (
-                        <span className="absolute left-2 top-2 rounded-full bg-surface/95 px-2 py-0.5 text-[11px] font-semibold text-ink">Aguardando</span>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-ink">
-                      {coverFolderLabel(collection.houseName, collection.neighborhood, collection.houseNumber) || 'Sem nome'}
-                    </p>
-                    <p className="mt-0.5 text-xs text-ink-muted">
-                      {mode === 'fotos'
-                        ? `${collection.photoCount} de ${photoLimit(mode)} no carrossel · ${collection.favoriteCount} ★`
-                        : `${collection.photoCount} ${collection.photoCount === 1 ? 'foto' : 'fotos'} · ${collection.favoriteCount} ★`}
-                    </p>
-                  </button>
-                </li>
-                ))}
+                        <span className="hidden shrink-0 text-xs tabular-nums text-ink-muted sm:inline">
+                          {collection.photoCount} {collection.photoCount === 1 ? 'foto' : 'fotos'}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.className}`}>{status.text}</span>
+                        <ChevronRight size={16} className="shrink-0 text-ink-muted" aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
@@ -714,6 +705,8 @@ function FolderDetail({
   }
 
   const favorites = collection.photos.filter((photo) => photo.favorite);
+  // Aprovação de capa: toda foto da pasta é candidata a capa (sem ★); Aprovação fotos: só as capas marcadas
+  const candidates = mode === 'capa' ? collection.photos : favorites;
   const approved = collection.photos.filter((photo) => photo.approved);
   const respondedWhen = collection.respondedAt
     ? new Date(collection.respondedAt).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -721,7 +714,7 @@ function FolderDetail({
   const approvedHint = scheduled
     ? 'Post salvo e aprovado. Ele aparece no calendário e na Grade do feed (lá também dá para publicar).'
     : !collection.responded
-      ? link ? 'Aguardando a escolha pelo link.' : 'Gere o link nas favoritas e envie para a Thereza.'
+      ? link ? `Aguardando a aprovação da ${APPROVER_NAME} pelo link.` : `Gere o link e envie para a ${APPROVER_NAME}.`
       : approved.length === 0
         ? `Respondido${respondedWhen ? ` em ${respondedWhen}` : ''}, sem capa escolhida.`
         : `${approved.length === 1 ? 'Capa escolhida' : `${approved.length} capas escolhidas`}${respondedWhen ? ` em ${respondedWhen}` : ''}. Já dá para programar o post.`;
@@ -740,7 +733,7 @@ function FolderDetail({
           <p className="mt-1 text-sm text-ink-muted">
             {carousel
               ? `${collection.photos.length} de ${limit} fotos do carrossel · ${favorites.length} ${favorites.length === 1 ? 'capa' : 'capas'}`
-              : `${collection.photos.length} ${collection.photos.length === 1 ? 'foto escolhida' : 'fotos escolhidas'} · ${favorites.length} ${favorites.length === 1 ? 'favorita' : 'favoritas'} para capa`}
+              : `${collection.photos.length} ${collection.photos.length === 1 ? 'foto candidata' : 'fotos candidatas'} a capa`}
           </p>
           {/* data planejada: enquanto não vira post, a pasta aparece na Grade do feed nessa data */}
           {mode === 'fotos' && !post && (
@@ -876,6 +869,7 @@ function FolderDetail({
         <ApproverAnswer
           collection={collection}
           canConfirm={team.can('editar_publicacoes') || team.can('criar_publicacoes')}
+          onChange={setCollection}
           onConfirm={async () => {
             const response = await fetch(`/api/capa/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
             const data = await response.json().catch(() => ({}));
@@ -892,11 +886,11 @@ function FolderDetail({
         <SectionTitle
           id="cover-all"
           step={1}
-          title={carousel ? 'Fotos do carrossel' : 'Todas as fotos'}
+          title={carousel ? 'Fotos do carrossel' : 'Fotos para aprovação'}
           hint={
             carousel
               ? `${collection.photos.length} de ${limit} escolhidas no Drive${full ? ' (carrossel completo)' : ''}. Toque na ★ para marcar como capa.`
-              : `${collection.photos.length} escolhidas no Drive. Toque na ★ para favoritar como capa.`
+              : `${collection.photos.length} escolhidas no Drive. Todas são candidatas a capa e aparecem no link da ${APPROVER_NAME}. Toque numa foto para ver, cortar ou tirar da pasta.`
           }
         />
         {collection.photos.length === 0 ? (
@@ -914,22 +908,22 @@ function FolderDetail({
                 selected
                 favorite={photo.favorite}
                 onOpen={() => setPreview(photo)}
-                onFavorite={() => void patch({ photo: photo.driveId, favorite: !photo.favorite })}
+                onFavorite={carousel ? () => void patch({ photo: photo.driveId, favorite: !photo.favorite }) : undefined}
               />
             ))}
           </ul>
         )}
       </section>
 
-      {/* 2. Favoritas do Social Media + link */}
+      {/* 2. Capas marcadas (Aprovação fotos) + link */}
       <section aria-labelledby="cover-favorites" className="space-y-3 border-t border-border pt-6">
         <SectionTitle
           id="cover-favorites"
           step={2}
-          title={carousel ? 'Capas' : 'Favoritas para capa'}
-          hint={carousel ? 'Marcadas entre as fotos do carrossel. Só estas aparecem no link de aprovação.' : 'Escolhidas pelo Social Media. Só estas aparecem no link de aprovação.'}
+          title={carousel ? 'Capas' : 'Link de aprovação'}
+          hint={carousel ? 'Marcadas entre as fotos do carrossel. Só estas aparecem no link de aprovação.' : `Mande o link para a ${APPROVER_NAME}: ela vê as fotos em tela grande, corta, e aprova a seleção.`}
         />
-        {favorites.length === 0 ? (
+        {!carousel ? null : favorites.length === 0 ? (
           <p className="text-sm text-ink-muted">Nenhuma favorita ainda. Marque a ★ nas fotos acima.</p>
         ) : (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-6">
@@ -954,7 +948,11 @@ function FolderDetail({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Link2 size={16} className="text-brand-plum" aria-hidden="true" /> Link para aprovação da capa</h3>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">Mostra as {favorites.length} favoritas. Quem abrir escolhe a capa e pode comentar, sem login. Em “Encontrar mais fotos” pode escolher outras fotos desta pasta e pôr nas capas.</p>
+              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+                {carousel
+                  ? `Mostra as ${favorites.length} capas marcadas. Quem abrir escolhe a capa e pode comentar, sem login.`
+                  : `Mostra as ${candidates.length} fotos. Quem abrir vê cada foto grande, corta, tira o que não quiser e aprova a seleção, sem login. Você recebe uma notificação quando ela aprovar.`}
+              </p>
             </div>
             {team.can('enviar_link_aprovacao') && (
               link ? (
@@ -974,7 +972,7 @@ function FolderDetail({
                 <button
                   type="button"
                   onClick={() => void makeLink()}
-                  disabled={busy || favorites.length === 0}
+                  disabled={busy || candidates.length === 0}
                   className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Link2 size={15} aria-hidden="true" />} Gerar link
@@ -983,7 +981,7 @@ function FolderDetail({
             )}
           </div>
           {link && <p className="mt-3 break-all rounded-control bg-canvas px-3 py-2 font-mono text-[11px] text-ink-muted">{link}</p>}
-          {favorites.length === 0 && <p className="mt-3 text-xs text-status-warning">Favorite pelo menos uma foto (★) para gerar o link.</p>}
+          {candidates.length === 0 && <p className="mt-3 text-xs text-status-warning">{carousel ? 'Marque pelo menos uma capa (★) para gerar o link.' : 'Escolha pelo menos uma foto no Drive para gerar o link.'}</p>}
         </section>
       </section>
 
@@ -1005,7 +1003,7 @@ function FolderDetail({
                   favorite
                   approved
                   onOpen={() => setPreview(photo)}
-                  onFavorite={() => void patch({ photo: photo.driveId, favorite: false })}
+                  onFavorite={carousel ? () => void patch({ photo: photo.driveId, favorite: false }) : undefined}
                 />
               ))}
             </ul>
@@ -1063,7 +1061,7 @@ function FolderDetail({
             onIndex={(i) => setPreview(photos[i])}
             onClose={() => setPreview(null)}
             favorite={current.favorite}
-            onToggleFavorite={() => void patch({ photo: current.driveId, favorite: !current.favorite })}
+            onToggleFavorite={mode === 'capa' ? undefined : () => void patch({ photo: current.driveId, favorite: !current.favorite })}
             onEdited={(edited) => void patch({ photo: current.driveId, edited })}
             extraActions={
               <button
@@ -1140,10 +1138,50 @@ function SectionTitle({ id, step, title, hint }: { id: string; step: number; tit
   );
 }
 
-function ApproverAnswer({ collection, canConfirm, onConfirm }: { collection: CoverCollectionDetail; canConfirm: boolean; onConfirm: () => Promise<void> }) {
+const SAVE_ERRORS: Record<string, string> = {
+  drive_write_missing: 'O Google Drive está conectado só para leitura. Um administrador precisa reconectar o Drive (Desconectar → Conectar) para permitir salvar.',
+  drive_not_connected: 'O acesso ao Google Drive expirou. Reconecte o Drive e tente de novo.',
+  house_folder_missing: 'Não achei no Drive a pasta da casa de onde vieram as fotos.',
+  not_answered: `A ${APPROVER_NAME} ainda não aprovou nenhuma capa.`,
+};
+
+function ApproverAnswer({
+  collection,
+  canConfirm,
+  onConfirm,
+  onChange,
+}: {
+  collection: CoverCollectionDetail;
+  canConfirm: boolean;
+  onConfirm: () => Promise<void>;
+  onChange: (collection: CoverCollectionDetail) => void;
+}) {
   const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const touched = collection.photos.filter((photo) => approverLines(photo).length > 0);
   const chosen = collection.photos.filter((photo) => photo.approved);
+  // cada vez que salvou no Drive (registro da pasta), do mais recente para o mais antigo
+  const savedToDrive = collection.history.filter((entry) => entry.action === SAVED_TO_DRIVE_ACTION);
+
+  const saveToDrive = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+    const response = await fetch(`/api/capa/${collection.id}/drive`, { method: 'POST' }).catch(() => null);
+    const data = response ? await response.json().catch(() => ({})) : {};
+    setSaving(false);
+    if (response?.ok) {
+      if (data.collection) onChange(data.collection);
+      const failed: string[] = data.failed ?? [];
+      setSaveMessage(
+        failed.length
+          ? { tone: 'error', text: `Pasta criada, mas ${failed.length} ${failed.length === 1 ? 'foto não foi salva' : 'fotos não foram salvas'}: ${failed.join(', ')}.` }
+          : { tone: 'success', text: `Salvo no Drive na pasta “${data.folder?.name}”.` },
+      );
+    } else {
+      setSaveMessage({ tone: 'error', text: SAVE_ERRORS[data.error] ?? 'Não foi possível salvar no Drive. Tente de novo.' });
+    }
+  };
   return (
     <section aria-labelledby="approver-answer" className="space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1177,6 +1215,49 @@ function ApproverAnswer({ collection, canConfirm, onConfirm }: { collection: Cov
           )
         )}
       </div>
+      {/* Salvar no Drive: sempre cria uma pasta nova "Capas aprovadas por Thereza em ..." na pasta da casa */}
+      {chosen.length > 0 && (
+        <div className="space-y-2 rounded-control bg-surface-muted px-3 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-ink-muted">
+              Salve as capas aprovadas{chosen.some((photo) => photo.edited) ? ' (com os cortes)' : ''} numa pasta nova na pasta da casa no Drive, com o registro da aprovação.
+            </p>
+            {canConfirm && (
+              <button
+                type="button"
+                onClick={() => void saveToDrive()}
+                disabled={saving}
+                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <FolderPlus size={15} aria-hidden="true" />}
+                {saving ? 'Salvando no Drive…' : savedToDrive.length ? 'Salvar de novo no Drive' : 'Salvar no Drive'}
+              </button>
+            )}
+          </div>
+          {saveMessage && (
+            <p role={saveMessage.tone === 'error' ? 'alert' : 'status'} className={`text-xs ${saveMessage.tone === 'error' ? 'text-status-danger' : 'text-status-success'}`}>
+              {saveMessage.text}
+            </p>
+          )}
+          {savedToDrive.length > 0 && (
+            <ul className="space-y-1 text-xs text-ink-muted">
+              {savedToDrive.map((entry) => (
+                <li key={entry.id} className="flex flex-wrap items-center gap-x-2">
+                  <span>
+                    Salvo por {entry.actor} em {formatLongStamp(entry.createdAt)}
+                    {typeof entry.details.pasta_drive === 'string' ? ` · “${entry.details.pasta_drive}”` : ''}
+                  </span>
+                  {typeof entry.details.link === 'string' && entry.details.link.startsWith('https://drive.google.com/') && (
+                    <a href={entry.details.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-ink underline-offset-2 hover:underline">
+                      <FolderOpen size={13} aria-hidden="true" /> Abrir no Drive
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {touched.length > 0 && (
         <ul className="grid gap-3 sm:grid-cols-2">
           {touched.map((photo) => (

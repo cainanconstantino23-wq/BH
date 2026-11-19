@@ -22,7 +22,7 @@ interface RawImage {
 
 const ALL_DRIVES = { supportsAllDrives: 'true' };
 
-async function parentsOf(fileId: string): Promise<string[]> {
+export async function parentsOf(fileId: string): Promise<string[]> {
   const response = await driveFetch(`/files/${encodeURIComponent(fileId)}`, { fields: 'parents', ...ALL_DRIVES });
   return ((await response.json()) as { parents?: string[] }).parents ?? [];
 }

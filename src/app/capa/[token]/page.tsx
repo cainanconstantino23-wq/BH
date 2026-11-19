@@ -3,15 +3,14 @@
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Check, Crop, Expand, LoaderCircle, Search, Star, Undo2, X } from 'lucide-react';
+import { Check, Crop, LoaderCircle, Search, Star, X } from 'lucide-react';
 import { APPROVER_LABEL, APPROVER_NAME, formatLongStamp, type CoverPhoto, type EditedImage, type PublicCoverCollection } from '@/lib/covers';
-import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { OnScreen } from '@/components/drive/OnScreen';
 import { ApproverPhotoViewer } from '@/components/capa/ApproverPhotoViewer';
-import { formatPlaceLabel } from '@/lib/instagramFormats';
 
-// Link para a aprovadora: mostra só as fotos favoritadas para capa; ela escolhe a(s) capa(s) e pode comentar.
-// Se não gostar, "Encontrar mais fotos" mostra as outras fotos da pasta (as do carrossel): ela mesma põe nas capas e aprova.
+// Link para a aprovadora: mostra as fotos escolhidas pelo social media. Ela toca numa foto e abre a tela grande
+// (foto inteira): corta ali mesmo, salva o corte e passa para a próxima. No fim aprova a seleção (a equipe é notificada).
+// Se quiser outras, "Encontrar mais fotos" mostra as demais fotos da casa: ela mesma põe na seleção.
 
 const folderPhoto = (image: { driveId: string; name: string; width: number | null; height: number | null }): CoverPhoto => ({
   ...image,
@@ -40,18 +39,17 @@ export default function CoverApprovalLinkPage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
-  const [zoom, setZoom] = useState<CoverPhoto | null>(null);
   // fotos do carrossel que ela mesma pôs nas capas (gravadas ao enviar)
   const [added, setAdded] = useState<Set<string>>(new Set());
   const [moreOpen, setMoreOpen] = useState(false);
   // pasta da casa no Drive (carregada ao abrir "Encontrar mais fotos")
   const [folder, setFolder] = useState<{ status: 'idle' | 'loading' | 'error' } | { status: 'ready'; photos: CoverPhoto[] }>({ status: 'idle' });
-  // corte: foto aberta no editor, envio em andamento e aviso
-  const [cropping, setCropping] = useState<CoverPhoto | null>(null);
+  // corte: envio em andamento e aviso
   const [cropBusy, setCropBusy] = useState<string | null>(null);
   const [cropError, setCropError] = useState('');
-  // tela grande em "Encontrar mais fotos": índice da foto aberta
+  // tela grande: índice da foto aberta na seleção e em "Encontrar mais fotos"
   const [viewing, setViewing] = useState<number | null>(null);
+  const [viewingMore, setViewingMore] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,7 +58,8 @@ export default function CoverApprovalLinkPage() {
         if (!response.ok) return setState({ status: 'missing' });
         const data = (await response.json()) as PublicCoverCollection;
         setState({ status: 'ready', data });
-        setChosen(new Set(data.photos.filter((photo) => photo.approved).map((photo) => photo.driveId)));
+        // primeira vez: todas as fotos escolhidas pela equipe já vêm na seleção; depois de responder, a resposta dela
+        setChosen(new Set((data.respondedAt ? data.photos.filter((photo) => photo.approved) : data.photos).map((photo) => photo.driveId)));
         setFeedback(data.feedback);
       })
       .catch(() => {
@@ -103,7 +102,7 @@ export default function CoverApprovalLinkPage() {
   };
 
   const saveCrop = async (photo: CoverPhoto, file: File, edited: Omit<EditedImage, 'url'>): Promise<boolean> => {
-    setCropping(null);
+    setSent(false);
     setCropBusy(photo.driveId);
     setCropError('');
     try {
@@ -137,6 +136,7 @@ export default function CoverApprovalLinkPage() {
       });
       if (!response.ok) throw new Error(String(response.status));
       setEdited(photo.driveId, null, null);
+      setSent(false);
     } catch {
       setCropError('Não foi possível voltar à foto original. Tente de novo.');
     } finally {
@@ -174,7 +174,7 @@ export default function CoverApprovalLinkPage() {
 
   const send = async () => {
     if (chosen.size === 0 && !feedback.trim()) {
-      setError('Escolha pelo menos uma foto ou escreva um comentário.');
+      setError('Deixe pelo menos uma foto na seleção ou escreva um comentário.');
       return;
     }
     setSending(true);
@@ -234,83 +234,60 @@ export default function CoverApprovalLinkPage() {
           <>
             <header className="mt-10 max-w-2xl lg:mt-14">
               <p className="text-[0.95rem] text-bh-tinta-suave">{state.data.label}</p>
-              <h1 className="mt-1 text-[2.5rem] font-light leading-[1.05] sm:text-[3.25rem]">Escolha a capa</h1>
+              <h1 className="mt-1 text-[2.5rem] font-light leading-[1.05] sm:text-[3.25rem]">Aprove as fotos</h1>
               <p className="mt-3 text-base leading-relaxed text-bh-tinta-suave sm:text-[1.0625rem]">
                 {capas.length > 0
-                  ? 'Toque nas fotos que podem ser capa do feed. As fotos aparecem no formato da grade do perfil.'
+                  ? 'Toque numa foto para ver em tamanho grande. Lá você corta, salva o corte e passa para a próxima. Tire da seleção o que não quiser e, no fim, aprove a seleção.'
                   : carouselPhotos.length > 0
-                    ? 'Ainda não há fotos marcadas para capa. Use “Encontrar mais fotos” para escolher entre as fotos da casa.'
-                    : 'Ainda não há fotos separadas para capa. A equipe avisa quando estiverem prontas.'}
+                    ? 'Ainda não há fotos separadas. Use “Encontrar mais fotos” para escolher entre as fotos da casa.'
+                    : 'Ainda não há fotos separadas. A equipe avisa quando estiverem prontas.'}
               </p>
             </header>
 
             {capas.length > 0 && (
               <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:gap-x-6">
-                {capas.map((photo) => {
+                {capas.map((photo, photoIndex) => {
                   const isChosen = chosen.has(photo.driveId);
                   const isAdded = added.has(photo.driveId) || photo.favoritedByApprover;
                   return (
                     <li key={photo.driveId} className="relative">
                       <button
                         type="button"
-                        onClick={() => toggle(photo.driveId)}
-                        aria-pressed={isChosen}
-                        aria-label={isChosen ? 'Desmarcar esta foto' : 'Escolher esta foto como capa'}
-                        className={`relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-bh-azul transition-shadow focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata ${
-                          isChosen ? 'ring-4 ring-bh-mata ring-offset-2 ring-offset-bh-cal' : ''
+                        onClick={() => setViewing(photoIndex)}
+                        aria-label="Ver a foto em tamanho grande, cortar e passar para a próxima"
+                        className={`relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-bh-azul transition-[box-shadow,opacity] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata ${
+                          isChosen ? 'ring-4 ring-bh-mata ring-offset-2 ring-offset-bh-cal' : 'opacity-60'
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                         <img src={image(photo, 900)} alt="" loading="lazy" className="h-full w-full object-cover" />
-                        <span
-                          className={`absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white shadow ${
-                            isChosen ? 'bg-bh-mata text-white' : 'bg-black/25 text-transparent'
-                          }`}
-                        >
-                          <Check size={18} strokeWidth={3} aria-hidden="true" />
-                        </span>
-                        {isAdded && (
+                        {cropBusy === photo.driveId ? (
+                          <span className="absolute inset-x-3 bottom-3 inline-flex items-center justify-center gap-1.5 rounded-full bg-bh-papel/95 px-3 py-1 text-[0.8125rem] font-medium text-bh-tinta">
+                            <LoaderCircle size={14} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> Salvando…
+                          </span>
+                        ) : photo.edited ? (
+                          <span className="absolute inset-x-3 bottom-3 inline-flex items-center justify-center gap-1.5 rounded-full bg-bh-papel/95 px-3 py-1 text-[0.8125rem] font-medium text-bh-tinta">
+                            <Crop size={13} aria-hidden="true" /> Cortada
+                          </span>
+                        ) : isAdded ? (
                           <span className="absolute inset-x-3 bottom-3 rounded-full bg-bh-papel/95 px-3 py-1 text-center text-[0.8125rem] font-medium text-bh-tinta">
                             Adicionada por {APPROVER_NAME}
                           </span>
-                        )}
+                        ) : null}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setZoom(photo)}
-                        aria-label="Ver a foto inteira"
-                        className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white hover:bg-black/50"
+                        onClick={() => toggle(photo.driveId)}
+                        aria-pressed={isChosen}
+                        aria-label={isChosen ? 'Tirar esta foto da seleção' : 'Pôr esta foto na seleção'}
+                        className={`absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border-2 border-white shadow ${
+                          isChosen ? 'bg-bh-mata text-white' : 'bg-black/30 text-transparent hover:bg-black/50'
+                        }`}
                       >
-                        <Expand size={16} aria-hidden="true" />
+                        <Check size={18} strokeWidth={3} aria-hidden="true" />
                       </button>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.875rem]">
-                        {cropBusy === photo.driveId ? (
-                          <span className="inline-flex min-h-9 items-center gap-1.5 text-bh-tinta-suave">
-                            <LoaderCircle size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> Salvando…
-                          </span>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setCropping(photo)}
-                              className="inline-flex min-h-9 items-center gap-1.5 font-medium text-bh-mata hover:underline"
-                            >
-                              <Crop size={15} aria-hidden="true" /> {photo.edited ? 'Cortar de novo' : 'Cortar'}
-                            </button>
-                            {photo.edited && photo.editedBy === APPROVER_LABEL && (
-                              <button
-                                type="button"
-                                onClick={() => void undoCrop(photo)}
-                                className="inline-flex min-h-9 items-center gap-1.5 text-bh-tinta-suave hover:text-bh-tinta"
-                              >
-                                <Undo2 size={15} aria-hidden="true" /> Original
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </div>
                       {photo.edited && photo.editedBy === APPROVER_LABEL && photo.editedAt && (
-                        <p className="text-[0.8125rem] text-bh-tinta-suave">Cortada por você em {formatLongStamp(photo.editedAt)}</p>
+                        <p className="mt-2 text-[0.8125rem] text-bh-tinta-suave">Cortada por você em {formatLongStamp(photo.editedAt)}</p>
                       )}
                     </li>
                   );
@@ -352,8 +329,8 @@ export default function CoverApprovalLinkPage() {
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <p role="status" className="text-[0.95rem] text-bh-tinta-suave">
               {error ? <span className="text-bh-madeira">{error}</span>
-                : sent ? 'Resposta enviada. Obrigado!'
-                : chosen.size === 0 ? 'Nenhuma foto escolhida' : `${chosen.size} ${chosen.size === 1 ? 'foto escolhida' : 'fotos escolhidas'}`}
+                : sent ? 'Seleção aprovada. A equipe já foi avisada. Obrigado!'
+                : chosen.size === 0 ? 'Nenhuma foto na seleção' : `${chosen.size} de ${capas.length} ${capas.length === 1 ? 'foto' : 'fotos'} na seleção`}
             </p>
             <button
               type="button"
@@ -362,7 +339,7 @@ export default function CoverApprovalLinkPage() {
               className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full bg-bh-mata px-6 text-base font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {sending ? <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
-              {sent ? 'Enviado' : 'Enviar escolha'}
+              {sent ? 'Aprovada' : chosen.size === 0 ? 'Enviar comentário' : 'Aprovar seleção'}
             </button>
           </div>
         </div>
@@ -374,7 +351,7 @@ export default function CoverApprovalLinkPage() {
             <div className="mx-auto flex max-w-5xl items-start justify-between gap-4">
               <div>
                 <h2 id="more-photos-title" className="text-[1.75rem] font-light leading-tight">Mais fotos da casa</h2>
-                <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque numa foto para ver grande, passar as fotos, cortar e favoritar. As favoritas entram na sua escolha.</p>
+                <p className="mt-1 text-[0.95rem] text-bh-tinta-suave">Toque numa foto para ver grande, passar as fotos, cortar e favoritar. As favoritas entram na sua seleção.</p>
               </div>
               <button type="button" autoFocus onClick={() => setMoreOpen(false)} aria-label="Fechar" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-bh-linha/50">
                 <X size={20} aria-hidden="true" />
@@ -400,7 +377,7 @@ export default function CoverApprovalLinkPage() {
                   <li key={photo.driveId} className="relative">
                     <button
                       type="button"
-                      onClick={() => setViewing(photoIndex)}
+                      onClick={() => setViewingMore(photoIndex)}
                       aria-label="Ver a foto em tela grande"
                       className={`relative block aspect-[3/4] w-full overflow-hidden rounded-xl bg-bh-azul transition-shadow focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bh-mata ${
                         isAdded ? 'ring-4 ring-bh-mata ring-offset-2 ring-offset-bh-cal' : ''
@@ -445,13 +422,38 @@ export default function CoverApprovalLinkPage() {
         </div>
       )}
 
-      {viewing !== null && morePhotos[viewing] && (
+      {viewing !== null && capas[viewing] && (
         <OnScreen>
           <ApproverPhotoViewer
-            photos={morePhotos}
+            photos={capas}
             index={viewing}
             onIndex={setViewing}
             onClose={() => setViewing(null)}
+            src={image}
+            originalSrc={(photo) => `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=4000`}
+            toggleKind="selecao"
+            isFavorite={(photo) => chosen.has(photo.driveId)}
+            onToggleFavorite={(photo) => toggle(photo.driveId)}
+            canUndo={(photo) => photo.editedBy === APPROVER_LABEL}
+            onUndoCrop={undoCrop}
+            saving={cropBusy !== null}
+            onSaveCrop={async (photo, file, size) => {
+              const ok = await saveCrop(photo, file, size);
+              // foto cortada entra na seleção
+              if (ok && !chosen.has(photo.driveId)) toggle(photo.driveId);
+              return ok;
+            }}
+          />
+        </OnScreen>
+      )}
+
+      {viewingMore !== null && morePhotos[viewingMore] && (
+        <OnScreen>
+          <ApproverPhotoViewer
+            photos={morePhotos}
+            index={viewingMore}
+            onIndex={setViewingMore}
+            onClose={() => setViewingMore(null)}
             src={image}
             originalSrc={(photo) => `/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(photo.driveId)}?s=4000`}
             isFavorite={(photo) => added.has(photo.driveId)}
@@ -461,44 +463,12 @@ export default function CoverApprovalLinkPage() {
               const ok = await saveCrop(photo, file, size);
               // foto cortada entra nas favoritas (o servidor já a pôs na pasta de capa)
               if (ok && !added.has(photo.driveId)) toggleAdded(photo.driveId);
+              return ok;
             }}
           />
         </OnScreen>
       )}
 
-      {cropping && (
-        <OnScreen>
-          <InstagramImageEditor
-            src={`/api/capa-link/${encodeURIComponent(token)}/thumb/${encodeURIComponent(cropping.driveId)}?s=4000`}
-            fileName={cropping.name || 'capa'}
-            contentType="CARROSSEL"
-            initialFormatId="ig-carrossel-4x5"
-            title="Cortar para a capa do carrossel"
-            applyLabel="Salvar corte"
-            cancelLabel="Cancelar"
-            onCancel={() => setCropping(null)}
-            onApply={({ file, format }) =>
-              void saveCrop(cropping, file, { width: format.width, height: format.height, label: `${formatPlaceLabel(format)} ${format.ratioLabel}` })
-            }
-          />
-        </OnScreen>
-      )}
-
-      {zoom && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Foto inteira"
-          onPointerDown={(event) => event.target === event.currentTarget && setZoom(null)}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/90 p-4"
-        >
-          <button type="button" autoFocus onClick={() => setZoom(null)} aria-label="Fechar" className="flex h-11 w-11 items-center justify-center self-end rounded-full bg-white/15 text-white hover:bg-white/25">
-            <X size={20} aria-hidden="true" />
-          </button>
-          {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
-          <img src={image(zoom, 1800)} alt="" className="min-h-0 max-w-full flex-1 rounded-lg object-contain" />
-        </div>
-      )}
     </main>
   );
 }

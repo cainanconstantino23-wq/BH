@@ -37,7 +37,8 @@ export function DrivePhotoViewer({
   selected?: boolean;
   favorite: boolean;
   onToggleSelect?: () => void;
-  onToggleFavorite: () => void;
+  /** undefined = sem o botão Capa (Aprovação de capa: toda foto da pasta já é candidata a capa) */
+  onToggleFavorite?: () => void;
   /** corte salvo (ou null = voltar para a original) */
   onEdited: (edited: EditedImage | null) => void;
   extraActions?: ReactNode;
@@ -104,9 +105,11 @@ export function DrivePhotoViewer({
                 <Check size={14} aria-hidden="true" /> {selected ? 'Escolhida' : 'Escolher'}
               </button>
             )}
-            <button type="button" onClick={onToggleFavorite} aria-pressed={favorite} className={action(favorite, 'bg-amber-400 text-white')}>
-              <Star size={14} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /> Capa
-            </button>
+            {onToggleFavorite && (
+              <button type="button" onClick={onToggleFavorite} aria-pressed={favorite} className={action(favorite, 'bg-amber-400 text-white')}>
+                <Star size={14} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /> Capa
+              </button>
+            )}
             {extraActions}
           </>
         }

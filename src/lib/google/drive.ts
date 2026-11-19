@@ -2,12 +2,15 @@ import 'server-only';
 
 import { createAdminClient } from '@/utils/supabase/admin';
 
-// Google Drive: login OAuth (escopo só leitura), tokens em google_drive_connections (só servidor)
-// e chamadas à API do Drive. A conexão vale para a equipe inteira (a mais recente).
+// Google Drive: login OAuth, tokens em google_drive_connections (só servidor) e chamadas à API do Drive.
+// A conexão vale para a equipe inteira (a mais recente).
+// Escopo "drive" (escrita) desde 19/11/2026: salvar as capas aprovadas numa pasta nova da casa.
+// Conexões antigas só têm drive.readonly: leem normalmente, mas precisam reconectar para salvar.
 
 export const GOOGLE_CALLBACK_PATH = '/api/auth/google/callback';
 export const GOOGLE_STATE_COOKIE = 'bh_google_state';
-const SCOPES = ['openid', 'email', 'https://www.googleapis.com/auth/drive.readonly'];
+export const DRIVE_WRITE_SCOPE = 'https://www.googleapis.com/auth/drive';
+const SCOPES = ['openid', 'email', DRIVE_WRITE_SCOPE];
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 
 export function getGoogleAppConfig() {
@@ -83,13 +86,14 @@ interface ConnectionRow {
   refresh_token: string;
   access_token: string | null;
   access_token_expires_at: string | null;
+  scopes: string | null;
 }
 
 /** A conexão da equipe (a mais recente), ou null. */
 export async function getDriveConnection() {
   const { data, error } = await createAdminClient()
     .from('google_drive_connections')
-    .select('user_id, google_email, refresh_token, access_token, access_token_expires_at')
+    .select('user_id, google_email, refresh_token, access_token, access_token_expires_at, scopes')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -144,6 +148,58 @@ export async function driveFetch(path: string, params: Record<string, string> = 
     throw new Error(`Drive ${response.status}: ${detail.slice(0, 300)}`);
   }
   return response;
+}
+
+/** A conexão deixa gravar no Drive? (escopo "drive" completo, não só drive.readonly) */
+export const canWriteDrive = (connection: Pick<ConnectionRow, 'scopes'> | null) =>
+  (connection?.scopes ?? '').split(/\s+/).includes(DRIVE_WRITE_SCOPE);
+
+/** A conexão é só de leitura: reconectar o Google Drive para salvar. */
+export class DriveWriteMissingError extends Error {}
+
+const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
+const ALL_DRIVES = 'supportsAllDrives=true';
+
+async function driveWrite(url: string, init: { method: string; body: BodyInit; contentType: string }) {
+  const response = await fetch(url, {
+    method: init.method,
+    headers: { Authorization: `Bearer ${await getDriveAccessToken()}`, 'Content-Type': init.contentType },
+    body: init.body,
+    cache: 'no-store',
+  });
+  if (response.status === 401) throw new DriveNotConnectedError();
+  const data = (await response.json().catch(() => ({}))) as { id?: string; webViewLink?: string; error?: { message?: string; errors?: { reason?: string }[] } };
+  if (response.status === 403 && /insufficient|scope/i.test(JSON.stringify(data.error ?? ''))) throw new DriveWriteMissingError();
+  if (!response.ok || !data.id) throw new Error(`Drive ${response.status}: ${data.error?.message ?? ''}`.trim());
+  return { id: data.id, link: data.webViewLink ?? null };
+}
+
+/** Cria uma pasta dentro de outra. */
+export const driveCreateFolder = (name: string, parent: string, description = '') =>
+  driveWrite(`${DRIVE_API}/files?${ALL_DRIVES}&fields=id,webViewLink`, {
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ name, parents: [parent], description, mimeType: 'application/vnd.google-apps.folder' }),
+  });
+
+/** Copia um arquivo do Drive para uma pasta, com outro nome e descrição. */
+export const driveCopyFile = (fileId: string, name: string, parent: string, description = '') =>
+  driveWrite(`${DRIVE_API}/files/${encodeURIComponent(fileId)}/copy?${ALL_DRIVES}&fields=id`, {
+    method: 'POST',
+    contentType: 'application/json',
+    body: JSON.stringify({ name, parents: [parent], description }),
+  });
+
+/** Envia um arquivo novo (até alguns MB) para uma pasta. */
+export function driveUploadFile(name: string, parent: string, bytes: Uint8Array, mimeType: string, description = '') {
+  const boundary = `bh${crypto.randomUUID().replace(/-/g, '')}`;
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parent], description })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
+  const body = Buffer.concat([Buffer.from(head, 'utf8'), Buffer.from(bytes), Buffer.from(`\r\n--${boundary}--`, 'utf8')]);
+  return driveWrite(`${UPLOAD_API}/files?uploadType=multipart&${ALL_DRIVES}&fields=id`, {
+    method: 'POST',
+    contentType: `multipart/related; boundary=${boundary}`,
+    body,
+  });
 }
 
 /** IDs do Drive: letras, números, - e _. "root" é a raiz do Meu Drive. */

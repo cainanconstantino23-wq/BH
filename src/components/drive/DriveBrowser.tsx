@@ -2,14 +2,15 @@
 
 import { OnScreen } from '@/components/drive/OnScreen';
 import { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Crop, Folder, FolderInput, HardDrive, Loader2, RefreshCw, Star, Users, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Crop, Folder, FolderInput, HardDrive, Loader2, Plus, RefreshCw, Star, Users, X } from 'lucide-react';
 import type { DriveEntry } from '@/app/api/drive/list/route';
 import { photoLimit, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type EditedImage } from '@/lib/covers';
 import { DrivePhotoViewer } from '@/components/drive/DrivePhotoViewer';
-import { coverFolderLabel, guessHouseFromFileName } from '@/lib/house';
+import { DEFAULT_NEIGHBORHOODS, coverFolderLabel, guessHouseFromFileName, neighborhoodOptions } from '@/lib/house';
 
-// Navegação no Google Drive: escolher fotos (✓) e favoritar para capa (★); depois salvar numa pasta de casa.
-// Na aprovação fotos (mode 'fotos') a pasta da casa guarda no máximo 15 fotos: as do carrossel.
+// Navegação no Google Drive: escolher fotos (✓); depois salvar numa pasta de casa.
+// Aprovação de capa (mode 'capa'): toda foto escolhida é candidata a capa (sem ★).
+// Aprovação fotos (mode 'fotos'): no máximo 15 fotos (as do carrossel) e, entre elas, as capas marcadas com ★.
 
 type Source = 'root' | 'shared' | 'drives';
 const SOURCES: { key: Source; label: string; icon: typeof HardDrive }[] = [
@@ -262,7 +263,7 @@ export function DriveBrowser({
                   favorite={favorites.has(entry.id)}
                   onOpen={() => setPreview(entry)}
                   onSelect={() => toggleSelected(entry)}
-                  onFavorite={() => toggleFavorite(entry)}
+                  onFavorite={carousel ? () => toggleFavorite(entry) : undefined}
                 />
               ))}
             </ul>
@@ -300,7 +301,7 @@ export function DriveBrowser({
               ) : (
                 <>
                   <span className="block font-semibold text-ink">{selected.size} {selected.size === 1 ? 'foto escolhida' : 'fotos escolhidas'}</span>
-                  {favorites.size} {favorites.size === 1 ? 'favorita' : 'favoritas'} para capa
+                  candidatas a capa
                 </>
               )}
             </p>
@@ -325,7 +326,7 @@ export function DriveBrowser({
           selected={selected.has(preview.id)}
           favorite={favorites.has(preview.id)}
           onToggleSelect={() => toggleSelected(preview)}
-          onToggleFavorite={() => toggleFavorite(preview)}
+          onToggleFavorite={carousel ? () => toggleFavorite(preview) : undefined}
           onEdited={(edited) => {
             setEdits((current) => {
               const next = new Map(current);
@@ -346,7 +347,7 @@ export function DriveBrowser({
           collections={collections}
           target={target}
           guessFrom={path.length ? path[path.length - 1].name : ''}
-          photos={[...selected.values()].map((entry) => ({ id: entry.id, name: entry.name, width: entry.width, height: entry.height, favorite: favorites.has(entry.id), edited: edits.get(entry.id) }))}
+          photos={[...selected.values()].map((entry) => ({ id: entry.id, name: entry.name, width: entry.width, height: entry.height, favorite: !carousel || favorites.has(entry.id), edited: edits.get(entry.id) }))}
           onClose={() => setSaveOpen(false)}
           onSaved={(collection) => {
             setSaveOpen(false);
@@ -390,7 +391,8 @@ export function PhotoTile({
   meta?: string;
   onOpen: () => void;
   onSelect?: () => void;
-  onFavorite: () => void;
+  /** undefined = sem estrela (Aprovação de capa: toda foto é candidata a capa) */
+  onFavorite?: () => void;
   selectLabel?: string;
 }) {
   const [broken, setBroken] = useState(false);
@@ -437,6 +439,7 @@ export function PhotoTile({
           <Check size={15} strokeWidth={3} aria-hidden="true" />
         </button>
       )}
+      {onFavorite && (
       <button
         type="button"
         onClick={onFavorite}
@@ -449,6 +452,7 @@ export function PhotoTile({
       >
         <Star size={15} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
       </button>
+      )}
       <p className="mt-1.5 truncate text-[11px] text-ink-muted" title={name}>{name}</p>
       {meta && <p className="truncate text-[11px] tabular-nums text-ink-muted" title={meta}>{meta}</p>}
     </li>
@@ -534,7 +538,9 @@ function SaveDialog({
           <div>
             <h2 id="save-cover-title" className="text-base font-semibold text-ink">Salvar na pasta da casa</h2>
             <p className="mt-1 text-sm text-ink-muted">
-              {photos.length} {photos.length === 1 ? 'foto' : 'fotos'}, {photos.filter((photo) => photo.favorite).length} {mode === 'fotos' ? 'capas' : 'favoritas para capa'}.
+              {mode === 'fotos'
+                ? `${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'}, ${photos.filter((photo) => photo.favorite).length} capas.`
+                : `${photos.length} ${photos.length === 1 ? 'foto candidata' : 'fotos candidatas'} a capa.`}
             </p>
           </div>
           <button type="button" onClick={onClose} disabled={saving} aria-label="Fechar" className="flex h-9 w-9 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted">
@@ -580,10 +586,7 @@ function SaveDialog({
                 <input value={houseNumber} onChange={(event) => setHouseNumber(event.target.value)} inputMode="numeric" placeholder="110" className={`${input} tabular-nums`} />
               </label>
             </div>
-            <label className="block space-y-1.5">
-              <span className="text-xs font-semibold text-ink">Bairro</span>
-              <input value={neighborhood} onChange={(event) => setNeighborhood(event.target.value)} placeholder="Ex.: Vila dos Coqueiros" className={input} />
-            </label>
+            <NeighborhoodPicker value={neighborhood} onChange={setNeighborhood} inputClass={input} />
             {askDate && (
               <fieldset className="space-y-1.5">
                 <legend className="text-xs font-semibold text-ink">Quando planejamos publicar</legend>
@@ -617,5 +620,84 @@ function SaveDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Bairro: escolhe entre os já criados (Quadrado, Rio da Barra e os das pastas salvas) ou cria um novo. */
+function NeighborhoodPicker({ value, onChange, inputClass }: { value: string; onChange: (value: string) => void; inputClass: string }) {
+  const [options, setOptions] = useState<string[]>(DEFAULT_NEIGHBORHOODS);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/capa/bairros', { cache: 'no-store', signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as { neighborhoods?: string[] };
+        if (data.neighborhoods?.length) setOptions(data.neighborhoods);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  const createNew = () => {
+    const name = draft.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    setOptions((current) => neighborhoodOptions([...current, name]));
+    // se já existia com outra grafia (ex.: "quadrado"), usa a que já está na lista
+    onChange(neighborhoodOptions([...options, name]).find((option) => option.localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0) ?? name);
+    setDraft('');
+    setCreating(false);
+  };
+
+  const chip = (active: boolean) =>
+    `inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${
+      active ? 'border-brand-plum bg-brand-plum text-white' : 'border-border bg-surface text-ink hover:bg-surface-muted'
+    }`;
+
+  return (
+    <fieldset className="space-y-1.5">
+      <legend className="text-xs font-semibold text-ink">Bairro</legend>
+      <div role="radiogroup" aria-label="Bairro" className="flex flex-wrap gap-1.5">
+        {options.map((option) => (
+          <button key={option} type="button" role="radio" aria-checked={value === option} onClick={() => onChange(value === option ? '' : option)} className={chip(value === option)}>
+            {value === option && <Check size={13} aria-hidden="true" />} {option}
+          </button>
+        ))}
+        {!creating && (
+          <button type="button" onClick={() => setCreating(true)} className="inline-flex min-h-9 items-center gap-1 rounded-full border border-dashed border-border px-3.5 text-xs font-semibold text-ink-muted hover:border-brand-plum hover:text-ink">
+            <Plus size={13} aria-hidden="true" /> Novo bairro
+          </button>
+        )}
+      </div>
+      {creating && (
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                createNew();
+              } else if (event.key === 'Escape') {
+                setCreating(false);
+              }
+            }}
+            placeholder="Nome do bairro"
+            aria-label="Nome do novo bairro"
+            maxLength={120}
+            autoFocus
+            className={inputClass}
+          />
+          <button type="button" onClick={createNew} disabled={!draft.trim()} className="min-h-11 shrink-0 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50">
+            Criar
+          </button>
+          <button type="button" onClick={() => setCreating(false)} aria-label="Cancelar novo bairro" className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted">
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+    </fieldset>
   );
 }

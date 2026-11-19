@@ -58,3 +58,17 @@ export function guessHouseFromFileName(fileName: string) {
 
   return { name, number };
 }
+
+/** Bairros já criados para escolher ao salvar a pasta da casa (os outros vêm das pastas já salvas). */
+export const DEFAULT_NEIGHBORHOODS = ['Quadrado', 'Rio da Barra'];
+
+/** Lista de bairros sem repetir (ignora maiúsculas e acentos), em ordem alfabética, com os padrões sempre presentes. */
+export function neighborhoodOptions(used: (string | null | undefined)[]) {
+  const byKey = new Map<string, string>();
+  for (const value of [...DEFAULT_NEIGHBORHOODS, ...used]) {
+    const name = (value ?? '').trim().replace(/\s+/g, ' ');
+    const key = withoutAccents(name).toLowerCase();
+    if (name && !byKey.has(key)) byKey.set(key, name);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}

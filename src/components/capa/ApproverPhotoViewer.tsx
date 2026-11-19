@@ -1,12 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Check, ChevronLeft, ChevronRight, Crop, LoaderCircle, Star, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Crop, LoaderCircle, Star, Undo2, X } from 'lucide-react';
 import type { CoverPhoto } from '@/lib/covers';
 import { CROP_RATIOS, clampOffset, coverScale, lowResolution, maxZoom, sourceRect, type CropRatio, type Point } from '@/lib/simpleCrop';
 
-// Tela grande do link da aprovadora: setas para passar as fotos da casa, Favoritar e um corte simples
-// (só 4:5 ou 1:1 do carrossel, arrastar e zoom). Sem as opções do editor da equipe.
+// Tela grande do link da aprovadora: a foto inteira (proporção original), setas para passar as fotos,
+// corte simples ali mesmo (4:5 ou 1:1 do carrossel, arrastar e zoom), "Salvar e próxima",
+// voltar à original e pôr/tirar da seleção. Sem as opções do editor da equipe.
+
+type CropSize = { width: number; height: number; label: string };
 
 interface Props {
   photos: CoverPhoto[];
@@ -18,14 +21,34 @@ interface Props {
   originalSrc: (photo: CoverPhoto) => string;
   isFavorite: (photo: CoverPhoto) => boolean;
   onToggleFavorite: (photo: CoverPhoto) => void;
-  onSaveCrop: (photo: CoverPhoto, file: File, size: { width: number; height: number; label: string }) => Promise<void>;
+  onSaveCrop: (photo: CoverPhoto, file: File, size: CropSize) => Promise<boolean | void>;
+  /** Volta à foto original (só quando o corte é da aprovadora). */
+  onUndoCrop?: (photo: CoverPhoto) => Promise<void>;
+  canUndo?: (photo: CoverPhoto) => boolean;
+  /** Textos do botão de seleção: 'selecao' (✓ Na seleção) ou 'favorita' (★ Favoritar). */
+  toggleKind?: 'selecao' | 'favorita';
   saving: boolean;
 }
 
-export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, originalSrc, isFavorite, onToggleFavorite, onSaveCrop, saving }: Props) {
+export function ApproverPhotoViewer({
+  photos,
+  index,
+  onIndex,
+  onClose,
+  src,
+  originalSrc,
+  isFavorite,
+  onToggleFavorite,
+  onSaveCrop,
+  onUndoCrop,
+  canUndo,
+  toggleKind = 'favorita',
+  saving,
+}: Props) {
   const [cropping, setCropping] = useState(false);
   const photo = photos[index];
   const go = useCallback((step: number) => onIndex((index + step + photos.length) % photos.length), [index, onIndex, photos.length]);
+  const hasNext = photos.length > 1;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -40,12 +63,15 @@ export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, orig
 
   if (!photo) return null;
   const favorite = isFavorite(photo);
+  const selection = toggleKind === 'selecao';
+  const toggleText = selection ? (favorite ? 'Na seleção' : 'Incluir na seleção') : favorite ? 'Favoritada' : 'Favoritar';
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Foto da casa" className="fixed inset-0 z-50 flex flex-col bg-black text-white">
       <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-6">
         <p className="text-[0.95rem] tabular-nums text-white/70">
           {index + 1} de {photos.length}
+          {photo.edited && !cropping && <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-[0.8125rem] text-white">Cortada{photo.edited.label ? ` · ${photo.edited.label}` : ''}</span>}
         </p>
         <button type="button" autoFocus onClick={cropping ? () => setCropping(false) : onClose} aria-label="Fechar" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
           <X size={20} aria-hidden="true" />
@@ -58,18 +84,22 @@ export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, orig
           imageSrc={originalSrc(photo)}
           fileName={photo.name}
           saving={saving}
+          hasNext={hasNext}
           onCancel={() => setCropping(false)}
-          onSave={async (file, size) => {
-            await onSaveCrop(photo, file, size);
+          onSave={async (file, size, next) => {
+            const ok = await onSaveCrop(photo, file, size);
+            if (ok === false) return;
             setCropping(false);
+            if (next) go(1);
           }}
         />
       ) : (
         <>
           <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 sm:px-16">
+            {/* foto inteira, na proporção original (ou o corte, se já cortada) */}
             {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
-            <img key={photo.driveId} src={src(photo, 1800)} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
-            {photos.length > 1 && (
+            <img key={`${photo.driveId}-${photo.edited?.url ?? ''}`} src={src(photo, 2400)} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+            {hasNext && (
               <>
                 <button type="button" onClick={() => go(-1)} aria-label="Foto anterior" className="absolute left-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-bh-tinta shadow-lg hover:bg-white sm:left-4">
                   <ChevronLeft size={24} aria-hidden="true" />
@@ -80,14 +110,14 @@ export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, orig
               </>
             )}
           </div>
-          <div className="flex items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
             <button
               type="button"
               onClick={() => onToggleFavorite(photo)}
               aria-pressed={favorite}
               className={`inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-base font-medium transition-colors ${favorite ? 'bg-bh-mata text-white' : 'bg-white text-bh-tinta hover:bg-white/90'}`}
             >
-              <Star size={18} aria-hidden="true" fill={favorite ? 'currentColor' : 'none'} /> {favorite ? 'Favoritada' : 'Favoritar'}
+              {selection ? <Check size={18} aria-hidden="true" /> : <Star size={18} aria-hidden="true" fill={favorite ? 'currentColor' : 'none'} />} {toggleText}
             </button>
             <button
               type="button"
@@ -98,6 +128,25 @@ export function ApproverPhotoViewer({ photos, index, onIndex, onClose, src, orig
               {saving ? <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Crop size={18} aria-hidden="true" />}
               {photo.edited ? 'Cortar de novo' : 'Cortar'}
             </button>
+            {onUndoCrop && photo.edited && canUndo?.(photo) && (
+              <button
+                type="button"
+                onClick={() => void onUndoCrop(photo)}
+                disabled={saving}
+                className="inline-flex min-h-12 items-center gap-2 rounded-full px-4 text-base font-medium text-white/80 hover:bg-white/10 hover:text-white disabled:opacity-50"
+              >
+                <Undo2 size={18} aria-hidden="true" /> Original
+              </button>
+            )}
+            {hasNext && (
+              <button
+                type="button"
+                onClick={() => go(1)}
+                className="inline-flex min-h-12 items-center gap-2 rounded-full border border-white/40 px-6 text-base font-medium text-white hover:bg-white/10"
+              >
+                Próxima <ArrowRight size={18} aria-hidden="true" />
+              </button>
+            )}
           </div>
         </>
       )}
@@ -109,14 +158,17 @@ function SimpleCropper({
   imageSrc,
   fileName,
   saving,
+  hasNext,
   onCancel,
   onSave,
 }: {
   imageSrc: string;
   fileName: string;
   saving: boolean;
+  hasNext: boolean;
   onCancel: () => void;
-  onSave: (file: File, size: { width: number; height: number; label: string }) => Promise<void>;
+  /** next = depois de salvar, passa para a próxima foto */
+  onSave: (file: File, size: CropSize, next: boolean) => Promise<void>;
 }) {
   const [ratio, setRatio] = useState<CropRatio>(CROP_RATIOS[0]);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -184,7 +236,7 @@ function SimpleCropper({
     setOffset({ x: frame.w / 2 - center.x * next, y: frame.h / 2 - center.y * next });
   };
 
-  const save = async () => {
+  const save = async (next = false) => {
     if (!image || !scale) return;
     const canvas = document.createElement('canvas');
     canvas.width = ratio.width;
@@ -201,7 +253,7 @@ function SimpleCropper({
       width: ratio.width,
       height: ratio.height,
       label: `Carrossel ${ratio.label.split(' ')[1]}`,
-    });
+    }, next);
   };
 
   return (
@@ -269,7 +321,7 @@ function SimpleCropper({
         />
       </div>
       )}
-      <div className="flex items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
+      <div className="flex flex-wrap items-center justify-center gap-3 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
         <button type="button" onClick={onCancel} disabled={saving} className="inline-flex min-h-12 items-center rounded-full border border-white/40 px-6 text-base font-medium text-white hover:bg-white/10 disabled:opacity-50">
           Cancelar
         </button>
@@ -277,11 +329,21 @@ function SimpleCropper({
           type="button"
           onClick={() => void save()}
           disabled={!image || saving}
-          className="inline-flex min-h-12 items-center gap-2 rounded-full bg-bh-mata px-6 text-base font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className={`inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-base font-medium disabled:opacity-50 ${hasNext ? 'border border-white/40 text-white hover:bg-white/10' : 'bg-bh-mata text-white hover:opacity-90'}`}
         >
           {saving ? <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check size={18} aria-hidden="true" />}
           Salvar corte
         </button>
+        {hasNext && (
+          <button
+            type="button"
+            onClick={() => void save(true)}
+            disabled={!image || saving}
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-bh-mata px-6 text-base font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            Salvar e próxima <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
     </>
   );
