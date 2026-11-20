@@ -107,10 +107,10 @@ export function CoverApprovalPanel({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">{COPY[mode].title}</h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">{COPY[mode].intro}</p>
+          <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">{COPY[mode].title}</h1>
+          <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">{COPY[mode].intro}</p>
         </div>
         {connected && status.state === 'ready' && (
           <div className="flex items-center gap-2 text-xs text-ink-muted">
@@ -158,7 +158,7 @@ export function CoverApprovalPanel({
             }}
             onAdd={() => setView({ name: 'drive', target: null })}
           />
-          <div id="foto-detalhe" className="min-w-0 scroll-mt-4 rounded-panel border border-border bg-surface p-4 sm:p-6">
+          <div id="foto-detalhe" className="min-w-0 scroll-mt-4 cartao rounded-panel p-4 sm:p-6">
             {view.name === 'folder' ? (
               <FolderDetail
                 mode={mode}
@@ -180,7 +180,7 @@ export function CoverApprovalPanel({
                 <p className="text-sm font-semibold text-ink">Escolha uma casa na fila</p>
                 <p className="max-w-sm text-xs leading-relaxed text-ink-muted">As fotos, as capas, o link de aprovação e a publicação de cada casa aparecem aqui.</p>
                 {connected && (
-                  <button type="button" onClick={() => setView({ name: 'drive', target: null })} className="mt-1 inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover">
+                  <button type="button" onClick={() => setView({ name: 'drive', target: null })} className="mt-1 inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover">
                     <FolderPlus size={15} aria-hidden="true" /> Escolher fotos no Drive
                   </button>
                 )}
@@ -250,12 +250,12 @@ function HowItWorks({ mode }: { mode: CollectionKind }) {
     { title: 'Salve no Drive', text: 'Quando ela aprovar, chega uma notificação. Abra a casa e salve as capas aprovadas numa pasta nova no Drive, com o registro.' },
   ];
   return (
-    <section aria-label="Como funciona" className="rounded-panel border border-border bg-surface p-4 sm:p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">Como funciona</h2>
+    <section aria-label="Como funciona" className="cartao rounded-panel p-4 sm:p-5">
+      <h2 className="text-[13px] font-semibold text-ink-muted">Como funciona</h2>
       <ol className="mt-3 grid gap-4 sm:grid-cols-3 sm:gap-6">
         {steps.map((step, index) => (
           <li key={step.title} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-plum text-xs font-semibold text-white tabular-nums">{index + 1}</span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white tabular-nums">{index + 1}</span>
             <div>
               <p className="text-sm font-semibold text-ink">{step.title}</p>
               <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">{step.text}</p>
@@ -269,8 +269,8 @@ function HowItWorks({ mode }: { mode: CollectionKind }) {
 
 function ConnectCard({ status, mode }: { status: Extract<Status, { state: 'ready' }>; mode: CollectionKind }) {
   return (
-    <section className="flex max-w-xl flex-col gap-3 rounded-panel border border-border bg-surface p-5">
-      <h2 className="text-base font-semibold text-ink">{status.expired ? 'Reconecte o Google Drive' : 'Conecte o Google Drive'}</h2>
+    <section className="flex max-w-xl flex-col gap-3 cartao rounded-panel p-5">
+      <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{status.expired ? 'Reconecte o Google Drive' : 'Conecte o Google Drive'}</h2>
       <p className="text-sm leading-relaxed text-ink-muted">
         {!status.configured
           ? 'Falta configurar as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).'
@@ -288,7 +288,7 @@ function ConnectCard({ status, mode }: { status: Extract<Status, { state: 'ready
               // sem sessionStorage: volta para a Aprovação de capa
             }
           }}
-          className="inline-flex min-h-11 w-fit items-center gap-2 rounded-control bg-brand-plum px-4 text-sm font-semibold text-white hover:bg-brand-plum-hover">
+          className="inline-flex min-h-11 w-fit items-center gap-2 rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover">
           {status.expired ? 'Reconectar Google Drive' : 'Conectar Google Drive'}
         </a>
       )}
@@ -323,7 +323,7 @@ function FolderGrid({
       <div className="flex items-center justify-between gap-3">
         <h2 id="cover-folders-title" className="text-lg font-semibold text-ink">Pastas das casas</h2>
         {canAdd && (
-          <button type="button" onClick={onAdd} className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover">
+          <button type="button" onClick={onAdd} className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover">
             <FolderPlus size={15} aria-hidden="true" /> Escolher fotos no Drive
           </button>
         )}
@@ -345,7 +345,7 @@ function FolderGrid({
             { key: 'outras', title: 'Aguardando aprovação', items: collections.filter((c) => !(c.responded && c.approvedCount > 0)), approved: false },
           ].filter((group) => group.items.length > 0).map(({ key, title, items, approved }) => (
             <section key={key} aria-label={title} className={approved ? 'space-y-3 rounded-panel border border-status-success-border bg-status-success-soft/60 p-4' : 'space-y-3'}>
-              <h3 className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${approved ? 'text-status-success' : 'text-ink-muted'}`}>
+              <h3 className={`flex items-center gap-1.5 text-[13px] font-semibold ${approved ? 'text-status-success' : 'text-ink-muted'}`}>
                 {approved ? <Check size={14} aria-hidden="true" /> : <Clock3 size={14} aria-hidden="true" />}
                 {title}
                 <span className="tabular-nums">· {items.length}</span>
@@ -364,7 +364,7 @@ function FolderGrid({
                       <button
                         type="button"
                         onClick={() => onOpen(collection.id)}
-                        className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-plum"
+                        className="flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold text-ink">{house}</span>
@@ -438,13 +438,13 @@ function FolderQueue({
           : { text: 'Em preparação', icon: <FolderOpen size={11} aria-hidden="true" />, cls: 'bg-surface-muted text-ink-muted' };
 
   return (
-    <section aria-labelledby="fotos-fila-title" className="overflow-hidden rounded-panel border border-border bg-surface xl:self-start">
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-canvas p-4">
-        <h2 id="fotos-fila-title" className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Fila de aprovação</h2>
+    <section aria-labelledby="fotos-fila-title" className="overflow-hidden cartao rounded-panel xl:self-start">
+      <div className="flex items-center justify-between gap-2 border-b border-border/70 p-4">
+        <h2 id="fotos-fila-title" className="text-[13px] font-semibold text-ink-muted">Fila de aprovação</h2>
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold text-brand-plum tabular-nums">{collections?.length ?? 0}</span>
           {canAdd && (
-            <button type="button" onClick={onAdd} aria-label="Escolher fotos no Drive" title="Escolher fotos no Drive" className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-plum text-white hover:bg-brand-plum-hover">
+            <button type="button" onClick={onAdd} aria-label="Escolher fotos no Drive" title="Escolher fotos no Drive" className="flex h-8 w-8 items-center justify-center rounded-control bg-accent text-white hover:bg-accent-hover">
               <FolderPlus size={14} aria-hidden="true" />
             </button>
           )}
@@ -461,8 +461,8 @@ function FolderQueue({
         ) : (
           groups.map((group) => (
             <section key={group.key} aria-label={group.title}>
-              <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wide ${
-                group.tone === 'approved' ? 'bg-status-success-soft text-status-success' : 'bg-canvas text-ink-muted'
+              <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[13px] font-semibold ${
+                group.tone === 'approved' ? 'bg-status-success-soft text-status-success' : 'bg-surface/90 text-ink-muted backdrop-blur-xl'
               }`}>
                 <span className="flex items-center gap-1.5">
                   {group.tone === 'approved' ? <Check size={13} aria-hidden="true" /> : group.tone === 'waiting' ? <Clock3 size={13} aria-hidden="true" /> : <FolderOpen size={13} aria-hidden="true" />}
@@ -481,11 +481,11 @@ function FolderQueue({
                         type="button"
                         aria-pressed={selected}
                         onClick={() => onOpen(c.id)}
-                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-plum ${
+                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent ${
                           selected
-                            ? 'border-l-4 border-brand-plum bg-surface-muted/70'
+                            ? 'bg-accent/10 shadow-[inset_3px_0_0_var(--color-accent)]'
                             : group.tone === 'approved'
-                              ? 'border-l-4 border-status-success bg-status-success-soft/50 hover:bg-status-success-soft'
+                              ? 'bg-status-success-soft/40 shadow-[inset_3px_0_0_var(--color-status-success)] hover:bg-status-success-soft'
                               : 'hover:bg-canvas/70'
                         }`}
                       >
@@ -749,14 +749,14 @@ function FolderDetail({
                     value={collection.plannedDate ?? ''}
                     onChange={(event) => event.target.value && void patch({ plannedDate: event.target.value, plannedHour: collection.plannedHour ?? 19 })}
                     aria-label="Data planejada"
-                    className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                   <select
                     value={collection.plannedHour ?? 19}
                     onChange={(event) => collection.plannedDate && void patch({ plannedDate: collection.plannedDate, plannedHour: Number(event.target.value) })}
                     disabled={!collection.plannedDate}
                     aria-label="Horário planejado"
-                    className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     {Array.from({ length: 24 }, (_, h) => (
                       <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
@@ -772,7 +772,7 @@ function FolderDetail({
         </div>
         <div className="flex flex-wrap gap-2">
           {canAddFromDrive && !full && (
-            <button type="button" onClick={() => onAddFromDrive(collection)} className="inline-flex min-h-10 items-center gap-2 rounded-control border border-border bg-surface px-3.5 text-xs font-semibold text-ink hover:bg-surface-muted">
+            <button type="button" onClick={() => onAddFromDrive(collection)} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border bg-white/80 px-3.5 text-xs font-semibold text-ink hover:bg-surface-muted">
               <FolderPlus size={15} aria-hidden="true" /> Adicionar fotos do Drive
             </button>
           )}
@@ -831,7 +831,7 @@ function FolderDetail({
                     type="button"
                     onClick={() => void schedule(postPhotos)}
                     disabled={Boolean(preparing)}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-60"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                   >
                     {preparing ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CalendarPlus size={15} aria-hidden="true" />}
                     {others > 0 ? `Programar carrossel: capa + ${others} ${others === 1 ? 'foto' : 'fotos'}` : 'Programar post com a capa'}
@@ -842,7 +842,7 @@ function FolderDetail({
                     type="button"
                     onClick={() => void openPostEditor(post.id)}
                     disabled={openingPost}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-60"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
                   >
                     {openingPost ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <CalendarPlus size={15} aria-hidden="true" />}
                     {post.status === 'scheduled' ? 'Editar publicação' : 'Agendar publicação'}
@@ -952,7 +952,7 @@ function FolderDetail({
           </ul>
         )}
         {/* Link para a aprovadora */}
-        <section className="rounded-panel border border-border bg-surface p-4">
+        <section className="cartao rounded-panel p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Link2 size={16} className="text-brand-plum" aria-hidden="true" /> Link para aprovação da capa</h3>
@@ -968,7 +968,7 @@ function FolderDetail({
                   <button
                     type="button"
                     onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true))}
-                    className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover"
                   >
                     {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />} {copied ? 'Link copiado' : 'Copiar link'}
                   </button>
@@ -981,7 +981,7 @@ function FolderDetail({
                   type="button"
                   onClick={() => void makeLink()}
                   disabled={busy || candidates.length === 0}
-                  className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+                  className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                 >
                   {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Link2 size={15} aria-hidden="true" />} Gerar link
                 </button>
@@ -1034,7 +1034,7 @@ function FolderDetail({
         {collection.history.length === 0 ? (
           <p className="text-sm text-ink-muted">Nenhuma ação registrada ainda. As próximas ações aparecem aqui.</p>
         ) : (
-          <ol className="max-w-3xl divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">
+          <ol className="max-w-3xl divide-y divide-border overflow-hidden cartao rounded-panel">
             {collection.history.map((entry) => {
               const { icon: Icon, tone, text, note } = describeActivity({
                 id: entry.id,
@@ -1080,7 +1080,7 @@ function FolderDetail({
                   void patch({ photo: current.driveId, remove: true });
                   setPreview(next);
                 }}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-3 text-xs font-semibold text-ink hover:bg-status-danger-soft hover:text-status-danger"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold text-ink hover:bg-status-danger-soft hover:text-status-danger"
               >
                 <Trash2 size={14} aria-hidden="true" /> Tirar da pasta
               </button>
@@ -1151,8 +1151,8 @@ function SectionTitle({ id, step, title, hint }: { id: string; step: number; tit
 function StepsGroup({ collapsed, summary, children }: { collapsed: boolean; summary: string; children: ReactNode }) {
   if (!collapsed) return <>{children}</>;
   return (
-    <details className="group rounded-panel border border-border bg-surface">
-      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-panel px-4 py-3 hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum [&::-webkit-details-marker]:hidden">
+    <details className="group cartao rounded-panel">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-panel px-4 py-3 hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
         <ChevronRight size={18} className="shrink-0 text-ink-muted transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-ink">Preparação e envio (passos 1, 2 e 3)</span>
@@ -1276,7 +1276,7 @@ function ApproverAnswer({
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        className={`group flex w-full items-center gap-3 rounded-panel border-2 p-3 text-left shadow-md transition hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:p-4 ${
+        className={`group flex w-full items-center gap-3 rounded-panel border-2 p-3 text-left shadow-md transition hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:p-4 ${
           isNew ? 'border-amber-400 bg-status-warning-soft' : 'border-status-success-border bg-status-success-soft'
         }`}
       >
@@ -1287,7 +1287,7 @@ function ApproverAnswer({
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2 text-base font-semibold text-ink">
             {isNew ? `A ${APPROVER_NAME} respondeu` : `Resposta da ${APPROVER_NAME}`}
-            {isNew && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">Nova</span>}
+            {isNew && <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-bold text-white">Nova</span>}
           </span>
           <span className="mt-0.5 block text-sm text-ink-muted">
             {chosen.length > 0 ? `${chosen.length} ${chosen.length === 1 ? 'capa aprovada' : 'capas aprovadas'}` : 'Nenhuma capa escolhida'} · {formatLongStamp(collection.respondedAt)}
@@ -1301,7 +1301,7 @@ function ApproverAnswer({
             <img key={photo.driveId} src={photoSrc(photo, 200)} alt="" className="h-12 w-10 rounded-control object-cover ring-2 ring-surface" />
           ))}
         </span>
-        <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white group-hover:bg-brand-plum-hover">
+        <span className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 text-xs font-semibold text-white group-hover:bg-accent-hover">
           Ver resposta <ChevronRight size={15} aria-hidden="true" />
         </span>
       </button>
@@ -1345,7 +1345,7 @@ function ApproverAnswer({
                 await onConfirm();
                 setConfirming(false);
               }}
-              className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+              className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
             >
               {confirming ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
               Confirmar capas
@@ -1368,7 +1368,7 @@ function ApproverAnswer({
                 type="button"
                 onClick={() => void saveToDrive()}
                 disabled={saving}
-                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
+                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <FolderPlus size={15} aria-hidden="true" />}
                 {saving ? 'Salvando no Drive…' : savedToDrive.length ? 'Salvar de novo no Drive' : 'Salvar no Drive'}
@@ -1407,7 +1407,7 @@ function ApproverAnswer({
                 type="button"
                 onClick={() => setViewing(i)}
                 aria-label={`Ver ${photo.name} em tela grande`}
-                className="group relative h-32 w-24 shrink-0 overflow-hidden rounded-control ring-1 ring-border transition hover:ring-2 hover:ring-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="group relative h-32 w-24 shrink-0 overflow-hidden rounded-control ring-1 ring-border transition hover:ring-2 hover:ring-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                 <img src={photoSrc(photo, 400)} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-105" />

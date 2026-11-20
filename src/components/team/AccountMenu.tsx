@@ -58,9 +58,9 @@ export function AccountMenu({
         aria-expanded={open}
         aria-label={`Conta de ${me.name}${pendingCount ? `, ${pendingCount} cadastro(s) aguardando aprovação` : ''}`}
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-11 items-center gap-2 rounded-xl py-1 pl-1 pr-2 text-left transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+        className="flex min-h-11 items-center gap-2 rounded-xl py-1 pl-1 pr-2 text-left transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-plum text-[11px] font-semibold text-white">
+        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-white">
           {initials(me.name)}
           {pendingCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-surface bg-status-warning px-1 text-[10px] font-bold tabular-nums text-white">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, ArrowLeftRight, Check, Expand, Film, Images, Plus, ThumbsDown, Undo2, X } from 'lucide-react';
+import { Archive, ArrowLeftRight, Check, Crop, Expand, Film, FolderPlus, Images, Plus, Search, ThumbsDown, Undo2, X } from 'lucide-react';
 import {
   coverOf,
   planSlots,
@@ -25,6 +25,19 @@ const LONG_PRESS_MS = 320;
 
 type Sheet = { kind: 'day'; date: string } | { kind: 'reserve'; collectionId: number };
 
+/** Casa já preparada na Aprovação de capa (fora da grade), para buscar e pôr num dia. */
+export interface LibraryHouse {
+  collectionId: number;
+  label: string;
+  imageUrl: string | null;
+  photoCount: number;
+  /** a capa mostrada já está cortada */
+  cropped: boolean;
+}
+
+/** Busca sem acento e sem diferença de maiúsculas. */
+const searchKey = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 /** Ações extras do link da Thereza: ver a foto grande (e cortar), buscar outras fotos da casa e recusar a casa. */
 export interface PhotoTools {
   onView: (house: PlanHouse, driveId: string) => void;
@@ -44,6 +57,9 @@ export function FeedGridEditor({
   onChange,
   readOnly = false,
   photoTools,
+  onPickFromDrive,
+  library,
+  onPickLibrary,
 }: {
   houses: PlanHouse[];
   startDate: string;
@@ -53,6 +69,11 @@ export function FeedGridEditor({
   onChange: (houses: PlanHouse[]) => void;
   readOnly?: boolean;
   photoTools?: PhotoTools;
+  /** Aba da equipe: escolher no Drive uma casa nova para este dia (dia livre ou trocar a casa). */
+  onPickFromDrive?: (date: string) => void;
+  /** Aba da equipe: todas as casas já preparadas (busca no "Escolher uma casa para este dia"). */
+  library?: LibraryHouse[];
+  onPickLibrary?: (date: string, collectionId: number) => void;
 }) {
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const slots = useMemo(() => [...planSlots(startDate, days)].reverse(), [startDate, days]);
@@ -159,11 +180,11 @@ export function FeedGridEditor({
 
   return (
     <div className="space-y-6">
-      <ul className="grid grid-cols-3 gap-0.5 overflow-hidden rounded-panel bg-border sm:gap-1" aria-label="Grade do feed">
+      <ul className="grid grid-cols-3 gap-0.5 overflow-hidden rounded-[var(--g-r-panel,1rem)] bg-[var(--g-line,#e8e4dc)] sm:gap-1" aria-label="Grade do feed">
         {slots.map((slot) => {
           if (slot.kind === 'reels') {
             return (
-              <li key={slot.date} className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1 bg-surface-muted text-center text-ink-muted">
+              <li key={slot.date} className="relative flex aspect-[3/4] flex-col items-center justify-center gap-1 bg-[var(--g-fill,#f3f0e9)] text-center text-[var(--g-fg3,#746e68)]">
                 <Film size={20} aria-hidden="true" />
                 <span className="text-[11px] font-semibold uppercase tracking-wide">Reels</span>
                 <span className="text-[11px] tabular-nums">{shortDay(slot.date)}</span>
@@ -175,14 +196,14 @@ export function FeedGridEditor({
           const isDragged = drag?.date === slot.date;
           const isTarget = drag?.over === slot.date;
           return (
-            <li key={slot.date} data-slot-date={slot.date} className="relative aspect-[3/4] bg-surface">
+            <li key={slot.date} data-slot-date={slot.date} className="relative aspect-[3/4] bg-[var(--g-sheet,#fffefa)]">
               <button
                 type="button"
                 onPointerDown={(event) => onTilePointerDown(event, slot.date)}
                 onClick={() => openDay(slot.date)}
                 onContextMenu={(event) => event.preventDefault()}
                 aria-label={house ? `${shortDay(slot.date)}: ${house.label}. Tocar para trocar a capa ou a casa` : `${shortDay(slot.date)}: dia livre. Tocar para escolher uma casa`}
-                className={`group absolute inset-0 block h-full w-full touch-manipulation overflow-hidden text-left [-webkit-touch-callout:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-plum ${
+                className={`group absolute inset-0 block h-full w-full touch-manipulation overflow-hidden text-left [-webkit-touch-callout:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)] ${
                   readOnly ? '' : 'cursor-grab'
                 } ${isDragged ? 'opacity-35' : ''} ${isTarget ? 'ring-4 ring-inset ring-amber-400' : ''}`}
               >
@@ -190,7 +211,7 @@ export function FeedGridEditor({
                   // eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor
                   <img src={imageSrc(cover, 600)} alt="" draggable={false} className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" />
                 ) : (
-                  <span className="flex h-full w-full flex-col items-center justify-center gap-1 border-2 border-dashed border-border-strong text-ink-muted">
+                  <span className="flex h-full w-full flex-col items-center justify-center gap-1 border-2 border-dashed border-[var(--g-line2,#d9d2c8)] text-[var(--g-fg3,#746e68)]">
                     <Plus size={18} aria-hidden="true" />
                     <span className="text-[11px] font-semibold">Dia livre</span>
                   </span>
@@ -208,7 +229,7 @@ export function FeedGridEditor({
           );
         })}
         {published.map((tile) => (
-          <li key={tile.id} className="relative aspect-[3/4] bg-surface-muted">
+          <li key={tile.id} className="relative aspect-[3/4] bg-[var(--g-fill,#f3f0e9)]">
             {tile.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element -- miniatura do Instagram
               <img src={tile.imageUrl} alt="" className="h-full w-full object-cover opacity-60 grayscale-[35%]" />
@@ -220,12 +241,12 @@ export function FeedGridEditor({
         ))}
       </ul>
 
-      {published.length > 0 && <p className="-mt-4 text-xs text-ink-muted">Embaixo, mais apagados: os últimos posts que já estão no Instagram, para ver o equilíbrio.</p>}
+      {published.length > 0 && <p className="-mt-4 text-xs text-[var(--g-fg3,#746e68)]">Embaixo, mais apagados: os últimos posts que já estão no Instagram, para ver o equilíbrio.</p>}
 
       <section aria-labelledby="reserve-title" className="space-y-2">
-        <h3 id="reserve-title" className="text-sm font-semibold text-ink">Casas na reserva ({reserve.length})</h3>
+        <h3 id="reserve-title" className="text-sm font-semibold text-[var(--g-fg,#302d34)]">Casas na reserva ({reserve.length})</h3>
         {reserve.length === 0 ? (
-          <p className="text-xs text-ink-muted">Nenhuma casa sobrando. As casas que saírem da grade aparecem aqui.</p>
+          <p className="text-xs text-[var(--g-fg3,#746e68)]">Nenhuma casa sobrando. As casas que saírem da grade aparecem aqui.</p>
         ) : (
           <ul className="grid grid-cols-4 gap-2 sm:grid-cols-6">
             {reserve.map((house) => {
@@ -235,13 +256,13 @@ export function FeedGridEditor({
                   <button
                     type="button"
                     onClick={() => setSheet({ kind: 'reserve', collectionId: house.collectionId })}
-                    className="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]"
                   >
-                    <span className="block aspect-[3/4] overflow-hidden rounded-control bg-surface-muted">
+                    <span className="block aspect-[3/4] overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)]">
                       {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                       {cover && <img src={imageSrc(cover, 300)} alt="" className="h-full w-full object-cover" />}
                     </span>
-                    <span className="mt-1 block truncate text-[11px] text-ink">{house.label}</span>
+                    <span className="mt-1 block truncate text-[11px] text-[var(--g-fg,#302d34)]">{house.label}</span>
                   </button>
                 </li>
               );
@@ -253,7 +274,7 @@ export function FeedGridEditor({
       {drag && draggedCover && createPortal(
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed z-[90] w-24 overflow-hidden rounded-control shadow-2xl ring-2 ring-white sm:w-32"
+          className="pointer-events-none fixed z-[90] w-24 overflow-hidden rounded-[var(--g-r-control,0.75rem)] shadow-2xl ring-2 ring-white sm:w-32"
           style={{ left: drag.x, top: drag.y, transform: drag.touch ? 'translate(-50%, -115%) rotate(-2deg)' : 'translate(-50%, -60%) rotate(-2deg)' }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
@@ -271,6 +292,23 @@ export function FeedGridEditor({
           imageSrc={imageSrc}
           readOnly={readOnly}
           photoTools={photoTools}
+          onPickFromDrive={
+            onPickFromDrive && sheet.kind === 'day' && !readOnly
+              ? () => {
+                  setSheet(null);
+                  onPickFromDrive(sheet.date);
+                }
+              : undefined
+          }
+          library={sheet.kind === 'day' && !readOnly ? library?.filter((item) => !houses.some((house) => house.collectionId === item.collectionId)) : undefined}
+          onPickLibrary={
+            onPickLibrary && sheet.kind === 'day' && !readOnly
+              ? (collectionId) => {
+                  setSheet(null);
+                  onPickLibrary(sheet.date, collectionId);
+                }
+              : undefined
+          }
           onClose={() => setSheet(null)}
           onChange={(next, follow) => {
             onChange(next);
@@ -290,6 +328,9 @@ function HouseSheet({
   imageSrc,
   readOnly,
   photoTools,
+  onPickFromDrive,
+  library,
+  onPickLibrary,
   onClose,
   onChange,
 }: {
@@ -299,6 +340,9 @@ function HouseSheet({
   imageSrc: (candidate: PlanCandidate, size: number) => string;
   readOnly: boolean;
   photoTools?: PhotoTools;
+  onPickFromDrive?: () => void;
+  library?: LibraryHouse[];
+  onPickLibrary?: (collectionId: number) => void;
   onClose: () => void;
   onChange: (houses: PlanHouse[], follow?: Sheet) => void;
 }) {
@@ -309,6 +353,7 @@ function HouseSheet({
   const [preview, setPreview] = useState<string | null>(cover?.driveId ?? null);
   const shown = house?.candidates.find((candidate) => candidate.driveId === preview) ?? cover;
   // recusar a casa: pede confirmação e um motivo (opcional)
+  const [query, setQuery] = useState('');
   const [rejecting, setRejecting] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [rejectBusy, setRejectBusy] = useState(false);
@@ -329,21 +374,43 @@ function HouseSheet({
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center sm:p-6" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-label={title} className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-panel bg-surface shadow-2xl sm:rounded-panel">
-        <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <section role="dialog" aria-modal="true" aria-label={title} className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[var(--g-r-panel,1rem)] bg-[var(--g-sheet,#fffefa)] shadow-2xl sm:rounded-[var(--g-r-panel,1rem)]">
+        <header className="flex items-center gap-3 border-b border-[var(--g-line,#e8e4dc)] px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{title}</p>
-            <h2 className="truncate text-base font-semibold text-ink">{choosingHouse ? (house ? `Trocar ${house.label}` : 'Escolher uma casa para este dia') : house?.label}</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--g-fg3,#746e68)]">{title}</p>
+            <h2 className="truncate text-base font-semibold text-[var(--g-fg,#302d34)]">{choosingHouse ? (house ? `Trocar ${house.label}` : 'Escolher uma casa para este dia') : house?.label}</h2>
           </div>
-          <button type="button" autoFocus onClick={onClose} aria-label="Fechar" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ink-muted hover:bg-surface-muted">
+          <button type="button" autoFocus onClick={onClose} aria-label="Fechar" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)]">
             <X size={20} aria-hidden="true" />
           </button>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {choosingHouse ? (
+          {choosingHouse && onPickFromDrive && (
+            <div className="mb-4 flex flex-col gap-2 rounded-[var(--g-r-control,0.75rem)] border border-dashed border-[var(--g-line2,#d9d2c8)] p-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-[var(--g-fg3,#746e68)]">Uma casa nova: abra a pasta dela no Drive e marque as fotos que podem ser capa. Ela entra neste dia.</p>
+              <button
+                type="button"
+                onClick={onPickFromDrive}
+                className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-accent,#231b2d)] px-4 text-xs font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)]"
+              >
+                <FolderPlus size={15} aria-hidden="true" /> Escolher casa no Drive
+              </button>
+            </div>
+          )}
+          {choosingHouse && library && onPickLibrary ? (
+            <HousePicker
+              query={query}
+              onQuery={setQuery}
+              reserve={reserve}
+              library={library}
+              imageSrc={imageSrc}
+              onPickReserve={(collectionId) => sheet.kind === 'day' && onChange(replaceHouse(houses, sheet.date, collectionId), { kind: 'day', date: sheet.date })}
+              onPickLibrary={onPickLibrary}
+            />
+          ) : choosingHouse ? (
             reserve.length === 0 ? (
-              <p className="text-sm text-ink-muted">Não há casas na reserva para trocar.</p>
+              <p className="text-sm text-[var(--g-fg3,#746e68)]">{onPickFromDrive ? 'Não há casas na reserva.' : 'Não há casas na reserva para trocar.'}</p>
             ) : (
               <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
                 {reserve.map((option) => {
@@ -354,13 +421,13 @@ function HouseSheet({
                         type="button"
                         disabled={readOnly || sheet.kind !== 'day'}
                         onClick={() => sheet.kind === 'day' && onChange(replaceHouse(houses, sheet.date, option.collectionId), { kind: 'day', date: sheet.date })}
-                        className="block w-full text-left disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                        className="block w-full text-left disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]"
                       >
-                        <span className="block aspect-[3/4] overflow-hidden rounded-control bg-surface-muted ring-1 ring-border hover:ring-2 hover:ring-amber-400">
+                        <span className="block aspect-[3/4] overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)] ring-1 ring-[var(--g-line,#e8e4dc)] hover:ring-2 hover:ring-amber-400">
                           {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                           {optionCover && <img src={imageSrc(optionCover, 300)} alt="" className="h-full w-full object-cover" />}
                         </span>
-                        <span className="mt-1 block truncate text-xs text-ink">{option.label}</span>
+                        <span className="mt-1 block truncate text-xs text-[var(--g-fg,#302d34)]">{option.label}</span>
                       </button>
                     </li>
                   );
@@ -374,7 +441,7 @@ function HouseSheet({
                   type="button"
                   onClick={() => photoTools.onView(house, shown.driveId)}
                   aria-label="Ver a foto inteira em tela grande e cortar"
-                  className="group relative mx-auto block w-full max-w-xs overflow-hidden rounded-control bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  className="group relative mx-auto block w-full max-w-xs overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                   <img key={shown.driveId} src={imageSrc(shown, 1200)} alt={shown.name} className="aspect-[3/4] w-full object-cover" />
@@ -383,13 +450,13 @@ function HouseSheet({
                   </span>
                 </button>
               ) : (
-                <div className="mx-auto max-w-xs overflow-hidden rounded-control bg-surface-muted">
+                <div className="mx-auto max-w-xs overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)]">
                   {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                   <img key={shown.driveId} src={imageSrc(shown, 1200)} alt={shown.name} className="aspect-[3/4] w-full object-cover" />
                 </div>
               )}
               <div>
-                <p className="mb-2 text-xs font-semibold text-ink-muted">Capas candidatas ({house.candidates.length}) — toque para ver</p>
+                <p className="mb-2 text-xs font-semibold text-[var(--g-fg3,#746e68)]">Capas candidatas ({house.candidates.length}) — toque para ver</p>
                 <ul className="flex gap-2 overflow-x-auto pb-1">
                   {house.candidates.map((candidate) => {
                     const isCover = candidate.driveId === cover?.driveId;
@@ -401,12 +468,12 @@ function HouseSheet({
                           onClick={() => setPreview(candidate.driveId)}
                           aria-label={`${candidate.name}${isCover ? ' (capa atual)' : ''}`}
                           aria-pressed={isShown}
-                          className={`relative block h-24 w-[4.5rem] overflow-hidden rounded-control ${isShown ? 'ring-2 ring-brand-plum ring-offset-2' : 'ring-1 ring-border'}`}
+                          className={`relative block h-24 w-[4.5rem] overflow-hidden rounded-[var(--g-r-control,0.75rem)] ${isShown ? 'ring-2 ring-[var(--g-accent,#231b2d)] ring-offset-2' : 'ring-1 ring-[var(--g-line,#e8e4dc)]'}`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
                           <img src={imageSrc(candidate, 200)} alt="" className="h-full w-full object-cover" />
                           {isCover && (
-                            <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-status-success text-white">
+                            <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--g-success,#17633b)] text-white">
                               <Check size={12} strokeWidth={3} aria-hidden="true" />
                             </span>
                           )}
@@ -419,23 +486,23 @@ function HouseSheet({
                   <button
                     type="button"
                     onClick={() => photoTools.onFindMore(house)}
-                    className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-3 text-xs font-semibold text-ink hover:bg-surface-muted"
+                    className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] px-3 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]"
                   >
                     <Images size={14} aria-hidden="true" /> Não gostei de nenhuma: ver mais fotos da casa
                   </button>
                 )}
               </div>
               {photoTools && !readOnly && rejecting && (
-                <div className="space-y-2 rounded-control border border-status-warning-border bg-status-warning-soft p-3">
-                  <p className="text-sm font-semibold text-ink">Tirar {house.label} da grade e pedir outra casa?</p>
-                  <p className="text-xs text-ink-muted">O dia fica livre e a equipe recebe um aviso para colocar outra casa.</p>
+                <div className="space-y-2 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-warning-line,#f0d99f)] bg-[var(--g-warning-soft,#fff5dc)] p-3">
+                  <p className="text-sm font-semibold text-[var(--g-fg,#302d34)]">Tirar {house.label} da grade e pedir outra casa?</p>
+                  <p className="text-xs text-[var(--g-fg3,#746e68)]">O dia fica livre e a equipe recebe um aviso para colocar outra casa.</p>
                   <textarea
                     value={motivo}
                     onChange={(event) => setMotivo(event.target.value)}
                     rows={2}
                     maxLength={500}
                     placeholder="Motivo (opcional). Ex.: já postamos essa casa há pouco."
-                    className="w-full rounded-control border border-border bg-surface p-2 text-sm text-ink"
+                    className="w-full rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] p-2 text-sm text-[var(--g-fg,#302d34)]"
                   />
                   <div className="flex flex-wrap gap-2">
                     <button
@@ -447,11 +514,11 @@ function HouseSheet({
                         setRejectBusy(false);
                         if (ok) onClose();
                       }}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-control bg-status-danger px-4 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-danger,#a52626)] px-4 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
                     >
                       <ThumbsDown size={14} aria-hidden="true" /> {rejectBusy ? 'Enviando…' : 'Pedir outra casa'}
                     </button>
-                    <button type="button" onClick={() => setRejecting(false)} className="inline-flex min-h-10 items-center rounded-control px-3 text-xs font-semibold text-ink-muted hover:bg-surface-muted">
+                    <button type="button" onClick={() => setRejecting(false)} className="inline-flex min-h-10 items-center rounded-[var(--g-r-control,0.75rem)] px-3 text-xs font-semibold text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)]">
                       Cancelar
                     </button>
                   </div>
@@ -459,11 +526,11 @@ function HouseSheet({
               )}
               {sheet.kind === 'reserve' && !readOnly && (
                 <label className="block text-sm">
-                  <span className="mb-1 block font-semibold text-ink">Colocar na grade no dia</span>
+                  <span className="mb-1 block font-semibold text-[var(--g-fg,#302d34)]">Colocar na grade no dia</span>
                   <select
                     defaultValue=""
                     onChange={(event) => event.target.value && onChange(replaceHouse(houses, event.target.value, house.collectionId), { kind: 'day', date: event.target.value })}
-                    className="min-h-10 w-full rounded-control border border-border bg-surface px-3 text-sm text-ink"
+                    className="min-h-10 w-full rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] px-3 text-sm text-[var(--g-fg,#302d34)]"
                   >
                     <option value="" disabled>Escolher o dia…</option>
                     {postDates.map((date) => {
@@ -478,10 +545,10 @@ function HouseSheet({
         </div>
 
         {!readOnly && (
-          <footer className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-3">
+          <footer className="flex flex-wrap items-center gap-2 border-t border-[var(--g-line,#e8e4dc)] px-4 py-3">
             {choosingHouse ? (
               house && (
-                <button type="button" onClick={() => setChoosingHouse(false)} className="inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-3 text-xs font-semibold text-ink hover:bg-surface-muted">
+                <button type="button" onClick={() => setChoosingHouse(false)} className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] px-3 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]">
                   <Undo2 size={14} aria-hidden="true" /> Voltar
                 </button>
               )
@@ -492,14 +559,14 @@ function HouseSheet({
                     <button
                       type="button"
                       onClick={() => onChange(setCover(houses, house.collectionId, shown.driveId))}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover"
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-accent,#231b2d)] px-4 text-xs font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)]"
                     >
                       <Check size={15} aria-hidden="true" /> Usar esta como capa
                     </button>
                   )}
                   {sheet.kind === 'day' && (
                     <>
-                      <button type="button" onClick={() => setChoosingHouse(true)} className="inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-3 text-xs font-semibold text-ink hover:bg-surface-muted">
+                      <button type="button" onClick={() => setChoosingHouse(true)} className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] px-3 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]">
                         <ArrowLeftRight size={14} aria-hidden="true" /> Trocar a casa
                       </button>
                       <button
@@ -508,7 +575,7 @@ function HouseSheet({
                           onChange(houses.map((item) => (item.collectionId === house.collectionId ? { ...item, slotDate: null } : item)));
                           onClose();
                         }}
-                        className="inline-flex min-h-10 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-ink-muted hover:bg-surface-muted"
+                        className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] px-3 text-xs font-semibold text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)]"
                       >
                         <Archive size={14} aria-hidden="true" /> Tirar da grade (vai para a reserva)
                       </button>
@@ -518,7 +585,7 @@ function HouseSheet({
                     <button
                       type="button"
                       onClick={() => setRejecting(true)}
-                      className="inline-flex min-h-10 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-status-danger hover:bg-status-danger-soft"
+                      className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] px-3 text-xs font-semibold text-[var(--g-danger,#a52626)] hover:bg-[var(--g-danger-soft,#fff0ef)]"
                     >
                       <ThumbsDown size={14} aria-hidden="true" /> Não quero esta casa
                     </button>
@@ -526,7 +593,7 @@ function HouseSheet({
                 </>
               )
             )}
-            <button type="button" onClick={onClose} className="ml-auto inline-flex min-h-10 items-center rounded-control px-3 text-xs font-semibold text-ink-muted hover:bg-surface-muted">
+            <button type="button" onClick={onClose} className="ml-auto inline-flex min-h-10 items-center rounded-[var(--g-r-control,0.75rem)] px-3 text-xs font-semibold text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)]">
               Pronto
             </button>
           </footer>
@@ -534,5 +601,98 @@ function HouseSheet({
       </section>
     </div>,
     document.body,
+  );
+}
+
+/** Escolher a casa de um dia (aba da equipe): busca nas casas da reserva e em todas as casas já preparadas. */
+function HousePicker({
+  query,
+  onQuery,
+  reserve,
+  library,
+  imageSrc,
+  onPickReserve,
+  onPickLibrary,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  reserve: PlanHouse[];
+  library: LibraryHouse[];
+  imageSrc: (candidate: PlanCandidate, size: number) => string;
+  onPickReserve: (collectionId: number) => void;
+  onPickLibrary: (collectionId: number) => void;
+}) {
+  const key = searchKey(query.trim());
+  const match = (label: string) => !key || searchKey(label).includes(key);
+  const reserveShown = reserve.filter((house) => match(house.label));
+  const libraryShown = library.filter((house) => match(house.label));
+  const tile = 'block aspect-[3/4] overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)] ring-1 ring-[var(--g-line,#e8e4dc)] hover:ring-2 hover:ring-amber-400';
+
+  return (
+    <div className="space-y-4">
+      <label className="relative block">
+        <span className="sr-only">Buscar casa</span>
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--g-fg3,#746e68)]" aria-hidden="true" />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          placeholder="Buscar casa por nome, número ou bairro"
+          autoFocus
+          className="min-h-11 w-full rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] pl-9 pr-3 text-sm text-[var(--g-fg,#302d34)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]"
+        />
+      </label>
+
+      {reserveShown.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--g-fg3,#746e68)]">Na reserva desta grade</h3>
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {reserveShown.map((option) => {
+              const optionCover = coverOf(option);
+              return (
+                <li key={option.collectionId}>
+                  <button type="button" onClick={() => onPickReserve(option.collectionId)} className="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]">
+                    <span className={tile}>
+                      {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
+                      {optionCover && <img src={imageSrc(optionCover, 300)} alt="" className="h-full w-full object-cover" />}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-[var(--g-fg,#302d34)]">{option.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <section className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--g-fg3,#746e68)]">
+          Casas já preparadas ({libraryShown.length}{key ? ` de ${library.length}` : ''})
+        </h3>
+        {libraryShown.length === 0 ? (
+          <p className="text-sm text-[var(--g-fg3,#746e68)]">{key ? 'Nenhuma casa encontrada com essa busca.' : 'Nenhuma outra casa preparada. Use “Escolher casa no Drive”.'}</p>
+        ) : (
+          <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {libraryShown.map((option) => (
+              <li key={option.collectionId}>
+                <button type="button" onClick={() => onPickLibrary(option.collectionId)} className="block w-full text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]">
+                  <span className={`relative ${tile}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor */}
+                    {option.imageUrl && <img src={option.imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                    {option.cropped && (
+                      <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        <Crop size={10} aria-hidden="true" /> Cortada
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-1 block truncate text-xs text-[var(--g-fg,#302d34)]" title={option.label}>{option.label}</span>
+                  <span className="block text-[11px] text-[var(--g-fg3,#746e68)]">{option.photoCount} {option.photoCount === 1 ? 'foto' : 'fotos'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

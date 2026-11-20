@@ -49,7 +49,7 @@ const displayName = (member: Pick<TeamMember, 'full_name' | 'email'>) => member.
 function PageHeader({ title, description }: { title: string; description: string }) {
   return (
     <div className="border-b border-border pb-5">
-      <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">{title}</h1>
+      <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">{title}</h1>
       <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">{description}</p>
     </div>
   );
@@ -86,8 +86,8 @@ export function PermissionEditor({
               aria-pressed={current === key}
               title={PRESETS[key].hint}
               onClick={() => onChange([...PRESETS[key].permissions])}
-              className={`min-h-9 rounded-control border px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50 ${
-                current === key ? 'border-brand-plum bg-brand-plum text-white' : 'border-border bg-surface text-ink hover:bg-surface-muted'
+              className={`min-h-9 rounded-control border px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50 ${
+                current === key ? 'border-brand-plum bg-accent text-white' : 'border-border bg-surface text-ink hover:bg-surface-muted'
               }`}
             >
               {PRESETS[key].label}
@@ -239,7 +239,7 @@ export function PeoplePanel() {
 
   if (!members) {
     return (
-      <p role="status" className="rounded-panel border border-border bg-surface p-6 text-sm text-ink-muted">
+      <p role="status" className="cartao rounded-panel p-6 text-sm text-ink-muted">
         Carregando a equipe…
       </p>
     );
@@ -268,7 +268,7 @@ export function PeoplePanel() {
 
       {/* Aguardando aprovação */}
       <section aria-labelledby="pending-title" className="space-y-3">
-        <h2 id="pending-title" className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <h2 id="pending-title" className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em] text-ink">
           <UserPlus size={16} aria-hidden="true" className="text-status-warning" />
           Aguardando aprovação
           <span className="text-xs font-normal tabular-nums text-ink-muted">({pending.length})</span>
@@ -303,7 +303,7 @@ export function PeoplePanel() {
                     type="button"
                     disabled={busyId === member.user_id}
                     onClick={() => approve(member)}
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
                   >
                     <UserCheck size={15} aria-hidden="true" /> Aprovar acesso
                   </button>
@@ -313,7 +313,7 @@ export function PeoplePanel() {
                     onClick={() =>
                       void run(member.user_id, () => update(member.user_id, { status: 'bloqueado' }), `O cadastro de ${displayName(member)} foi recusado.`)
                     }
-                    className="inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
                   >
                     <UserX size={15} aria-hidden="true" /> Recusar
                   </button>
@@ -326,12 +326,12 @@ export function PeoplePanel() {
 
       {/* Equipe ativa */}
       <section aria-labelledby="active-title" className="space-y-3">
-        <h2 id="active-title" className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <h2 id="active-title" className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em] text-ink">
           <Users size={16} aria-hidden="true" className="text-ink-muted" />
           Equipe
           <span className="text-xs font-normal tabular-nums text-ink-muted">({active.length})</span>
         </h2>
-        <ul className="divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">
+        <ul className="divide-y divide-border overflow-hidden cartao rounded-panel">
           {active.map((member) => {
             const isMe = member.user_id === me.userId;
             const isEditing = editingId === member.user_id;
@@ -395,7 +395,7 @@ export function PeoplePanel() {
                         type="button"
                         disabled={busyId === member.user_id}
                         onClick={() => void savePermissions(member)}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-brand-plum px-3.5 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-3.5 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
                       >
                         <Check size={14} aria-hidden="true" /> Salvar permissões
                       </button>
@@ -418,12 +418,12 @@ export function PeoplePanel() {
       {/* Bloqueados */}
       {blocked.length > 0 && (
         <section aria-labelledby="blocked-title" className="space-y-3">
-          <h2 id="blocked-title" className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <h2 id="blocked-title" className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em] text-ink">
             <ShieldBan size={16} aria-hidden="true" className="text-ink-muted" />
             Bloqueados e recusados
             <span className="text-xs font-normal tabular-nums text-ink-muted">({blocked.length})</span>
           </h2>
-          <ul className="divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">
+          <ul className="divide-y divide-border overflow-hidden cartao rounded-panel">
             {blocked.map((member) => (
               <li key={member.user_id} className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
@@ -795,7 +795,7 @@ export function HistoryPanel() {
           {error}
         </p>
       ) : !rows ? (
-        <p role="status" className="rounded-panel border border-border bg-surface p-6 text-sm text-ink-muted">
+        <p role="status" className="cartao rounded-panel p-6 text-sm text-ink-muted">
           Carregando o histórico…
         </p>
       ) : (
@@ -850,7 +850,7 @@ export function HistoryPanel() {
             groups.map((group) => (
               <section key={group.day} aria-label={group.day} className="space-y-2">
                 <h3 className="text-xs font-semibold text-ink-muted">{group.day}</h3>
-                <ol className="divide-y divide-border overflow-hidden rounded-panel border border-border bg-surface">
+                <ol className="divide-y divide-border overflow-hidden cartao rounded-panel">
                   {group.items.map((row) => {
                     const { icon: Icon, tone, text, note } = describeActivity(row);
                     return (
@@ -905,8 +905,8 @@ export function MyAccountPanel() {
       <PageHeader title="Minha conta" description="Seus dados de acesso e o que você pode fazer no sistema." />
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-3 rounded-panel border border-border bg-surface p-5">
-          <h2 className="text-sm font-semibold text-ink">Dados</h2>
+        <div className="space-y-3 cartao rounded-panel p-5">
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Dados</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-3">
               <dt className="text-ink-muted">Nome</dt>
@@ -924,20 +924,20 @@ export function MyAccountPanel() {
         </div>
 
         <form
-          className="space-y-3 rounded-panel border border-border bg-surface p-5"
+          className="space-y-3 cartao rounded-panel p-5"
           onSubmit={(event) => {
             event.preventDefault();
             void changePassword();
           }}
         >
-          <h2 className="text-sm font-semibold text-ink">Trocar senha</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Trocar senha</h2>
           <input
             type="password"
             autoComplete="new-password"
             placeholder="Nova senha (mínimo 8 caracteres)"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="min-h-10 w-full rounded-control border border-border bg-canvas px-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="min-h-10 w-full rounded-control border border-border bg-canvas px-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
           <input
             type="password"
@@ -945,7 +945,7 @@ export function MyAccountPanel() {
             placeholder="Repita a nova senha"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
-            className="min-h-10 w-full rounded-control border border-border bg-canvas px-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="min-h-10 w-full rounded-control border border-border bg-canvas px-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           />
           {message && (
             <p role={message.tone === 'error' ? 'alert' : 'status'} className={`text-xs ${message.tone === 'error' ? 'text-status-danger' : 'text-status-success'}`}>
@@ -955,15 +955,15 @@ export function MyAccountPanel() {
           <button
             type="submit"
             disabled={saving || !password}
-            className="min-h-10 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+            className="min-h-10 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
           >
             {saving ? 'Salvando…' : 'Salvar nova senha'}
           </button>
         </form>
       </section>
 
-      <section className="space-y-3 rounded-panel border border-border bg-surface p-5">
-        <h2 className="text-sm font-semibold text-ink">Minhas permissões</h2>
+      <section className="space-y-3 cartao rounded-panel p-5">
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Minhas permissões</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PERMISSION_GROUPS.map((group) => (
             <div key={group.title}>

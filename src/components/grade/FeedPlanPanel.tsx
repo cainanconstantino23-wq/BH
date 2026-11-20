@@ -13,6 +13,7 @@ import {
   addDays,
   periodLabel,
   postDates,
+  replaceHouse,
   shortDay,
   toLayout,
   type FeedPlanDetail,
@@ -20,16 +21,17 @@ import {
   type PlanCandidate,
   type PlanHouse,
 } from '@/lib/feedPlan';
-import { FeedGridEditor } from '@/components/grade/FeedGridEditor';
+import { FeedGridEditor, type LibraryHouse } from '@/components/grade/FeedGridEditor';
 import { OnScreen } from '@/components/drive/OnScreen';
+import { AppleThemeToggle, SF_FONT, appleMesh, useAppleTheme } from '@/components/apple/appleTheme';
 
 // Aba "Aprovação da grade": a social media monta a grade do feed dos próximos 15 (ou 30) dias
 // com as casas (pastas da Aprovação de capa) e manda um link só para a Thereza aprovar.
 
 const STATUS_TONE: Record<FeedPlanSummary['status'], string> = {
-  rascunho: 'bg-surface-muted text-ink-muted',
-  enviado: 'bg-status-warning-soft text-status-warning',
-  aprovado: 'bg-status-success-soft text-status-success',
+  rascunho: 'bg-[var(--g-fill,#f3f0e9)] text-[var(--g-fg3,#746e68)]',
+  enviado: 'bg-[var(--g-warning-soft,#fff5dc)] text-[var(--g-warning,#825310)]',
+  aprovado: 'bg-[var(--g-success-soft,#eaf6ee)] text-[var(--g-success,#17633b)]',
 };
 
 const teamImage = (candidate: PlanCandidate, size: number) => candidate.editedUrl ?? driveThumb(candidate.driveId, size);
@@ -39,18 +41,26 @@ const tomorrow = () => addDays(new Date().toLocaleDateString('en-CA', { timeZone
 
 export function FeedPlanPanel() {
   const [view, setView] = useState<{ name: 'list' } | { name: 'new' } | { name: 'plan'; id: number }>({ name: 'list' });
+  // padrão Apple, como a "Selecionar capas" e o link da Thereza: claro por padrão, escuro pelo sol/lua
+  // claro = tema do painel (Fim de tarde no Quadrado, sem caixa nem degradê próprio); escuro = caixa escura Apple
+  const { theme, toggle } = useAppleTheme('bh-grade-equipe-tema', 'quadrado');
+  const dark = theme === 'dark';
   return (
-    <div className="space-y-6">
+    <div style={SF_FONT} className={`relative isolate text-[var(--fg)] antialiased transition-colors duration-300 ${dark ? 'overflow-hidden rounded-[28px] bg-[var(--bg)]' : ''}`}>
+      {dark && <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10" style={{ background: appleMesh }} />}
+      <div className={`absolute right-0 top-0 z-10 ${dark ? 'right-4 top-4 sm:right-6 sm:top-6' : ''}`}><AppleThemeToggle theme={theme} onToggle={toggle} /></div>
+    <div className={`space-y-6 ${dark ? 'p-4 pt-16 sm:p-8 sm:pt-8 sm:pr-20' : 'pt-12 sm:pt-0 sm:pr-14'}`}>
       {view.name === 'list' && <PlanList onNew={() => setView({ name: 'new' })} onOpen={(id) => setView({ name: 'plan', id })} />}
       {view.name === 'new' && <NewPlan onBack={() => setView({ name: 'list' })} onCreated={(id) => setView({ name: 'plan', id })} />}
       {view.name === 'plan' && <PlanDetail id={view.id} onBack={() => setView({ name: 'list' })} />}
+    </div>
     </div>
   );
 }
 
 function BackLink({ onClick, label = 'Voltar para as grades' }: { onClick: () => void; label?: string }) {
   return (
-    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-sm font-semibold text-ink-muted hover:text-ink">
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-sm font-semibold text-[var(--g-fg3,#746e68)] hover:text-[var(--g-fg,#302d34)]">
       <ChevronLeft size={16} aria-hidden="true" /> {label}
     </button>
   );
@@ -81,36 +91,36 @@ function PlanList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: number) =
     <section aria-labelledby="plans-title" className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 id="plans-title" className="text-xl font-semibold tracking-[-0.02em] text-ink">Aprovação da grade</h2>
-          <p className="mt-1 max-w-2xl text-sm text-ink-muted">
+          <h2 id="plans-title" className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-[var(--g-fg,#302d34)] sm:text-[34px]">Aprovação da grade</h2>
+          <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--g-fg3,#746e68)]">
             Monte a grade do feed dos próximos dias com as casas e as capas candidatas, e mande um link só para a {APPROVER_NAME}.
             Ela vê como o feed vai ficar, troca posições, capas e casas, e aprova. 1 post por dia; domingo é Reels.
           </p>
         </div>
         {team.can('criar_publicacoes') && (
-          <button type="button" onClick={onNew} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover">
+          <button type="button" onClick={onNew} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[var(--g-accent,#231b2d)] px-5 text-[15px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_8px_20px_-10px_var(--g-accent,#231b2d)] transition-[transform,background-color] duration-150 hover:bg-[var(--g-accent-hover,#352a42)] active:scale-[0.97]">
             <Plus size={15} aria-hidden="true" /> Nova grade
           </button>
         )}
       </div>
 
-      {state.status === 'loading' && <p role="status" className="text-sm text-ink-muted">Carregando…</p>}
-      {state.status === 'error' && <p role="alert" className="rounded-control bg-status-warning-soft px-3 py-2 text-sm text-status-warning">{state.text}</p>}
+      {state.status === 'loading' && <p role="status" className="text-sm text-[var(--g-fg3,#746e68)]">Carregando…</p>}
+      {state.status === 'error' && <p role="alert" className="rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-warning-soft,#fff5dc)] px-3 py-2 text-sm text-[var(--g-warning,#825310)]">{state.text}</p>}
       {state.status === 'ready' && state.plans.length === 0 && (
-        <p className="rounded-panel border border-dashed border-border-strong p-6 text-center text-sm text-ink-muted">Nenhuma grade ainda. Comece por “Nova grade”.</p>
+        <p className="rounded-[var(--g-r-panel,1rem)] border border-dashed border-[var(--g-line2,#d9d2c8)] p-6 text-center text-sm text-[var(--g-fg3,#746e68)]">Nenhuma grade ainda. Comece por “Nova grade”.</p>
       )}
       {state.status === 'ready' && state.plans.length > 0 && (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {state.plans.map((plan) => (
             <li key={plan.id}>
-              <button type="button" onClick={() => onOpen(plan.id)} className="flex w-full flex-col gap-2 rounded-panel border border-border bg-surface p-4 text-left hover:border-border-strong hover:shadow-sm">
+              <button type="button" onClick={() => onOpen(plan.id)} className="flex w-full flex-col gap-2.5 rounded-[20px] border border-white/80 bg-[var(--g-sheet,#fffefa)]/90 p-5 text-left shadow-[0_1px_2px_rgb(var(--sombra,59_42_44)/0.05),0_14px_36px_-22px_rgb(var(--sombra,59_42_44)/0.3)] backdrop-blur-xl transition-[transform,box-shadow] duration-200 ease-out active:scale-[0.98] [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[0_1px_2px_rgb(var(--sombra,59_42_44)/0.06),0_18px_40px_-20px_rgb(var(--sombra,59_42_44)/0.38)]">
                 <span className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink">
-                    <CalendarRange size={16} className="text-brand-plum" aria-hidden="true" /> {periodLabel(plan.startDate, plan.days)}
+                  <span className="inline-flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em] text-[var(--g-fg,#302d34)] tabular-nums">
+                    <CalendarRange size={16} className="text-[var(--g-accent,#231b2d)]" aria-hidden="true" /> {periodLabel(plan.startDate, plan.days)}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONE[plan.status]}`}>{PLAN_STATUS_LABEL[plan.status]}</span>
                 </span>
-                <span className="text-xs text-ink-muted">
+                <span className="text-[13px] text-[var(--g-fg3,#746e68)] tabular-nums">
                   {plan.days} dias · {plan.houseCount} {plan.houseCount === 1 ? 'casa' : 'casas'}
                   {plan.respondedAt ? ` · aprovada em ${formatLongStamp(plan.respondedAt)}` : ''}
                 </span>
@@ -126,7 +136,8 @@ function PlanList({ onNew, onOpen }: { onNew: () => void; onOpen: (id: number) =
 function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: number) => void }) {
   const [startDate, setStartDate] = useState(tomorrow);
   const [days, setDays] = useState<number>(PLAN_DAY_OPTIONS[0]);
-  const [hour, setHour] = useState(DEFAULT_POST_HOUR);
+  // horário dos posts: por enquanto fixo (19h), sem a caixa de escolher
+  const hour = DEFAULT_POST_HOUR;
   const [folders, setFolders] = useState<CoverCollectionSummary[] | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
@@ -150,7 +161,7 @@ function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: nu
 
   const notConnected = useCallback(() => {
     setPicking(false);
-    setError('O Google Drive não está conectado. Conecte na aba Aprovação de capa e volte aqui.');
+    setError('O Google Drive não está conectado. Conecte na aba Aprovação fotos e volte aqui.');
   }, []);
 
   const openDrive = async () => {
@@ -169,8 +180,8 @@ function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: nu
       <section aria-label="Escolher fotos no Drive" className="space-y-5">
         <BackLink label="Voltar para a nova grade" onClick={() => setPicking(false)} />
         <div>
-          <h2 className="text-xl font-semibold tracking-[-0.02em] text-ink">Escolher fotos no Drive</h2>
-          <p className="mt-1 text-sm text-ink-muted">
+          <h2 className="text-[28px] font-bold leading-[1.1] tracking-[-0.022em] text-[var(--g-fg,#302d34)]">Escolher fotos no Drive</h2>
+          <p className="mt-1 text-sm text-[var(--g-fg3,#746e68)]">
             Abra a pasta da casa, marque com ✓ as fotos que podem ser capa e salve com o nome, número e bairro. A casa volta para a nova grade já escolhida.
           </p>
         </div>
@@ -206,23 +217,22 @@ function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: nu
     else setError(data.error === 'migration_pending' ? MIGRATION_TEXT : 'Não foi possível criar a grade.');
   };
 
-  const usable = (folders ?? []).filter((folder) => folder.photoCount > 0);
 
   return (
     <section aria-labelledby="new-plan-title" className="space-y-5">
       <BackLink onClick={onBack} />
       <div>
-        <h2 id="new-plan-title" className="text-xl font-semibold tracking-[-0.02em] text-ink">Nova grade</h2>
-        <p className="mt-1 text-sm text-ink-muted">Escolha o período e as casas, na ordem em que devem entrar. As fotos de cada pasta da Aprovação de capa viram as capas candidatas.</p>
+        <h2 id="new-plan-title" className="text-[28px] font-bold leading-[1.1] tracking-[-0.022em] text-[var(--g-fg,#302d34)]">Nova grade</h2>
+        <p className="mt-1 text-sm text-[var(--g-fg3,#746e68)]">Escolha o período e, pelo Drive, as fotos candidatas a capa de cada casa, na ordem em que devem entrar.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4 rounded-panel border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-end gap-4 rounded-[var(--g-r-panel,1rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] p-4">
         <label className="text-sm">
-          <span className="mb-1 block font-semibold text-ink">Começa em</span>
-          <input type="date" value={startDate} onChange={(event) => event.target.value && setStartDate(event.target.value)} className="min-h-10 rounded-control border border-border bg-surface px-3 tabular-nums text-ink" />
+          <span className="mb-1 block font-semibold text-[var(--g-fg,#302d34)]">Começa em</span>
+          <input type="date" value={startDate} onChange={(event) => event.target.value && setStartDate(event.target.value)} className="min-h-10 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] px-3 tabular-nums text-[var(--g-fg,#302d34)]" />
         </label>
         <fieldset className="text-sm">
-          <legend className="mb-1 font-semibold text-ink">Período</legend>
+          <legend className="mb-1 font-semibold text-[var(--g-fg,#302d34)]">Período</legend>
           <div className="flex gap-2">
             {PLAN_DAY_OPTIONS.map((option) => (
               <button
@@ -230,38 +240,34 @@ function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: nu
                 type="button"
                 aria-pressed={days === option}
                 onClick={() => setDays(option)}
-                className={`min-h-10 rounded-control px-4 text-xs font-semibold ${days === option ? 'bg-brand-plum text-white' : 'border border-border text-ink hover:bg-surface-muted'}`}
+                className={`min-h-10 rounded-[var(--g-r-control,0.75rem)] px-4 text-xs font-semibold ${days === option ? 'bg-[var(--g-accent,#231b2d)] text-white' : 'border border-[var(--g-line,#e8e4dc)] text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]'}`}
               >
                 {option} dias
               </button>
             ))}
           </div>
         </fieldset>
-        <label className="text-sm">
-          <span className="mb-1 block font-semibold text-ink">Horário dos posts</span>
-          <select value={hour} onChange={(event) => setHour(Number(event.target.value))} className="min-h-10 rounded-control border border-border bg-surface px-3 tabular-nums text-ink">
-            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
-          </select>
-        </label>
-        <p className="text-xs text-ink-muted">
-          {periodLabel(startDate, days)}: <strong className="text-ink">{needed} dias de post</strong> e {days - needed} {days - needed === 1 ? 'domingo' : 'domingos'} de Reels.
+        <p className="text-xs text-[var(--g-fg3,#746e68)]">
+          {periodLabel(startDate, days)}: <strong className="text-[var(--g-fg,#302d34)]">{needed} dias de post</strong> e {days - needed} {days - needed === 1 ? 'domingo' : 'domingos'} de Reels.
         </p>
       </div>
 
       <div className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-sm font-semibold text-ink">Casas ({selected.length} escolhidas)</h3>
+            <h3 className="text-sm font-semibold text-[var(--g-fg,#302d34)]">Casas ({selected.length} escolhidas)</h3>
+            {selected.length > 0 && (
             <button
               type="button"
               onClick={() => void openDrive()}
               disabled={checkingDrive}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border bg-surface px-3 text-xs font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] px-3 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)] disabled:opacity-50"
             >
               {checkingDrive ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <FolderPlus size={14} aria-hidden="true" />} Escolher fotos no Drive
             </button>
+            )}
           </div>
-          <p className={`text-xs ${selected.length < needed ? 'text-status-warning' : 'text-ink-muted'}`}>
+          <p className={`text-xs ${selected.length < needed ? 'text-[var(--g-warning,#825310)]' : 'text-[var(--g-fg3,#746e68)]'}`}>
             {selected.length < needed
               ? `Faltam ${needed - selected.length} para preencher todos os dias (dá para criar assim e completar depois).`
               : selected.length > needed
@@ -269,48 +275,47 @@ function NewPlan({ onBack, onCreated }: { onBack: () => void; onCreated: (id: nu
                 : 'Todos os dias preenchidos.'}
           </p>
         </div>
-        {folders === null ? (
-          <p role="status" className="text-sm text-ink-muted">Carregando as pastas…</p>
-        ) : usable.length === 0 ? (
-          <p className="text-sm text-ink-muted">Nenhuma casa com fotos ainda. Use “Escolher fotos no Drive” para separar as capas de cada casa.</p>
+        {/* só as casas escolhidas agora pelo Drive, sem fotos: ordem, dia e nome */}
+        {selected.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-[var(--g-r-panel,1rem)] border border-dashed border-[var(--g-line2,#d9d2c8)] px-5 py-10 text-center">
+            <p className="max-w-sm text-sm text-[var(--g-fg3,#746e68)]">Nenhuma casa ainda. Abra a pasta de cada casa no Drive e marque as fotos que podem ser capa.</p>
+            <button
+              type="button"
+              onClick={() => void openDrive()}
+              disabled={checkingDrive}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--g-accent,#231b2d)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.97] transition-transform px-5 text-sm font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)] disabled:opacity-50"
+            >
+              {checkingDrive ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <FolderPlus size={16} aria-hidden="true" />} Escolher fotos no Drive
+            </button>
+          </div>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {usable.map((folder) => {
-              const order = selected.indexOf(folder.id);
-              const isSelected = order >= 0;
-              const date = isSelected ? postDates(startDate, days)[order] : undefined;
+          <ol className="divide-y divide-[var(--g-line,#e8e4dc)] overflow-hidden rounded-[var(--g-r-panel,1rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)]">
+            {selected.map((id, order) => {
+              const folder = (folders ?? []).find((item) => item.id === id);
+              const date = postDates(startDate, days)[order];
               return (
-                <li key={folder.id}>
-                  <button type="button" onClick={() => toggle(folder.id)} aria-pressed={isSelected} className="block w-full text-left">
-                    <span className={`relative block aspect-[3/4] overflow-hidden rounded-control bg-surface-muted ${isSelected ? 'ring-4 ring-brand-plum ring-offset-2' : 'ring-1 ring-border hover:ring-2 hover:ring-border-strong'}`}>
-                      {folder.coverDriveId && (
-                        // eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor
-                        <img src={folder.coverEditedUrl ?? driveThumb(folder.coverDriveId, 300)} alt="" className="h-full w-full object-cover" />
-                      )}
-                      {isSelected && (
-                        <span className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-plum px-1.5 text-xs font-bold text-white">{order + 1}</span>
-                      )}
-                      {isSelected && (
-                        <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-1 text-[11px] font-medium text-white">{date ? shortDay(date) : 'Reserva'}</span>
-                      )}
-                    </span>
-                    <span className="mt-1 block truncate text-xs font-medium text-ink">{folderLabel(folder)}</span>
-                    <span className="block text-[11px] text-ink-muted">{folder.photoCount} {folder.photoCount === 1 ? 'foto' : 'fotos'}</span>
+                <li key={id} className="flex min-h-12 items-center gap-3 px-4 py-2">
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--g-accent,#231b2d)] px-1.5 text-xs font-bold tabular-nums text-white">{order + 1}</span>
+                  <span className="w-20 shrink-0 text-xs font-semibold tabular-nums text-[var(--g-fg3,#746e68)]">{date ? shortDay(date) : 'Reserva'}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--g-fg,#302d34)]">{folder ? folderLabel(folder) : 'Casa'}</span>
+                  {folder && <span className="hidden shrink-0 text-xs tabular-nums text-[var(--g-fg3,#746e68)] sm:inline">{folder.photoCount} {folder.photoCount === 1 ? 'foto' : 'fotos'}</span>}
+                  <button type="button" onClick={() => toggle(id)} aria-label={`Tirar ${folder ? folderLabel(folder) : 'a casa'} da grade`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--g-r-control,0.75rem)] text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-danger-soft,#fff0ef)] hover:text-[var(--g-danger,#a52626)]">
+                    <Trash2 size={15} aria-hidden="true" />
                   </button>
                 </li>
               );
             })}
-          </ul>
+          </ol>
         )}
       </div>
 
-      {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
+      {error && <p role="alert" className="text-sm text-[var(--g-danger,#a52626)]">{error}</p>}
       <div className="flex justify-end">
         <button
           type="button"
           onClick={() => void create()}
           disabled={saving || selected.length === 0}
-          className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-5 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--g-accent,#231b2d)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.97] transition-transform px-5 text-xs font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)] disabled:opacity-50"
         >
           {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <LayoutGrid size={15} aria-hidden="true" />} Montar a grade
         </button>
@@ -330,6 +335,34 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState<CoverCollectionSummary[] | null>(null);
+  // escolher no Drive uma casa nova para um dia (o "+" do dia livre ou "Trocar a casa")
+  const [pickingDate, setPickingDate] = useState<string | null>(null);
+  const [driveFolders, setDriveFolders] = useState<CoverCollectionSummary[]>([]);
+  // todas as casas já preparadas na Aprovação de capa (busca ao escolher a casa de um dia)
+  const [library, setLibrary] = useState<LibraryHouse[]>([]);
+  const loadLibrary = useCallback(
+    () =>
+      fetch('/api/capa?tipo=capa', { cache: 'no-store' })
+        .then((response) => response.json())
+        .then((data) =>
+          setLibrary(
+            ((data.collections ?? []) as CoverCollectionSummary[])
+              .filter((folder) => folder.photoCount > 0)
+              .map((folder) => ({
+                collectionId: folder.id,
+                label: folderLabel(folder),
+                imageUrl: folder.coverEditedUrl ?? (folder.coverDriveId ? driveThumb(folder.coverDriveId, 300) : null),
+                photoCount: folder.photoCount,
+                cropped: Boolean(folder.coverEditedUrl),
+              })),
+          ),
+        )
+        .catch(() => undefined),
+    [],
+  );
+  useEffect(() => {
+    void loadLibrary();
+  }, [loadLibrary]);
   const saveTimer = useRef<number | null>(null);
 
   const apply = useCallback((next: FeedPlanDetail) => {
@@ -348,15 +381,45 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
       .catch(() => setError('Não foi possível abrir a grade.'));
   }, [id, apply]);
 
-  const patch = async (body: Record<string, unknown>) => {
+  const patchPlan = async (body: Record<string, unknown>): Promise<FeedPlanDetail | null> => {
     const response = await fetch(`/api/grade/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
     const data = response ? await response.json().catch(() => ({})) : {};
     if (response?.ok && data.plan) {
       apply(data.plan);
-      return true;
+      return data.plan as FeedPlanDetail;
     }
     setError('Não foi possível salvar a mudança.');
-    return false;
+    return null;
+  };
+  const patch = async (body: Record<string, unknown>) => Boolean(await patchPlan(body));
+
+  const openDrivePicker = async (date: string) => {
+    setError('');
+    const status = await fetch('/api/drive/status', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).catch(() => null);
+    if (!status?.connected) return setError('O Google Drive não está conectado. Conecte na aba Aprovação fotos e volte aqui.');
+    const data = await fetch('/api/capa?tipo=capa', { cache: 'no-store' }).then((response) => response.json()).catch(() => ({}));
+    setDriveFolders((data.collections ?? []) as CoverCollectionSummary[]);
+    setPickingDate(date);
+  };
+
+  /** Casa salva pelo Drive: entra no plano (se ainda não estava) e vai para o dia escolhido. */
+  const placeFromDrive = async (collectionId: number, date: string) => {
+    setPickingDate(null);
+    // grava antes o que ainda estava para salvar, para não perder
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      await patchPlan({ layout: toLayout(houses) });
+    }
+    let current = houses;
+    if (!current.some((house) => house.collectionId === collectionId)) {
+      const updated = await patchPlan({ addCollectionIds: [collectionId] });
+      if (!updated) return;
+      current = updated.houses;
+    }
+    setSaveState('saving');
+    if (await patchPlan({ layout: toLayout(replaceHouse(current, date, collectionId)) })) setSaveState('saved');
+    void loadLibrary();
   };
 
   const change = (next: PlanHouse[]) => {
@@ -398,8 +461,30 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
     return (
       <div className="space-y-4">
         <BackLink onClick={onBack} />
-        {error ? <p role="alert" className="rounded-control bg-status-warning-soft px-3 py-2 text-sm text-status-warning">{error}</p> : <p role="status" className="text-sm text-ink-muted">Carregando…</p>}
+        {error ? <p role="alert" className="rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-warning-soft,#fff5dc)] px-3 py-2 text-sm text-[var(--g-warning,#825310)]">{error}</p> : <p role="status" className="text-sm text-[var(--g-fg3,#746e68)]">Carregando…</p>}
       </div>
+    );
+  }
+
+  if (pickingDate) {
+    return (
+      <section aria-label="Escolher casa no Drive" className="space-y-5">
+        <BackLink label="Voltar para a grade" onClick={() => setPickingDate(null)} />
+        <div>
+          <h2 className="text-[28px] font-bold leading-[1.1] tracking-[-0.022em] text-[var(--g-fg,#302d34)]">Casa para {shortDay(pickingDate)}</h2>
+          <p className="mt-1 text-sm text-[var(--g-fg3,#746e68)]">Abra a pasta da casa no Drive, marque com ✓ as fotos que podem ser capa e salve com o nome, número e bairro. Ela entra na grade neste dia.</p>
+        </div>
+        <DriveBrowser
+          mode="capa"
+          collections={driveFolders}
+          target={null}
+          onNotConnected={() => {
+            setPickingDate(null);
+            setError('O Google Drive não está conectado. Conecte na aba Aprovação fotos e volte aqui.');
+          }}
+          onSaved={(collection) => void placeFromDrive(collection.id, pickingDate)}
+        />
+      </section>
     );
   }
 
@@ -412,11 +497,11 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="flex flex-wrap items-center gap-2 text-xl font-semibold tracking-[-0.02em] text-ink">
+          <h2 className="flex flex-wrap items-center gap-2 text-[28px] font-bold leading-[1.1] tracking-[-0.022em] text-[var(--g-fg,#302d34)]">
             Grade de {periodLabel(plan.startDate, plan.days)}
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONE[plan.status]}`}>{PLAN_STATUS_LABEL[plan.status]}</span>
           </h2>
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-1 text-sm text-[var(--g-fg3,#746e68)]">
             {plan.days} dias · posts às {String(plan.hour).padStart(2, '0')}:00 · {scheduled.length} {scheduled.length === 1 ? 'casa' : 'casas'} na grade
             {freeDays > 0 ? ` · ${freeDays} ${freeDays === 1 ? 'dia livre' : 'dias livres'}` : ''}
             {saveState === 'saving' ? ' · salvando…' : saveState === 'saved' ? ' · salvo' : ''}
@@ -424,12 +509,12 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {canEdit && (
-            <button type="button" onClick={() => void openAdd()} className="inline-flex min-h-10 items-center gap-2 rounded-control border border-border bg-surface px-3.5 text-xs font-semibold text-ink hover:bg-surface-muted">
+            <button type="button" onClick={() => void openAdd()} className="inline-flex min-h-10 items-center gap-2 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] px-3.5 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]">
               <Plus size={15} aria-hidden="true" /> Adicionar casas
             </button>
           )}
           {team.can('apagar_publicacoes') && (
-            <button type="button" onClick={() => void remove()} className="inline-flex min-h-10 items-center gap-2 rounded-control px-3 text-xs font-semibold text-ink-muted hover:bg-status-danger-soft hover:text-status-danger">
+            <button type="button" onClick={() => void remove()} className="inline-flex min-h-10 items-center gap-2 rounded-[var(--g-r-control,0.75rem)] px-3 text-xs font-semibold text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-danger-soft,#fff0ef)] hover:text-[var(--g-danger,#a52626)]">
               <Trash2 size={15} aria-hidden="true" /> Apagar grade
             </button>
           )}
@@ -437,15 +522,15 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
       </div>
 
       {plan.status === 'aprovado' && plan.respondedAt && (
-        <section aria-label="Resposta da Thereza" className="space-y-2 rounded-panel border-2 border-status-success-border bg-status-success-soft p-4">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-status-success">
+        <section aria-label="Resposta da Thereza" className="space-y-2 rounded-[var(--g-r-panel,1rem)] border-2 border-[var(--g-success-line,#b8ddc4)] bg-[var(--g-success-soft,#eaf6ee)] p-4">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-[var(--g-success,#17633b)]">
             <Check size={18} strokeWidth={2.5} aria-hidden="true" /> {APPROVER_NAME} aprovou a grade em {formatLongStamp(plan.respondedAt)}
           </h3>
-          {plan.feedback && <p className="rounded-control bg-surface px-3 py-2 text-sm text-ink">&ldquo;{plan.feedback}&rdquo;</p>}
-          <p className="text-sm text-ink">
+          {plan.feedback && <p className="rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-sheet,#fffefa)] px-3 py-2 text-sm text-[var(--g-fg,#302d34)]">&ldquo;{plan.feedback}&rdquo;</p>}
+          <p className="text-sm text-[var(--g-fg,#302d34)]">
             A capa escolhida de cada casa já está aprovada na pasta dela, na Aprovação de capa, com a data do dia. Próximo passo: aprovação do carrossel de cada casa.
           </p>
-          <ol className="grid gap-x-6 gap-y-1 text-xs text-ink sm:grid-cols-2">
+          <ol className="grid gap-x-6 gap-y-1 text-xs text-[var(--g-fg,#302d34)] sm:grid-cols-2">
             {scheduled.map((house) => (
               <li key={house.collectionId} className="tabular-nums"><span className="font-semibold">{shortDay(house.slotDate!)}</span> · {house.label}</li>
             ))}
@@ -454,11 +539,11 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
       )}
 
       {/* Link para a Thereza */}
-      <section className="rounded-panel border border-border bg-surface p-4">
+      <section className="rounded-[var(--g-r-panel,1rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Link2 size={16} className="text-brand-plum" aria-hidden="true" /> Link da grade para a {APPROVER_NAME}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">Ela vê a grade como no Instagram, arrasta para trocar, escolhe as capas, troca casas pelas da reserva e aprova. As mudanças dela aparecem aqui.</p>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--g-fg,#302d34)]"><Link2 size={16} className="text-[var(--g-accent,#231b2d)]" aria-hidden="true" /> Link da grade para a {APPROVER_NAME}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--g-fg3,#746e68)]">Ela vê a grade como no Instagram, arrasta para trocar, escolhe as capas, troca casas pelas da reserva e aprova. As mudanças dela aparecem aqui.</p>
           </div>
           {team.can('enviar_link_aprovacao') &&
             (link ? (
@@ -466,11 +551,11 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
                 <button
                   type="button"
                   onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true))}
-                  className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[var(--g-accent,#231b2d)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.97] transition-transform px-4 text-xs font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)]"
                 >
                   {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />} {copied ? 'Link copiado' : 'Copiar link'}
                 </button>
-                <button type="button" onClick={() => void makeLink(true)} disabled={busy} title="Gerar um link novo (o antigo para de funcionar)" aria-label="Gerar um link novo" className="flex min-h-10 min-w-10 items-center justify-center rounded-control border border-border text-ink-muted hover:bg-surface-muted disabled:opacity-50">
+                <button type="button" onClick={() => void makeLink(true)} disabled={busy} title="Gerar um link novo (o antigo para de funcionar)" aria-label="Gerar um link novo" className="flex min-h-10 min-w-10 items-center justify-center rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)] disabled:opacity-50">
                   <RefreshCw size={15} aria-hidden="true" />
                 </button>
               </div>
@@ -479,29 +564,40 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
                 type="button"
                 onClick={() => void makeLink()}
                 disabled={busy || scheduled.length === 0}
-                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50"
+                className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full bg-[var(--g-accent,#231b2d)] shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] active:scale-[0.97] transition-transform px-4 text-xs font-semibold text-white hover:bg-[var(--g-accent-hover,#352a42)] disabled:opacity-50"
               >
                 {busy ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Link2 size={15} aria-hidden="true" />} Gerar link
               </button>
             ))}
         </div>
-        {link && <p className="mt-3 break-all rounded-control bg-canvas px-3 py-2 font-mono text-[11px] text-ink-muted">{link}</p>}
+        {link && <p className="mt-3 break-all rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-canvas,#f7f5f0)] px-3 py-2 font-mono text-[11px] text-[var(--g-fg3,#746e68)]">{link}</p>}
       </section>
 
-      {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
+      {error && <p role="alert" className="text-sm text-[var(--g-danger,#a52626)]">{error}</p>}
 
       <div className="max-w-2xl">
-        <FeedGridEditor houses={houses} startDate={plan.startDate} days={plan.days} published={plan.published} imageSrc={teamImage} onChange={change} readOnly={!canEdit} />
+        <FeedGridEditor
+          houses={houses}
+          startDate={plan.startDate}
+          days={plan.days}
+          published={plan.published}
+          imageSrc={teamImage}
+          onChange={change}
+          readOnly={!canEdit}
+          onPickFromDrive={canEdit ? (date) => void openDrivePicker(date) : undefined}
+          library={canEdit ? library : undefined}
+          onPickLibrary={canEdit ? (date, collectionId) => void placeFromDrive(collectionId, date) : undefined}
+        />
       </div>
 
       {adding && (
         <OnScreen>
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center sm:p-6" onClick={(event) => event.target === event.currentTarget && setAdding(null)}>
-          <section role="dialog" aria-modal="true" aria-label="Adicionar casas à reserva" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-panel bg-surface p-4 shadow-2xl sm:rounded-panel sm:p-6">
-            <h3 className="text-base font-semibold text-ink">Adicionar casas</h3>
-            <p className="mt-1 text-sm text-ink-muted">Entram na reserva. Depois é só tocar num dia livre ou trocar uma casa.</p>
+          <section role="dialog" aria-modal="true" aria-label="Adicionar casas à reserva" className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-t-[var(--g-r-panel,1rem)] bg-[var(--g-sheet,#fffefa)] p-4 shadow-2xl sm:rounded-[var(--g-r-panel,1rem)] sm:p-6">
+            <h3 className="text-base font-semibold text-[var(--g-fg,#302d34)]">Adicionar casas</h3>
+            <p className="mt-1 text-sm text-[var(--g-fg3,#746e68)]">Entram na reserva. Depois é só tocar num dia livre ou trocar uma casa.</p>
             {adding.length === 0 ? (
-              <p className="mt-4 text-sm text-ink-muted">Todas as pastas com fotos já estão nesta grade.</p>
+              <p className="mt-4 text-sm text-[var(--g-fg3,#746e68)]">Todas as pastas com fotos já estão nesta grade.</p>
             ) : (
               <ul className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
                 {adding.map((folder) => (
@@ -513,20 +609,20 @@ function PlanDetail({ id, onBack }: { id: number; onBack: () => void }) {
                       }}
                       className="block w-full text-left"
                     >
-                      <span className="block aspect-[3/4] overflow-hidden rounded-control bg-surface-muted ring-1 ring-border hover:ring-2 hover:ring-brand-plum">
+                      <span className="block aspect-[3/4] overflow-hidden rounded-[var(--g-r-control,0.75rem)] bg-[var(--g-fill,#f3f0e9)] ring-1 ring-[var(--g-line,#e8e4dc)] hover:ring-2 hover:ring-[var(--g-accent,#231b2d)]">
                         {folder.coverDriveId && (
                           // eslint-disable-next-line @next/next/no-img-element -- imagem do Drive pelo servidor
                           <img src={folder.coverEditedUrl ?? driveThumb(folder.coverDriveId, 300)} alt="" className="h-full w-full object-cover" />
                         )}
                       </span>
-                      <span className="mt-1 block truncate text-xs text-ink">{folderLabel(folder)}</span>
+                      <span className="mt-1 block truncate text-xs text-[var(--g-fg,#302d34)]">{folderLabel(folder)}</span>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
             <div className="mt-4 flex justify-end">
-              <button type="button" onClick={() => setAdding(null)} className="inline-flex min-h-10 items-center rounded-control border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted">Pronto</button>
+              <button type="button" onClick={() => setAdding(null)} className="inline-flex min-h-10 items-center rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] px-4 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]">Pronto</button>
             </div>
           </section>
         </div>

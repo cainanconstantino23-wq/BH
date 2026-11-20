@@ -119,7 +119,7 @@ export function MessagesInbox() {
   };
 
   return (
-    <div className="section-enter flex h-[calc(100dvh-6rem)] min-h-0 overflow-hidden rounded-panel border border-border bg-surface md:h-[calc(100dvh-8.75rem)]">
+    <div className="section-enter flex h-[calc(100dvh-6rem)] min-h-0 overflow-hidden cartao rounded-panel md:h-[calc(100dvh-8.75rem)]">
       
       {/* LATERAL ESQUERDA */}
       <div className={`${isChatOpen ? 'hidden' : 'flex'} w-full shrink-0 flex-col border-border bg-surface md:flex md:w-96 md:border-r`}>
@@ -138,7 +138,7 @@ export function MessagesInbox() {
               placeholder="Digite pelo menos 3 caracteres"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="min-h-11 w-full rounded-control border border-border bg-canvas py-2 pl-9 pr-8 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="min-h-11 w-full rounded-control border border-border bg-canvas py-2 pl-9 pr-8 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
             <Filter size={14} className="absolute right-3 top-3 cursor-pointer text-ink-muted" />
           </div>
@@ -183,7 +183,7 @@ export function MessagesInbox() {
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-plum text-xs font-semibold text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
                     <div className="flex h-full w-full items-center justify-center rounded-full">
                       {chat.avatar}
                     </div>
@@ -232,7 +232,7 @@ export function MessagesInbox() {
                 >
                   <ArrowLeft size={18} />
                 </button>
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-plum text-xs font-semibold text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">
                   <div className="flex h-full w-full items-center justify-center rounded-full">
                     {activeChat.avatar}
                   </div>
@@ -267,7 +267,7 @@ export function MessagesInbox() {
                 return (
                   <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-sm ${
-                      isMe ? 'rounded-br-none bg-brand-plum text-white' : 'rounded-bl-none border border-border bg-surface text-ink'
+                      isMe ? 'rounded-br-none bg-accent text-white' : 'rounded-bl-none border border-border bg-surface text-ink'
                     }`}>
                       <p>{msg.text}</p>
                       <span className={`mt-1 block text-right text-[9px] ${isMe ? 'text-white/65' : 'text-ink-muted'}`}>
@@ -285,11 +285,11 @@ export function MessagesInbox() {
                 placeholder="Escreva uma mensagem..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-4 py-2.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-4 py-2.5 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               />
               <button
                 type="submit"
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-control bg-brand-plum text-white transition-colors hover:bg-brand-plum-hover"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-accent-hover"
               >
                 <Send size={16} />
               </button>

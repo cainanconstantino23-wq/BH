@@ -18,8 +18,10 @@ import { HistoryPanel, MyAccountPanel, PeoplePanel } from '@/components/team/Tea
 import { CoverApprovalPanel, DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 import { PostagensTable } from '@/components/postagens/PostagensTable';
 import { FeedPlanPanel } from '@/components/grade/FeedPlanPanel';
+import { CoverStudio } from '@/components/capas/CoverStudio';
 import {
   BarChart2,
+  Sparkles,
   Inbox,
   FolderPlus,
   LogOut,
@@ -32,14 +34,13 @@ import {
   Menu,
   Table2,
   LayoutGrid,
-  ImageUp,
   X,
   MapPin,
   Users,
 } from 'lucide-react';
 
 const SectionLoading = () => (
-  <div role="status" className="rounded-panel border border-border bg-surface p-8 text-center text-sm text-ink-muted">
+  <div role="status" className="cartao rounded-panel p-8 text-center text-sm text-ink-muted">
     Carregando seção…
   </div>
 );
@@ -86,7 +87,32 @@ const instagramErrorMessages: Record<string, string> = {
   admin_only: 'Você não tem permissão para conectar o Instagram da empresa. Peça a quem administra a equipe.',
 };
 
-type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | 'grade' | 'capa' | AccountPage;
+const TOP_TAB_ACTIVE = 'bg-white/85 font-semibold text-ink shadow-[0_1px_2px_rgb(var(--sombra)/0.08),0_4px_12px_-6px_rgb(var(--sombra)/0.18)]';
+const TOP_TAB_IDLE = 'text-ink-muted hover:bg-white/55 hover:text-ink';
+
+type PanelTheme = 'tema-quadrado' | 'tema-espelho';
+const PANEL_THEME_COLOR: Record<PanelTheme, string> = { 'tema-quadrado': '#f8eee9', 'tema-espelho': '#eff5f7' };
+
+/**
+ * Põe o tema do painel no <html> enquanto ele está aberto (modais em portal também pegam).
+ * Hoje o painel inteiro usa "Mar de Espelho" (19/11/2026); "tema-quadrado" continua disponível.
+ */
+function PanelThemeClass({ theme }: { theme: PanelTheme }) {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add(theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const previous = meta?.getAttribute('content') ?? null;
+    meta?.setAttribute('content', PANEL_THEME_COLOR[theme]);
+    return () => {
+      root.classList.remove(theme);
+      if (meta && previous) meta.setAttribute('content', previous);
+    };
+  }, [theme]);
+  return null;
+}
+
+type DashboardTab = 'comunidade' | 'demografia' | 'inbox' | 'approval' | 'fotos' | 'planner' | 'postagens' | 'grade' | 'capas' | 'capa' | AccountPage;
 
 const driveErrorMessages: Record<string, string> = {
   not_configured: 'Faltam as credenciais do Google no servidor (GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET).',
@@ -117,10 +143,10 @@ function AudienceSnapshot() {
   if (!demographics) return null;
 
   return (
-    <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+    <section className="min-w-0 space-y-4 cartao rounded-panel p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-ink">Perfil da audiência</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Perfil da audiência</h2>
           <p className="mt-1 text-xs text-ink-muted">Uma leitura rápida do público</p>
         </div>
         <Users aria-hidden="true" size={17} className="mt-0.5 shrink-0 text-brand-plum" />
@@ -147,7 +173,7 @@ function AudienceSnapshot() {
 
       {leadingAgeGroup && (
         <div className="border-t border-border pt-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Faixa etária principal</p>
+          <p className="text-[13px] font-semibold text-ink-muted">Faixa etária principal</p>
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-ink">{leadingAgeGroup.range} anos</span>
             <span className="text-sm font-semibold tabular-nums text-brand-plum">{leadingAgeGroup.percentage}%</span>
@@ -162,7 +188,7 @@ function AudienceSnapshot() {
       )}
 
       <div className="border-t border-border pt-3">
-        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+        <p className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted">
           <MapPin aria-hidden="true" size={12} />
           Principais cidades
         </p>
@@ -255,7 +281,7 @@ export default function Home() {
               let returnTab: DashboardTab = 'fotos';
               try {
                 const saved = sessionStorage.getItem(DRIVE_RETURN_KEY);
-                if (saved === 'capa' || saved === 'postagens') returnTab = saved;
+                if (saved === 'capa' || saved === 'postagens' || saved === 'capas') returnTab = saved;
                 sessionStorage.removeItem(DRIVE_RETURN_KEY);
               } catch {
                 // sem sessionStorage
@@ -371,14 +397,15 @@ export default function Home() {
       id: 'instagram',
       label: 'Instagram',
       icon: InstagramIcon,
-      active: platform === 'instagram' && activeTab !== 'postagens' && activeTab !== 'grade',
+      active: platform === 'instagram' && activeTab !== 'postagens' && activeTab !== 'grade' && activeTab !== 'capas',
       select: () => {
         setPlatform('instagram');
-        if (activeTab === 'postagens' || activeTab === 'grade') setActiveTab('comunidade');
+        if (activeTab === 'postagens' || activeTab === 'grade' || activeTab === 'capas') setActiveTab('comunidade');
       },
     },
     { id: 'postagens', label: 'Tabela de postagens', icon: Table2, active: activeTab === 'postagens', select: () => setActiveTab('postagens') },
     { id: 'grade', label: 'Aprovação da grade', icon: LayoutGrid, active: activeTab === 'grade', select: () => setActiveTab('grade') },
+    { id: 'capas', label: 'Selecionar capas', icon: Sparkles, active: activeTab === 'capas', select: () => setActiveTab('capas') },
   ];
 
   if (!currentUser) {
@@ -409,7 +436,7 @@ export default function Home() {
     const blocked = membership?.status === 'bloqueado';
     return (
       <main className="flex min-h-dvh items-center justify-center bg-canvas px-5 py-10 font-sans text-ink">
-        <div className="w-full max-w-md rounded-panel border border-border bg-surface p-6 sm:p-8">
+        <div className="w-full max-w-md cartao rounded-panel p-6 sm:p-8">
           <Image src="/bahia-homes-logo.png" alt="Bahia Homes" width={1834} height={276} className="h-auto w-32" priority />
           <span
             aria-hidden="true"
@@ -435,7 +462,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover"
               >
                 <UserPlus size={15} aria-hidden="true" /> Verificar de novo
               </button>
@@ -443,7 +470,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => void signOut()}
-              className="inline-flex min-h-10 items-center gap-2 rounded-control border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted"
+              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted"
             >
               <LogOut size={15} aria-hidden="true" /> Sair
             </button>
@@ -476,14 +503,15 @@ export default function Home() {
 
   return (
     <TeamProvider value={team}>
-    <div className="press-feedback flex h-dvh min-h-0 overflow-hidden overscroll-none bg-canvas font-sans text-ink antialiased">
-      <aside className="z-10 hidden w-64 shrink-0 flex-col border-r border-border bg-surface xl:flex">
-        <div className="flex h-16 items-center border-b border-border px-6">
+    <PanelThemeClass theme="tema-espelho" />
+    <div className="press-feedback fundo-quadrado flex h-dvh min-h-0 overflow-hidden overscroll-none font-sans text-ink antialiased">
+      <aside className="vidro z-10 hidden w-64 shrink-0 flex-col border-r border-white/70 xl:flex">
+        <div className="flex h-16 items-center px-6">
           <button
             type="button"
             onClick={() => setShowHub(true)}
             aria-label="Voltar ao início"
-            className="flex min-h-11 items-center gap-2.5 rounded-xl text-sm font-semibold tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="flex min-h-11 items-center gap-2.5 rounded-xl text-sm font-semibold tracking-tight text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <Image
               src="/bahia-homes-logo.png"
@@ -497,7 +525,7 @@ export default function Home() {
         </div>
         <nav className="flex-1 space-y-8 px-3 py-7">
           <div>
-            <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Plataformas</p>
+            <p className="mb-3 px-3 text-[13px] font-semibold text-ink-muted">Plataformas</p>
           <ul className="space-y-1">
             {platforms.map((p) => {
               const Icon = p.icon;
@@ -509,9 +537,9 @@ export default function Home() {
                     aria-pressed={isActive}
                     onClick={p.select}
                     className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-xs font-semibold transition-[background-color,color,transform] duration-150 ease-out ${
-                      isActive 
-                        ? 'bg-brand-plum text-white'
-                        : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
+                      isActive
+                        ? 'bg-accent text-white shadow-[0_6px_16px_-8px_color-mix(in_oklab,var(--color-accent)_70%,transparent)]'
+                        : 'text-ink-muted hover:bg-white/70 hover:text-ink'
                     }`}
                   >
                     <Icon className="h-4 w-4 opacity-80" />
@@ -529,7 +557,7 @@ export default function Home() {
         ref={mobileMenuRef}
         id="mobile-navigation-dialog"
         aria-labelledby="mobile-menu-title"
-        className="mobile-nav-drawer fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none translate-x-0 scale-100 bg-transparent p-0 opacity-100 transition-[opacity,transform,display,overlay] duration-200 ease-drawer [transition-behavior:allow-discrete] starting:open:-translate-x-3 starting:open:opacity-0 starting:open:scale-[0.98] backdrop:bg-brand-plum/35 xl:hidden"
+        className="mobile-nav-drawer fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none translate-x-0 scale-100 bg-transparent p-0 opacity-100 transition-[opacity,transform,display,overlay] duration-200 ease-drawer [transition-behavior:allow-discrete] starting:open:-translate-x-3 starting:open:opacity-0 starting:open:scale-[0.98] backdrop:bg-brand-plum/30 backdrop:backdrop-blur-[2px] xl:hidden"
         onCancel={(event) => {
           event.preventDefault();
           closeMobileMenu();
@@ -545,8 +573,8 @@ export default function Home() {
           if (event.target === event.currentTarget) closeMobileMenu();
         }}
       >
-          <aside className="flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-border bg-surface pb-[env(safe-area-inset-bottom)] shadow-xl">
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5 pt-[env(safe-area-inset-top)]">
+          <aside className="flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto overscroll-contain border-r border-white/70 bg-surface/90 pb-[env(safe-area-inset-bottom)] shadow-[0_24px_60px_-20px_rgb(var(--sombra)/0.45)] backdrop-blur-2xl backdrop-saturate-150">
+            <div className="flex h-16 shrink-0 items-center justify-between px-5 pt-[env(safe-area-inset-top)]">
               <span id="mobile-menu-title" className="flex items-center gap-2.5 text-sm font-bold tracking-tight text-ink">
                 <Image
                   src="/bahia-homes-logo.png"
@@ -561,7 +589,7 @@ export default function Home() {
                 type="button"
                 aria-label="Fechar menu de navegação"
                 onClick={closeMobileMenu}
-                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <X size={18} />
               </button>
@@ -569,7 +597,7 @@ export default function Home() {
 
             <nav className="space-y-8 p-4">
               <div>
-                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Plataformas</p>
+                <p className="mb-3 px-3 text-[13px] font-semibold text-ink-muted">Plataformas</p>
                 <ul className="space-y-1">
                   {platforms.map((item) => {
                     const Icon = item.icon;
@@ -585,7 +613,7 @@ export default function Home() {
                             closeMobileMenu();
                           }}
                           className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
-                            isActive ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
+                            isActive ? 'bg-accent text-white' : 'text-ink-muted hover:bg-white/70 hover:text-ink'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
@@ -598,7 +626,7 @@ export default function Home() {
               </div>
 
               <div>
-                <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted">Workspace</p>
+                <p className="mb-3 px-3 text-[13px] font-semibold text-ink-muted">Workspace</p>
                 <ul className="space-y-1">
                   {[
                     { label: 'Analytics', icon: BarChart2, tab: 'comunidade' as const },
@@ -620,7 +648,7 @@ export default function Home() {
                             closeMobileMenu();
                           }}
                           className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
-                            isActive ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
+                            isActive ? 'bg-accent text-white' : 'text-ink-muted hover:bg-white/70 hover:text-ink'
                           }`}
                         >
                           <Icon size={16} />
@@ -636,26 +664,10 @@ export default function Home() {
                         setIsCatalogOpen(true);
                         closeMobileMenu();
                       }}
-                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-ink-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum"
+                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium text-ink-muted transition-[background-color,color,transform] duration-150 ease-out hover:bg-white/70 hover:text-ink"
                     >
                       <FolderPlus size={16} />
                       Grade do feed
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      aria-current={activeTab === 'capa' ? 'page' : undefined}
-                      onClick={() => {
-                        setActiveTab('capa');
-                        closeMobileMenu();
-                      }}
-                      className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-[background-color,color,transform] duration-150 ease-out ${
-                        activeTab === 'capa' ? 'bg-brand-plum text-white' : 'text-ink-muted hover:bg-surface-muted hover:text-brand-plum'
-                      }`}
-                    >
-                      <ImageUp size={16} />
-                      Aprovação de capa
                     </button>
                   </li>
                 </ul>
@@ -664,8 +676,8 @@ export default function Home() {
           </aside>
       </dialog>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="relative z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 pt-[env(safe-area-inset-top)] text-ink sm:px-6 xl:h-16 xl:flex-nowrap xl:px-8">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <header className="vidro sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/70 px-4 pt-[env(safe-area-inset-top)] text-ink sm:px-6 xl:h-16 xl:flex-nowrap xl:px-8">
           <div className="flex min-w-0 items-center gap-3 xl:hidden">
             <button
               type="button"
@@ -674,7 +686,7 @@ export default function Home() {
               aria-haspopup="dialog"
               aria-controls="mobile-navigation-dialog"
               onClick={openMobileMenu}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <Menu size={20} />
             </button>
@@ -682,7 +694,7 @@ export default function Home() {
               type="button"
               onClick={() => setShowHub(true)}
               aria-label="Voltar ao início"
-              className="flex min-h-11 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="flex min-h-11 items-center rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <Image
                 src="/bahia-homes-logo.png"
@@ -698,10 +710,10 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('comunidade')} 
               aria-current={['comunidade', 'demografia'].includes(activeTab) ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${
-                activeTab === 'comunidade' || activeTab === 'demografia' 
-                  ? 'bg-surface-muted font-semibold text-brand-plum'
-                  : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'
+              className={`flex min-h-11 items-center gap-2 rounded-full px-3.5 transition-[background-color,color,transform,box-shadow] duration-150 ease-out ${
+                activeTab === 'comunidade' || activeTab === 'demografia'
+                  ? TOP_TAB_ACTIVE
+                  : TOP_TAB_IDLE
               }`}
             >
               <BarChart2 size={15} /> Analytics
@@ -710,7 +722,7 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('inbox')} 
               aria-current={activeTab === 'inbox' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'inbox' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-full px-3.5 transition-[background-color,color,transform,box-shadow] duration-150 ease-out ${activeTab === 'inbox' ? TOP_TAB_ACTIVE : TOP_TAB_IDLE}`}
             >
               <Inbox size={15} /> Inbox
             </button>
@@ -718,7 +730,7 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('approval')} 
               aria-current={activeTab === 'approval' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'approval' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-full px-3.5 transition-[background-color,color,transform,box-shadow] duration-150 ease-out ${activeTab === 'approval' ? TOP_TAB_ACTIVE : TOP_TAB_IDLE}`}
             >
               <CheckCircle2 size={15} /> Aprovação vídeos
             </button>
@@ -726,7 +738,7 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('fotos')} 
               aria-current={activeTab === 'fotos' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'fotos' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-full px-3.5 transition-[background-color,color,transform,box-shadow] duration-150 ease-out ${activeTab === 'fotos' ? TOP_TAB_ACTIVE : TOP_TAB_IDLE}`}
             >
               <Images size={15} /> Aprovação fotos
             </button>
@@ -734,21 +746,13 @@ export default function Home() {
             <button 
               onClick={() => setActiveTab('planner')} 
               aria-current={activeTab === 'planner' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'planner' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
+              className={`flex min-h-11 items-center gap-2 rounded-full px-3.5 transition-[background-color,color,transform,box-shadow] duration-150 ease-out ${activeTab === 'planner' ? TOP_TAB_ACTIVE : TOP_TAB_IDLE}`}
             >
               <CalendarDays size={15} /> Calendário de posts
             </button>
             
-            <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-xl px-3 font-semibold text-brand-plum transition-[background-color,color,transform] duration-150 ease-out hover:bg-surface-muted hover:text-brand-plum-hover">
+            <button onClick={() => setIsCatalogOpen(true)} className="ml-1 flex min-h-11 items-center gap-2 rounded-full px-3.5 font-semibold text-accent transition-[background-color,color,transform] duration-150 ease-out hover:bg-white/70 hover:text-accent-hover">
               <FolderPlus size={15} /> Grade do feed
-            </button>
-
-            <button
-              onClick={() => setActiveTab('capa')}
-              aria-current={activeTab === 'capa' ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-2 rounded-xl px-3 transition-[background-color,color,transform] duration-150 ease-out ${activeTab === 'capa' ? 'bg-surface-muted font-semibold text-brand-plum' : 'text-ink-muted hover:bg-canvas hover:text-brand-plum'}`}
-            >
-              <ImageUp size={15} /> Aprovação de capa
             </button>
 
           </nav>
@@ -765,7 +769,7 @@ export default function Home() {
 
         </header>
 
-        <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain bg-canvas px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-7 xl:px-8">
+        <main className="min-w-0 flex-1 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-7 xl:px-8">
           <div className="mx-auto max-w-[1600px] space-y-5">
             {pendingCount > 0 && activeTab !== 'equipe' && (
               <div role="status" className="flex flex-col gap-3 rounded-control border border-status-warning-border bg-status-warning-soft px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -787,8 +791,8 @@ export default function Home() {
               <>
                 <div className="flex flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="space-y-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-muted">Bahia Homes <span className="px-1 opacity-60">/</span> Instagram</p>
-                    <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">
+                    <p className="text-[13px] font-semibold text-ink-muted">Bahia Homes <span className="px-1 opacity-60">/</span> Instagram</p>
+                    <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">
                       {activeTab === 'comunidade' ? 'Desempenho' : 'Audiência'}
                     </h1>
                     <p className="max-w-xl text-sm leading-relaxed text-ink-muted">
@@ -849,7 +853,7 @@ export default function Home() {
                      {instagramStatus.canConnect ? (
                        <a
                          href="/api/auth/instagram/login"
-                         className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors duration-150 ease-out hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                         className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors duration-150 ease-out hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                        >
                          <InstagramIcon className="h-4 w-4" />
                          Conectar Instagram
@@ -901,16 +905,16 @@ export default function Home() {
             {activeTab === 'conexoes' && (
               <div key="connections" className={`space-y-5 ${sectionEntranceClass}`}>
                 <div className="border-b border-border pb-5">
-                  <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">Conexões</h1>
+                  <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">Conexões</h1>
                   <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">Os canais conectados ao BH Analytics. A conexão vale para toda a equipe.</p>
                 </div>
-                <section className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+                <section className="flex flex-col gap-4 cartao rounded-panel p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-platform-instagram">
                       <InstagramIcon className="h-5 w-5" />
                     </span>
                     <div>
-                      <h2 className="text-sm font-semibold text-ink">Instagram</h2>
+                      <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Instagram</h2>
                       <p className="text-xs text-ink-muted">
                         {instagramStatus === null
                           ? 'Verificando…'
@@ -923,7 +927,7 @@ export default function Home() {
                   {instagramStatus?.canConnect && (
                     <a
                       href="/api/auth/instagram/login"
-                      className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-control border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted"
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full border border-border px-4 text-xs font-semibold text-ink hover:bg-surface-muted"
                     >
                       {instagramStatus.connected ? 'Conectar outra conta' : 'Conectar Instagram'}
                     </a>
@@ -941,6 +945,12 @@ export default function Home() {
             {activeTab === 'grade' && (
               <div key="grade" className={`min-w-0 ${sectionEntranceClass}`}>
                 <FeedPlanPanel />
+              </div>
+            )}
+
+            {activeTab === 'capas' && (
+              <div key="capas" className={`min-w-0 ${sectionEntranceClass}`}>
+                <CoverStudio />
               </div>
             )}
 

@@ -98,7 +98,7 @@ export function InstagramDashboard() {
 
   if (!data) {
     return (
-      <div role="status" className="flex items-center gap-2 rounded-panel border border-border bg-surface p-6 text-sm text-ink-muted">
+      <div role="status" className="flex items-center gap-2 cartao rounded-panel p-6 text-sm text-ink-muted">
         <LoaderCircle aria-hidden="true" size={16} className="animate-spin motion-reduce:animate-none" />
         Carregando métricas do Instagram…
       </div>
@@ -135,7 +135,7 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
   return (
     <div className="space-y-4">
       {/* Barra: conta, atualização e período */}
-      <div className="flex flex-col gap-3 rounded-panel border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 cartao rounded-panel px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-muted text-platform-instagram">
             <InstagramGlyph />
@@ -159,7 +159,7 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
                 type="button"
                 aria-pressed={days === option}
                 onClick={() => setDays(option)}
-                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   days === option ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
                 }`}
               >
@@ -171,7 +171,7 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
             type="button"
             onClick={onSync}
             disabled={syncing}
-            className="inline-flex min-h-11 items-center gap-2 rounded-control border border-border px-3 text-xs font-semibold text-ink transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-xs font-semibold text-ink transition-colors duration-150 ease-out hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-70"
           >
             <RefreshCw aria-hidden="true" size={14} className={syncing ? 'animate-spin motion-reduce:animate-none' : ''} />
             {syncing ? 'Atualizando…' : 'Atualizar agora'}
@@ -219,15 +219,15 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
 
           {/* Gráfico diário + seguidores */}
           <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(16rem,0.8fr)]">
-            <section className="min-w-0 rounded-panel border border-border bg-surface p-4 sm:p-5">
+            <section className="min-w-0 cartao rounded-panel p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <h2 className="text-base font-semibold text-ink">Visualizações e alcance por dia</h2>
+                  <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Visualizações e alcance por dia</h2>
                   <p className="mt-1 text-xs text-ink-muted">{periodLabel}</p>
                 </div>
                 <div className="flex gap-4 text-xs text-ink-muted" aria-hidden="true">
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-0.5 w-4 rounded-full bg-brand-plum" /> Visualizações
+                    <span className="h-0.5 w-4 rounded-full bg-accent" /> Visualizações
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <span className="h-0.5 w-4 rounded-full bg-chart-secondary" /> Alcance
@@ -237,8 +237,8 @@ export function InstagramDashboardView({ data, syncing, syncMessage, onSync }: V
               <DailyChart series={summary.series} />
             </section>
 
-            <section className="min-w-0 rounded-panel border border-border bg-surface p-4 sm:p-5">
-              <h2 className="text-base font-semibold text-ink">Saldo de seguidores</h2>
+            <section className="min-w-0 cartao rounded-panel p-4 sm:p-5">
+              <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Saldo de seguidores</h2>
               <p className="mt-1 text-xs text-ink-muted">{periodLabel}</p>
               <dl className="mt-4 divide-y divide-border border-y border-border">
                 <FollowerRow label="Novos seguidores" value={summary.newFollowers} />
@@ -346,7 +346,7 @@ function DailyChart({ series }: { series: { date: string; reach: number | null; 
           />
         ))}
         <polyline points={line('reach')} fill="none" stroke="var(--color-chart-secondary)" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-        <polyline points={line('views')} fill="none" stroke="var(--color-brand-plum)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <polyline points={line('views')} fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {series.map((point, index) => (
           <g key={`hit-${point.date}`}>
             <title>{`${formatDay(point.date)}: ${number.format(point.views ?? 0)} visualizações, ${number.format(point.reach ?? 0)} de alcance`}</title>
@@ -433,10 +433,10 @@ function MediaRanking({ media }: { media: MediaRow[] }) {
   );
 
   return (
-    <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+    <section className="min-w-0 space-y-4 cartao rounded-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-ink">Publicações que mais performaram</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Publicações que mais performaram</h2>
           <p className="mt-1 text-xs text-ink-muted">Todas as publicações da conta, com as métricas acumuladas de cada uma</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -453,7 +453,7 @@ function MediaRanking({ media }: { media: MediaRow[] }) {
                 type="button"
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
-                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   filter === value ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
                 }`}
               >
@@ -466,7 +466,7 @@ function MediaRanking({ media }: { media: MediaRow[] }) {
             <select
               value={sortKey}
               onChange={(event) => setSortKey(event.target.value as SortKey)}
-              className="min-h-9 rounded-control border border-border bg-surface px-2 text-xs font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="min-h-9 rounded-control border border-border bg-surface px-2 text-xs font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {SORT_OPTIONS.map((option) => (
                 <option key={option.key} value={option.key}>
@@ -517,7 +517,7 @@ function MediaRanking({ media }: { media: MediaRow[] }) {
                             href={item.permalink ?? undefined}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="group inline-flex max-w-full items-center gap-1 font-medium text-ink hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                            className="group inline-flex max-w-full items-center gap-1 font-medium text-ink hover:text-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           >
                             <span className="truncate">{caption}</span>
                             <ExternalLink aria-hidden="true" size={12} className="shrink-0 opacity-50 group-hover:opacity-100" />
@@ -528,7 +528,7 @@ function MediaRanking({ media }: { media: MediaRow[] }) {
                             {kind.label}
                             {item.published_at ? `, ${fullDate.format(new Date(item.published_at))}` : ''}
                             {index === 0 ? (
-                              <span className="ml-1 rounded-full bg-brand-plum px-1.5 py-px text-[10px] font-semibold text-white">Destaque</span>
+                              <span className="ml-1 rounded-full bg-accent px-1.5 py-px text-[10px] font-semibold text-white">Destaque</span>
                             ) : null}
                           </p>
                         </div>

@@ -85,13 +85,13 @@ export function PostagensTable() {
       );
   }, [rows, query, atualizado, qualif, showBlocked]);
 
-  const control = 'min-h-10 rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum';
+  const control = 'min-h-10 rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-[1.75rem]">Tabela de postagens</h1>
+          <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">Tabela de postagens</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-ink-muted">
             As casas da planilha {state.status === 'ready' ? `"${state.data.file.name}"` : 'POSTAGENS INSTA 2025'} em ordem de prioridade: primeiro as que nunca foram postadas, depois as que estão há mais tempo sem post. As marcadas para não publicar ficam no fim.
           </p>
@@ -107,7 +107,7 @@ export function PostagensTable() {
             type="button"
             onClick={() => void load()}
             disabled={state.status === 'loading'}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-control border border-border px-3 font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-border px-3 font-semibold text-ink hover:bg-surface-muted disabled:opacity-50"
           >
             <RefreshCw size={14} aria-hidden="true" className={state.status === 'loading' ? 'animate-spin' : ''} /> Atualizar
           </button>
@@ -117,8 +117,8 @@ export function PostagensTable() {
       {state.status === 'loading' && <p role="status" className="text-sm text-ink-muted">Lendo a planilha no Drive…</p>}
 
       {state.status === 'error' && (
-        <section className="flex max-w-xl flex-col gap-3 rounded-panel border border-border bg-surface p-5">
-          <h2 className="text-base font-semibold text-ink">{ERRORS[state.code]?.title ?? 'Não foi possível ler a planilha'}</h2>
+        <section className="flex max-w-xl flex-col gap-3 cartao rounded-panel p-5">
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{ERRORS[state.code]?.title ?? 'Não foi possível ler a planilha'}</h2>
           <p className="text-sm leading-relaxed text-ink-muted">{ERRORS[state.code]?.text ?? 'Tente de novo em alguns instantes.'}</p>
           {ERRORS[state.code]?.reconnect && (
             <a
@@ -130,7 +130,7 @@ export function PostagensTable() {
                   // sem sessionStorage
                 }
               }}
-              className="inline-flex min-h-11 w-fit items-center rounded-control bg-brand-plum px-4 text-sm font-semibold text-white hover:bg-brand-plum-hover"
+              className="inline-flex min-h-11 w-fit items-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover"
             >
               Reconectar Google Drive
             </a>
@@ -171,7 +171,7 @@ export function PostagensTable() {
           </p>
 
           {/* Tela larga: tabela */}
-          <div className="hidden overflow-x-auto rounded-panel border border-border bg-surface lg:block">
+          <div className="hidden overflow-x-auto cartao rounded-panel lg:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-surface-muted text-[11px] uppercase tracking-[0.08em] text-ink-muted">
                 <tr>
@@ -216,7 +216,7 @@ export function PostagensTable() {
             {filtered.map(({ row, rank }) => {
               const badge = since(row.diasSemPostar);
               return (
-                <li key={row.line} className={`rounded-panel border border-border bg-surface p-4 ${row.bloqueada ? 'opacity-55' : ''}`}>
+                <li key={row.line} className={`cartao rounded-panel p-4 ${row.bloqueada ? 'opacity-55' : ''}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs tabular-nums text-ink-muted">#{rank} · {row.atualizado}</p>

@@ -27,7 +27,7 @@ export function AccountManagement() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         
         {/* Módulo 1: Espaços de Trabalho (Workspaces) */}
-        <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+        <section className="cartao rounded-panel p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h4 className="flex items-center gap-2 font-semibold text-ink">
               <Briefcase className="text-brand-plum" size={20} /> Espaços de Trabalho
@@ -57,7 +57,7 @@ export function AccountManagement() {
       </section>
 
         {/* Módulo 2: Contas de Usuário (Equipe) */}
-        <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+        <section className="cartao rounded-panel p-5 sm:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h4 className="flex items-center gap-2 font-semibold text-ink">
               <Users className="text-brand-plum" size={20} /> Contas de Usuário
@@ -94,7 +94,7 @@ export function AccountManagement() {
       </div>
 
       {/* Módulo 3: Publicações Agendadas (Planner) */}
-      <section className="rounded-panel border border-border bg-surface p-5 sm:p-6">
+      <section className="cartao rounded-panel p-5 sm:p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h4 className="flex items-center gap-2 font-semibold text-ink">
             <CalendarClock className="text-brand-plum" size={20} /> Publicações Agendadas

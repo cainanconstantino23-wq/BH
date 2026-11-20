@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Paleta do painel: @theme normal (gera variáveis CSS), para o tema .tema-quadrado poder trocar os valores. */
+@theme {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-
   --color-brand-plum: #231b2d;
   --color-brand-plum-hover: #352a42;
   --color-brand-lime: #ccf600;
@@ -28,7 +28,13 @@
   --color-status-info-border: #ccd7e4;
   --color-platform-instagram: #c13584;
   --color-chart-secondary: #8e877d;
+  --color-accent: #b4532f;
+  --color-accent-hover: #9a4527;
+  --radius-panel: 1rem;
+  --radius-control: 0.75rem;
+}
 
+@theme inline {
   /* Página pública de aprovação: cores da logo Bahia Homes e do Quadrado de Trancoso */
   --font-display: var(--font-jost);
   --color-bh-cal: #eef1ee;
@@ -46,12 +52,134 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
-  --radius-panel: 1rem;
-  --radius-control: 0.75rem;
 }
 
 :root {
   color-scheme: light;
+}
+
+/*
+ * Tema do painel "Fim de tarde no Quadrado" (19/11/2026), visual Apple (skill apple-design).
+ * Fica no <html> só enquanto o painel está aberto (page.tsx): a tela inicial com o dock e as páginas
+ * públicas (/approval, /capa, /grade) continuam como estavam. Botões principais em tinta quente,
+ * destaque (menu ativo, ações principais) em terracota. Fonte do sistema (SF Pro no Mac/iPhone).
+ */
+html.tema-quadrado,
+html.tema-espelho {
+  --color-canvas: #f8eee9;
+  --color-surface: #fffdfb;
+  --color-surface-muted: #f6ebe5;
+  --color-ink: #3b2a2c;
+  --color-ink-muted: #776160;
+  --color-border: #f0e1da;
+  --color-border-strong: #e4cdc3;
+  --color-brand-plum: #3b2a2c;
+  --color-brand-plum-hover: #523b3d;
+  --color-brand-lime: #ffd9c2;
+  --color-chart-secondary: #a58d86;
+  --radius-panel: 1.25rem;
+  --radius-control: 0.875rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-geist-sans), system-ui, sans-serif;
+  /* fundo, vidro e sombras do tema */
+  --fundo-1: #fde6d8;
+  --fundo-2: #f4dbe4;
+  --vidro-bg: rgb(255 251 249 / 0.62);
+  --cartao-bg: rgb(255 253 251 / 0.86);
+  --sombra: 59 42 44;
+  background: var(--color-canvas);
+}
+
+/*
+ * Tema "Mar de Espelho" (19/11/2026): só nas abas Aprovação vídeos e Aprovação fotos (page.tsx troca a classe do <html>).
+ * Azul-água suave, tinta azul-petróleo, destaque verde-água escuro (contraste AA com texto branco).
+ */
+html.tema-espelho {
+  --color-canvas: #eff5f7;
+  --color-surface: #fbfdfe;
+  --color-surface-muted: #eaf3f6;
+  --color-ink: #18323a;
+  --color-ink-muted: #557079;
+  --color-border: #dbe8ec;
+  --color-border-strong: #c3d7de;
+  --color-brand-plum: #18323a;
+  --color-brand-plum-hover: #24464f;
+  --color-brand-lime: #c8f0f4;
+  --color-chart-secondary: #86a3ab;
+  --color-accent: #087a8a;
+  --color-accent-hover: #066673;
+  --fundo-1: #d9f0f2;
+  --fundo-2: #e6eef8;
+  --vidro-bg: rgb(250 253 255 / 0.6);
+  --cartao-bg: rgb(251 253 254 / 0.86);
+  --sombra: 24 50 58;
+}
+
+html.tema-quadrado body,
+html.tema-espelho body {
+  font-family: var(--font-sans);
+  letter-spacing: -0.006em;
+}
+
+/* fundo do painel (parado): Quadrado = pêssego em cima à esquerda e rosado embaixo à direita; Espelho = água em cima à direita */
+.fundo-quadrado {
+  background:
+    radial-gradient(90% 80% at 0% 0%, var(--fundo-1, #fde6d8) 0%, transparent 60%),
+    radial-gradient(90% 90% at 100% 100%, var(--fundo-2, #f4dbe4) 0%, transparent 60%),
+    var(--color-canvas);
+  transition: background-color 300ms var(--ease-out);
+}
+
+html.tema-espelho .fundo-quadrado {
+  background:
+    radial-gradient(100% 80% at 100% 0%, var(--fundo-1) 0%, transparent 60%),
+    radial-gradient(90% 90% at 0% 100%, var(--fundo-2) 0%, transparent 60%),
+    var(--color-canvas);
+}
+
+/* material de vidro (menu lateral, barra do topo): blur + saturação, luz na borda de cima */
+.vidro {
+  background: var(--vidro-bg, rgb(255 251 249 / 0.62));
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85);
+}
+
+/* cartão do painel: superfície clara quase opaca sobre o fundo, sombra suave em duas camadas, sem borda escura */
+.cartao {
+  border: 1px solid rgb(255 255 255 / 0.85);
+  background: var(--cartao-bg, rgb(255 253 251 / 0.86));
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 1px 2px rgb(var(--sombra, 59 42 44) / 0.05), 0 14px 36px -22px rgb(var(--sombra, 59 42 44) / 0.28);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cartao {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .cartao {
+    border-color: #b59a91;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vidro {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .vidro {
+    background: var(--color-surface);
+    border-color: #b59a91;
+  }
 }
 
 html {

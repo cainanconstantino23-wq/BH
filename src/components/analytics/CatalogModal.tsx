@@ -544,7 +544,7 @@ function InstagramFeedPreview() {
               onClick={handleRefresh}
               disabled={isRefreshing || isLoading}
               aria-label="Atualizar publicações"
-              className="flex min-h-10 min-w-10 items-center justify-center rounded-control border border-border bg-surface text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+              className="flex min-h-10 min-w-10 items-center justify-center rounded-control border border-border bg-surface text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
             >
               <RefreshCw size={15} className={isRefreshing ? 'animate-spin motion-reduce:animate-none' : ''} />
             </button>
@@ -565,7 +565,7 @@ function InstagramFeedPreview() {
                 type="button"
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
-                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                className={`min-h-9 rounded-lg px-3 text-xs font-semibold transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                   filter === value ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
                 }`}
               >
@@ -587,7 +587,7 @@ function InstagramFeedPreview() {
                 <button
                   type="button"
                   onClick={() => notice.undo && void swap(notice.undo[0], notice.undo[1], { isUndo: true })}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 font-semibold text-brand-plum hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 font-semibold text-brand-plum hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <Undo2 size={14} aria-hidden="true" /> Desfazer
                 </button>
@@ -652,7 +652,7 @@ function InstagramFeedPreview() {
                       setSelectedId(post.id);
                       setOpenedPost(post);
                     }}
-                    className={`group relative block aspect-[3/4] w-full select-none overflow-hidden bg-surface-muted text-left transition-[opacity,filter] duration-150 ease-out [-webkit-touch-callout:none] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+                    className={`group relative block aspect-[3/4] w-full select-none overflow-hidden bg-surface-muted text-left transition-[opacity,filter] duration-150 ease-out [-webkit-touch-callout:none] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                       canReorder ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${isDragged ? 'opacity-35' : ''}`}
                   >
@@ -707,8 +707,8 @@ function InstagramFeedPreview() {
                   </button>
 
                   {isTarget && (
-                    <span className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center bg-brand-plum/25 pb-3 outline outline-2 -outline-offset-2 outline-brand-plum">
-                      <span className="rounded-md bg-brand-plum px-2 py-1 text-[11px] font-semibold text-white">
+                    <span className="pointer-events-none absolute inset-0 z-10 flex items-end justify-center bg-brand-plum/25 pb-3 outline outline-2 -outline-offset-2 outline-accent">
+                      <span className="rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-white">
                         Trocar com {formatDay(post.scheduledDate)}
                       </span>
                     </span>
@@ -725,7 +725,7 @@ function InstagramFeedPreview() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`Publicação de ${item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('pt-BR') : 'data desconhecida'} no Instagram (abre em nova aba)`}
-                    className="group relative block aspect-[3/4] overflow-hidden bg-surface-muted focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="group relative block aspect-[3/4] overflow-hidden bg-surface-muted focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -767,7 +767,7 @@ function InstagramFeedPreview() {
         onClick={(event) => {
           if (event.target === event.currentTarget) setSelectedId(null);
         }}
-        className="modal-dialog-enter m-auto max-h-[92dvh] w-[min(94vw,46rem)] overflow-hidden rounded-panel border border-border bg-surface p-0 text-ink"
+        className="modal-dialog-enter m-auto max-h-[92dvh] w-[min(94vw,46rem)] overflow-hidden cartao rounded-panel p-0 text-ink"
       >
         {selected && (
           <div className="flex max-h-[92dvh] flex-col md:flex-row">
@@ -796,7 +796,7 @@ function InstagramFeedPreview() {
                   type="button"
                   aria-label="Fechar prévia"
                   onClick={() => setSelectedId(null)}
-                  className="flex min-h-10 min-w-10 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  className="flex min-h-10 min-w-10 items-center justify-center rounded-control text-ink-muted hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <X size={18} />
                 </button>
@@ -829,7 +829,7 @@ function InstagramFeedPreview() {
                     type="button"
                     disabled={!earlier}
                     onClick={() => earlier && void swap(selected.id, earlier.id)}
-                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-border px-2 text-xs font-medium text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-40"
+                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-border px-2 text-xs font-medium text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
                   >
                     <ArrowLeft size={14} aria-hidden="true" />
                     {earlier ? `Trocar com ${formatDay(earlier.scheduledDate)}` : 'Já é a primeira'}
@@ -838,7 +838,7 @@ function InstagramFeedPreview() {
                     type="button"
                     disabled={!later}
                     onClick={() => later && void swap(selected.id, later.id)}
-                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-border px-2 text-xs font-medium text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-40"
+                    className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-border px-2 text-xs font-medium text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40"
                   >
                     {later ? `Trocar com ${formatDay(later.scheduledDate)}` : 'Já é a última'}
                     <ArrowRight size={14} aria-hidden="true" />
@@ -887,7 +887,7 @@ export function CatalogModal({ isOpen, onClose }: Props) {
             type="button"
             onClick={onClose}
             aria-label="Fechar grade do feed"
-            className="flex min-h-10 min-w-10 items-center justify-center rounded-control text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-control text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             <X size={18} />
           </button>

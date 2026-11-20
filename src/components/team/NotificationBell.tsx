@@ -118,7 +118,7 @@ export function NotificationBell({ onOpenTarget }: { onOpenTarget: (target: 'app
         aria-expanded={open}
         aria-label={unread ? `Notificações: ${unread} novas` : 'Notificações'}
         onClick={toggle}
-        className="relative flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+        className="relative flex min-h-11 min-w-11 items-center justify-center rounded-xl text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         <Bell size={18} aria-hidden="true" />
         {unread > 0 && (

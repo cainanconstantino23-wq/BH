@@ -72,3 +72,21 @@ export function neighborhoodOptions(used: (string | null | undefined)[]) {
   }
   return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
+
+/**
+ * Nome, número e bairro sugeridos a partir da pasta da casa no Drive (a pessoa confere).
+ * "Itapororoca Casa 10 (Naoca - Viviane Hentsch)" dentro de "Itapororoca" → { name: "Naoca", number: "10", neighborhood: "Itapororoca" }.
+ * O que vem depois do " - " nos parênteses é o proprietário: nunca entra no nome.
+ */
+export function houseFromFolderName(folderName: string, parentName = '') {
+  const clean = folderName.replace(/\s+/g, ' ').trim();
+  const parens = clean.match(/\(([^)]*)\)/);
+  const base = clean.replace(/\(.*$/, '').trim();
+  const number =
+    withoutAccents(base).match(/\b(?:casa|villa|vila|vilas|lote|club|boutique)\s*(?:n[ºo°.]?\s*)?(\d{1,4})\b/i)?.[1] ?? base.match(/\b(\d{1,4})\b/)?.[1] ?? '';
+  // "(Apelido - Proprietário)": usa só o apelido
+  const nickname = parens && parens[1].includes(' - ') ? parens[1].split(' - ')[0].trim() : '';
+  const fallback = guessHouseFromFileName(base).name;
+  const neighborhood = parentName.replace(/\s*-\s*Trancoso$/i, '').trim();
+  return { name: nickname || fallback, number, neighborhood };
+}

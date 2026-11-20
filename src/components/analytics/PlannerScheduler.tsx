@@ -206,29 +206,33 @@ export function PlannerScheduler() {
   return (
     <div className="space-y-4">
       
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-border bg-surface px-4 py-3">
-        <div className="flex items-center gap-4 text-xs font-semibold text-ink-muted">
-          <button 
-            type="button"
-            aria-pressed={activeTab === 'calendar'}
-            onClick={() => setActiveTab('calendar')} 
-            className={`flex min-h-11 items-center gap-1.5 border-b-2 px-2 font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${activeTab === 'calendar' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-ink'}`}
-          >
-            <CalendarIcon size={14} /> Calendário
-          </button>
-          <button 
-            type="button"
-            aria-pressed={activeTab === 'list'}
-            onClick={() => setActiveTab('list')} 
-            className={`flex min-h-11 items-center gap-1.5 border-b-2 px-2 font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${activeTab === 'list' ? 'border-brand-plum text-brand-plum' : 'border-transparent hover:text-ink'}`}
-          >
-            <List size={14} /> Lista de Agendamentos
-          </button>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">Calendário de posts</h1>
+          <p className="mt-2 text-[15px] text-ink-muted">As publicações agendadas da semana.</p>
         </div>
-        
+        {/* controle segmentado (Apple): a opção escolhida vira uma pílula branca */}
+        <div role="group" aria-label="Modo de visualização" className="inline-flex rounded-full bg-ink/[0.06] p-1">
+          {([
+            { key: 'calendar', label: 'Calendário', icon: <CalendarIcon size={14} aria-hidden="true" /> },
+            { key: 'list', label: 'Lista', icon: <List size={14} aria-hidden="true" /> },
+          ] as const).map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              aria-pressed={activeTab === option.key}
+              onClick={() => setActiveTab(option.key)}
+              className={`flex min-h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-[background-color,color,box-shadow] duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                activeTab === option.key ? 'bg-white text-ink shadow-[0_1px_2px_rgb(var(--sombra,59_42_44)/0.1),0_3px_10px_-4px_rgb(var(--sombra,59_42_44)/0.2)]' : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              {option.icon} {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-panel border border-border bg-surface p-3">
+      <div className="flex flex-wrap items-center justify-between gap-4 cartao rounded-panel p-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search aria-hidden="true" size={16} className="absolute left-3 top-3 text-ink-muted" />
@@ -238,13 +242,13 @@ export function PlannerScheduler() {
               value={searchTerm} 
               onChange={(e) => setSearchTerm(e.target.value)}
               aria-label="Pesquisar publicações"
-              className="min-h-11 w-52 rounded-control border border-border bg-canvas pl-9 pr-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="min-h-11 w-52 rounded-control border border-border bg-canvas pl-9 pr-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
           </div>
           <button 
             type="button"
             onClick={() => setCurrentWeekOffset(0)} 
-            className="min-h-11 rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="min-h-11 rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
             Esta semana
           </button>
@@ -252,7 +256,7 @@ export function PlannerScheduler() {
 
         <div className="flex items-center gap-3">
           <div className="relative flex items-center overflow-hidden rounded-control border border-border bg-surface">
-            <button type="button" aria-label="Semana anterior" onClick={() => setCurrentWeekOffset(prev => prev - 1)} className="flex min-h-11 min-w-11 items-center justify-center border-r border-border text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-plum">
+            <button type="button" aria-label="Semana anterior" onClick={() => setCurrentWeekOffset(prev => prev - 1)} className="flex min-h-11 min-w-11 items-center justify-center border-r border-border text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent">
               <ChevronLeft size={16} />
             </button>
             <button
@@ -262,7 +266,7 @@ export function PlannerScheduler() {
                 if (monthPickerRef.current?.showPicker) monthPickerRef.current.showPicker();
                 else monthPickerRef.current?.click();
               }}
-              className="flex min-h-11 items-center gap-2 border-r border-border px-4 text-ink transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-plum"
+              className="flex min-h-11 items-center gap-2 border-r border-border px-4 text-ink transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
             >
               <CalendarDays size={16} className="text-brand-plum" />
               <span className="text-xs font-bold uppercase">{currentMonthLabel}</span>
@@ -276,7 +280,7 @@ export function PlannerScheduler() {
               className="pointer-events-none absolute h-px w-px opacity-0"
               tabIndex={-1}
             />
-            <button type="button" aria-label="Próxima semana" onClick={() => setCurrentWeekOffset(prev => prev + 1)} className="flex min-h-11 min-w-11 items-center justify-center text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-plum">
+            <button type="button" aria-label="Próxima semana" onClick={() => setCurrentWeekOffset(prev => prev + 1)} className="flex min-h-11 min-w-11 items-center justify-center text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -293,7 +297,7 @@ export function PlannerScheduler() {
             role="region"
             aria-label="Calendário semanal. Deslize horizontalmente para ver todos os dias."
             tabIndex={0}
-            className="overflow-x-auto overscroll-x-contain rounded-panel border border-border bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+            className="overflow-x-auto overscroll-x-contain cartao rounded-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
           <div className="min-w-[900px]">
             <div className="grid grid-cols-8 border-b border-border bg-canvas text-xs font-semibold text-ink">
@@ -327,7 +331,7 @@ export function PlannerScheduler() {
                             draggable={canSchedule}
                             onDragStart={() => canSchedule && setDraggedPostId(matchedPost.id)} 
                             onClick={() => setSelectedPost(matchedPost)}
-                            className="group w-full rounded-control border border-brand-plum/25 bg-surface p-2 text-left transition-colors hover:border-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                            className="group w-full rounded-control border border-brand-plum/25 bg-surface p-2 text-left transition-colors hover:border-brand-plum focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                           >
                             <div className="flex items-center justify-between mb-1">
                               <span className="rounded-full bg-canvas px-1.5 py-0.5 text-[10px] font-semibold text-brand-plum">{matchedPost.postType}</span>
@@ -371,7 +375,7 @@ export function PlannerScheduler() {
           </div>
         </div>
       ) : (
-        <div className="space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-6">
+        <div className="space-y-4 cartao rounded-panel p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
             <h3 className="text-sm font-semibold text-ink">Fila de agendamentos</h3>
             <span className="text-xs font-medium text-ink-muted">{sortedAndFilteredPosts.length} publicação(ões)</span>
@@ -382,7 +386,7 @@ export function PlannerScheduler() {
             ) : (
               sortedAndFilteredPosts.map(post => (
                 <div key={post.id} className="flex items-center justify-between gap-3 rounded-control border border-border bg-canvas/50 p-3 transition-colors hover:border-brand-plum/30 sm:p-4">
-                  <button type="button" onClick={() => setSelectedPost(post)} className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum sm:gap-4">
+                  <button type="button" onClick={() => setSelectedPost(post)} className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:gap-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-control bg-canvas">
                       <MediaPreview
                         key={post.image}
@@ -408,7 +412,7 @@ export function PlannerScheduler() {
                     type="button"
                     onClick={() => handleDeletePost(post.id)}
                     aria-label={`Excluir agendamento de ${post.title}`}
-                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     title="Excluir agendamento"
                   >
                     <Trash2 size={16} />
@@ -422,13 +426,13 @@ export function PlannerScheduler() {
 
       {selectedPost && (
         <div {...detailsDismiss} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-4 backdrop-blur-xs">
-          <div role="dialog" aria-modal="true" aria-labelledby="scheduled-post-title" className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-panel border border-border bg-surface">
+          <div role="dialog" aria-modal="true" aria-labelledby="scheduled-post-title" className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden cartao rounded-panel">
             <div className="flex items-center justify-between border-b border-border bg-canvas p-4">
               <div>
                 <h3 id="scheduled-post-title" className="text-sm font-semibold text-ink">{selectedPost.title}</h3>
                 <p className="text-[11px] text-ink-muted">{selectedPost.dateStr} às {selectedPost.hour}:00</p>
               </div>
-              <button type="button" aria-label="Fechar detalhes da publicação" onClick={() => setSelectedPost(null)} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+              <button type="button" aria-label="Fechar detalhes da publicação" onClick={() => setSelectedPost(null)} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
                 <X size={18} />
               </button>
             </div>
@@ -456,7 +460,7 @@ export function PlannerScheduler() {
               {team.can('apagar_publicacoes') ? <button 
                 type="button"
                 onClick={() => handleDeletePost(selectedPost.id)}
-                className="flex min-h-11 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="flex min-h-11 items-center gap-1.5 rounded-control px-3 text-xs font-semibold text-status-danger transition-colors hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 <Trash2 size={15} />
                 <span>Excluir publicação</span>
@@ -465,7 +469,7 @@ export function PlannerScheduler() {
               <button 
                 type="button"
                 onClick={() => setSelectedPost(null)}
-                className="min-h-11 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                className="min-h-11 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >
                 Fechar
               </button>

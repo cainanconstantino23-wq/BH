@@ -21,7 +21,7 @@ export function PublishStatusTag({ state, date, hour, noneLabel = 'Não publicad
   const config = {
     published: { icon: Send, text: 'Publicado', cls: 'bg-status-success text-white' },
     processing: { icon: Loader2, text: 'Publicando…', cls: 'bg-status-warning-soft text-status-warning' },
-    scheduled: { icon: CalendarCheck, text: `Agendado ${when(date, hour)}`.trim(), cls: 'bg-brand-plum text-white' },
+    scheduled: { icon: CalendarCheck, text: `Agendado ${when(date, hour)}`.trim(), cls: 'bg-accent text-white' },
     error: { icon: TriangleAlert, text: 'Erro ao publicar', cls: 'bg-status-danger-soft text-status-danger' },
     none: { icon: CircleDashed, text: noneLabel, cls: 'bg-surface-muted text-ink-muted' },
   }[state];

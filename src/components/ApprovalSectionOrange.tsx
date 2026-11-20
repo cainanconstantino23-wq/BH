@@ -636,13 +636,10 @@ export default function ApprovalSectionOrange() {
 
   return (
     <div className="section-enter space-y-6">
-      <div className="flex flex-col justify-between gap-4 rounded-panel border border-border bg-surface p-4 sm:flex-row sm:items-center sm:p-5">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-1 shrink-0 rounded-full bg-brand-plum"></div>
-          <div>
-            <h2 className="text-base font-semibold text-ink">Central de aprovação</h2>
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">Revise conteúdos, acompanhe as respostas e compartilhe links de aprovação.</p>
-          </div>
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] text-ink sm:text-[34px]">Aprovação vídeos</h1>
+          <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-ink-muted">Revise os vídeos, acompanhe as respostas e compartilhe os links de aprovação.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
         {team.can('enviar_link_aprovacao') && (
@@ -651,7 +648,7 @@ export default function ApprovalSectionOrange() {
             onClick={() => (listLink ? setListLink(null) : void loadListLink())}
             disabled={listLoading}
             aria-expanded={Boolean(listLink)}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-60"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
           >
             {listLoading ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <ListChecks size={15} aria-hidden="true" />}
             Link com todos os pendentes
@@ -660,7 +657,7 @@ export default function ApprovalSectionOrange() {
         {team.can('criar_publicacoes') && <button
           type="button"
           onClick={() => { setFeedbackMessage(''); setIsModalOpen(true); }}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           <Plus size={16} /> Novo post para aprovação
         </button>}
@@ -668,7 +665,7 @@ export default function ApprovalSectionOrange() {
       </div>
 
       {listLink && (
-        <div className="space-y-3 rounded-panel border border-border bg-surface p-4 sm:p-5">
+        <div className="space-y-3 cartao rounded-panel p-4 sm:p-5">
           <div>
             <h3 className="text-sm font-semibold text-ink">Link com todos os pendentes</h3>
             <p className="mt-1 text-xs leading-relaxed text-ink-muted">
@@ -682,16 +679,16 @@ export default function ApprovalSectionOrange() {
               value={listLink}
               aria-label="Link com todos os pendentes"
               onFocus={(event) => event.target.select()}
-              className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-3 font-mono text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-canvas px-3 font-mono text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
-            <button type="button" onClick={() => void copyListLink()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+            <button type="button" onClick={() => void copyListLink()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
               <Copy size={13} aria-hidden="true" /> {listCopied ? 'Copiado!' : 'Copiar link'}
             </button>
             <a
               href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Olá! Aqui estão todos os conteúdos da Bahia Homes esperando aprovação: ${listLink}`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Enviar por WhatsApp
             </a>
@@ -699,7 +696,7 @@ export default function ApprovalSectionOrange() {
               href={listLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+              className="flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Abrir
             </a>
@@ -719,8 +716,8 @@ export default function ApprovalSectionOrange() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.7fr)]">
         
-        <div className="overflow-hidden rounded-panel border border-border bg-surface">
-          <div className="flex items-center justify-between border-b border-border bg-canvas p-4 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        <div className="overflow-hidden cartao rounded-panel">
+          <div className="flex items-center justify-between border-b border-border/70 p-4 text-[13px] font-semibold text-ink-muted">
             <span>Fila de Aprovação</span>
             <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold text-brand-plum">{posts.length}</span>
           </div>
@@ -736,8 +733,8 @@ export default function ApprovalSectionOrange() {
                   { key: 'fila', title: 'Aguardando aprovação', items: posts.filter((p) => p.approval_status !== 'approved'), approved: false },
                 ].filter((group) => group.items.length > 0).map((group) => (
                   <section key={group.key} aria-label={group.title}>
-                    <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wide ${
-                      group.approved ? 'bg-status-success-soft text-status-success' : 'bg-canvas text-ink-muted'
+                    <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[13px] font-semibold ${
+                      group.approved ? 'bg-status-success-soft text-status-success' : 'bg-surface/90 text-ink-muted backdrop-blur-xl'
                     }`}>
                       <span className="flex items-center gap-1.5">
                         {group.approved ? <CheckCircle2 size={13} aria-hidden="true" /> : <Clock size={13} aria-hidden="true" />}
@@ -752,11 +749,11 @@ export default function ApprovalSectionOrange() {
                         type="button"
                         aria-pressed={selectedPost?.id === p.id}
                         onClick={() => setSelectedPost(p)}
-                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-brand-plum ${
+                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-accent ${
                           selectedPost?.id === p.id
-                            ? 'border-l-4 border-brand-plum bg-surface-muted/70'
+                            ? 'bg-accent/10 shadow-[inset_3px_0_0_var(--color-accent)]'
                             : p.approval_status === 'approved'
-                              ? 'border-l-4 border-status-success bg-status-success-soft/50 hover:bg-status-success-soft'
+                              ? 'bg-status-success-soft/40 shadow-[inset_3px_0_0_var(--color-status-success)] hover:bg-status-success-soft'
                               : 'hover:bg-canvas/70'
                         }`}
                       >
@@ -821,7 +818,7 @@ export default function ApprovalSectionOrange() {
           </div>
         </div>
 
-        <div className="flex min-h-[420px] flex-col justify-between rounded-panel border border-border bg-surface p-4 sm:p-6">
+        <div className="flex min-h-[420px] flex-col justify-between cartao rounded-panel p-4 sm:p-6">
           {selectedPost ? (
             <div className="space-y-5">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
@@ -860,14 +857,14 @@ export default function ApprovalSectionOrange() {
                         value={selectedPost.scheduled_date ?? ''}
                         onChange={(event) => event.target.value && void savePlanned(selectedPost.id, event.target.value, selectedPost.hour ?? 19)}
                         aria-label="Data planejada"
-                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                       />
                       <select
                         value={selectedPost.hour ?? 19}
                         onChange={(event) => selectedPost.scheduled_date && void savePlanned(selectedPost.id, selectedPost.scheduled_date, Number(event.target.value))}
                         disabled={!selectedPost.scheduled_date}
                         aria-label="Horário planejado"
-                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                        className="min-h-9 rounded-control border border-border bg-surface px-2.5 text-sm tabular-nums text-ink disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                       >
                         {Array.from({ length: 24 }, (_, h) => (
                           <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
@@ -889,7 +886,7 @@ export default function ApprovalSectionOrange() {
                     <button
                       type="button"
                       onClick={openVersionModal}
-                      className="flex min-h-11 items-center gap-2 rounded-control border border-border bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                      className="flex min-h-11 items-center gap-2 rounded-full border border-border bg-white/80 px-3 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       <Upload size={14} aria-hidden="true" /> Enviar nova versão
                     </button>
@@ -898,7 +895,7 @@ export default function ApprovalSectionOrange() {
                     type="button"
                     aria-label={`Excluir publicação de ${selectedPost.house_label}`}
                     onClick={() => deletePost(selectedPost.id)}
-                    className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-status-danger-soft hover:text-status-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     title="Excluir publicação"
                   >
                     <Trash2 size={15} />
@@ -950,7 +947,7 @@ export default function ApprovalSectionOrange() {
                               hour: selectedPost.hour,
                             });
                           }}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-white hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                         >
                           <Send size={14} aria-hidden="true" />
                           {selectedPost.auto_publish && Boolean(selectedPost.scheduled_date) ? 'Editar publicação' : 'Publicar'}
@@ -971,7 +968,7 @@ export default function ApprovalSectionOrange() {
                           await refreshPosts();
                         })();
                       }}
-                      className="inline-flex min-h-10 items-center gap-2 rounded-control border border-status-danger-border bg-surface px-4 text-xs font-semibold text-status-danger hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                      className="inline-flex min-h-10 items-center gap-2 rounded-control border border-status-danger-border bg-surface px-4 text-xs font-semibold text-status-danger hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                     >
                       <XCircle size={14} aria-hidden="true" /> Cancelar agendamento
                     </button>
@@ -980,7 +977,7 @@ export default function ApprovalSectionOrange() {
               )}
 
               {team.can('aprovar_publicacoes') && (
-                <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
+                <div className="space-y-3 cartao rounded-panel p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-sm font-semibold text-ink">Sua decisão</h4>
                     {selectedPost.approval_status !== 'pending' && (
@@ -997,10 +994,10 @@ export default function ApprovalSectionOrange() {
                     maxLength={2000}
                     aria-label="Comentário da decisão"
                     placeholder="Comentário (obrigatório para pedir ajustes)"
-                    className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'approved')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control bg-brand-plum px-3 text-xs font-semibold text-white hover:bg-brand-plum-hover disabled:opacity-50">
+                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'approved')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50">
                       <CheckCircle2 size={14} aria-hidden="true" /> Aprovar
                     </button>
                     <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'changes_requested')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-status-warning-border bg-status-warning-soft px-3 text-xs font-semibold text-status-warning hover:bg-status-warning-border disabled:opacity-50">
@@ -1014,7 +1011,7 @@ export default function ApprovalSectionOrange() {
               )}
 
               {team.can('enviar_link_aprovacao') && <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
-                <label htmlFor="approval-link" className="block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                <label htmlFor="approval-link" className="block text-[13px] font-semibold text-ink-muted">
                   Link exclusivo de aprovação para o cliente
                 </label>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -1023,12 +1020,12 @@ export default function ApprovalSectionOrange() {
                     type="text"
                     readOnly
                     value={`${typeof window !== 'undefined' ? window.location.origin : ''}/approval/${selectedPost.approval_token.replace(/[()]/g, '')}`}
-                    className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-surface px-3 text-xs font-mono text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-11 min-w-0 flex-1 rounded-control border border-border bg-surface px-3 text-xs font-mono text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                   <button
                     type="button"
                     onClick={() => copyApprovalLink(selectedPost.approval_token, selectedPost.id)}
-                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     <Copy size={13} />
                     {copiedId === String(selectedPost.id) ? 'Copiado!' : 'Copiar link'}
@@ -1041,7 +1038,7 @@ export default function ApprovalSectionOrange() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Enviar link de aprovação por WhatsApp"
-                    className="flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="flex min-h-11 shrink-0 items-center justify-center rounded-full border border-border bg-white/80 px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     Enviar por WhatsApp
                   </a>
@@ -1062,7 +1059,7 @@ export default function ApprovalSectionOrange() {
 
                 <div className="space-y-4">
                   <div>
-                    <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Legenda / copy</h4>
+                    <h4 className="mb-1.5 text-[13px] font-semibold text-ink-muted">Legenda / copy</h4>
                     <div className="max-h-36 overflow-y-auto rounded-control border border-border bg-canvas p-3 text-xs font-medium text-ink">
                       {selectedPost.caption || 'Sem legenda inserida.'}
                     </div>
@@ -1071,7 +1068,7 @@ export default function ApprovalSectionOrange() {
                       <VersionTimeline versions={selectedPost.versions} />
                     ) : selectedPost.client_feedback ? (
                       <div className="mt-4">
-                        <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">Feedback do cliente</h4>
+                        <h4 className="mb-1.5 text-[13px] font-semibold text-status-warning">Feedback do cliente</h4>
                         <div className="rounded-control border border-status-warning-border bg-status-warning-soft p-3 text-xs font-medium text-status-warning">
                           {selectedPost.client_feedback}
                         </div>
@@ -1092,18 +1089,18 @@ export default function ApprovalSectionOrange() {
 
       {isModalOpen && (
         <div {...createDismiss} {...createDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+          <div role="dialog" aria-modal="true" aria-labelledby="approval-create-title" className="relative flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden cartao rounded-panel md:flex-row">
             {createDrop.dragging && <DropOverlay title="Solte o vídeo aqui" hint="MP4, MOV ou WEBM" />}
             
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
                 <div className="flex items-center gap-2">
                   <div>
-                    <h2 id="approval-create-title" className="text-base font-semibold text-ink">Novo post para aprovação</h2>
+                    <h2 id="approval-create-title" className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Novo post para aprovação</h2>
                     <p className="mt-1 text-xs text-ink-muted">Prepare a mídia e o link que será enviado ao cliente.</p>
                   </div>
                 </div>
-                <button type="button" aria-label="Fechar janela de aprovação" onClick={() => setIsModalOpen(false)} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50">
+                <button type="button" aria-label="Fechar janela de aprovação" onClick={() => setIsModalOpen(false)} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50">
                   <X size={18} />
                 </button>
               </div>
@@ -1117,7 +1114,7 @@ export default function ApprovalSectionOrange() {
                     value={houseName}
                     onChange={(e) => { setHouseName(e.target.value); setFeedbackMessage(''); }}
                     placeholder="Ex: Vila dos Coqueiros"
-                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                 </div>
                 <div>
@@ -1129,7 +1126,7 @@ export default function ApprovalSectionOrange() {
                     value={houseNumber}
                     onChange={(e) => { setHouseNumber(e.target.value); setFeedbackMessage(''); }}
                     placeholder="Ex: 110"
-                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium tabular-nums text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm font-medium tabular-nums text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                 </div>
               </div>
@@ -1142,13 +1139,13 @@ export default function ApprovalSectionOrange() {
                     value={plannedDate}
                     onChange={(event) => { setPlannedDate(event.target.value); setFeedbackMessage(''); }}
                     aria-label="Data planejada"
-                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
                   <select
                     value={plannedHour}
                     onChange={(event) => setPlannedHour(Number(event.target.value))}
                     aria-label="Horário planejado"
-                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                    className="min-h-11 w-full rounded-control border border-border bg-canvas px-3 text-sm tabular-nums text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   >
                     {Array.from({ length: 24 }, (_, h) => (
                       <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
@@ -1158,7 +1155,7 @@ export default function ApprovalSectionOrange() {
                 <p className="text-xs text-ink-muted">O vídeo já aparece na Grade do feed nessa data. Só é publicado depois de aprovado e agendado.</p>
               </fieldset>
 
-              <div className="space-y-3 rounded-panel border border-border bg-surface p-4">
+              <div className="space-y-3 cartao rounded-panel p-4">
                 <textarea
                   value={caption}
                   onChange={(e) => { setCaption(e.target.value); setFeedbackMessage(''); }}
@@ -1177,7 +1174,7 @@ export default function ApprovalSectionOrange() {
                         type="button"
                         onClick={() => setMediaLightboxOpen(true)}
                         aria-label="Ver mídia em tamanho grande"
-                        className="group relative block h-20 w-20 overflow-hidden rounded-control border border-border bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                        className="group relative block h-20 w-20 overflow-hidden rounded-control border border-border bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                       >
                         {fileIsVideo ? (
                           <video src={mediaPreview} muted playsInline preload="metadata" className="h-full w-full object-cover" />
@@ -1198,7 +1195,7 @@ export default function ApprovalSectionOrange() {
                         disabled={submitting}
                         aria-label="Remover mídia"
                         title="Remover"
-                        className="absolute -right-2.5 -top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white shadow-md transition-colors duration-150 hover:bg-status-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-plum disabled:opacity-50"
+                        className="absolute -right-2.5 -top-2.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-900 text-white shadow-md transition-colors duration-150 hover:bg-status-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-50"
                       >
                         <X size={13} strokeWidth={2.5} aria-hidden="true" />
                       </button>
@@ -1222,7 +1219,7 @@ export default function ApprovalSectionOrange() {
                           disabled={submitting}
                           className={`flex items-center gap-2 rounded-control px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
                             photoDims && !photoExact
-                              ? 'bg-brand-plum text-white hover:bg-brand-plum-hover'
+                              ? 'bg-accent text-white hover:bg-accent-hover'
                               : 'border border-border bg-canvas text-ink hover:bg-surface'
                           }`}
                         >
@@ -1237,7 +1234,7 @@ export default function ApprovalSectionOrange() {
                 )}
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2 text-ink-muted">
-                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-xs font-semibold transition-colors hover:bg-canvas hover:text-brand-plum focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control px-3 text-xs font-semibold transition-colors hover:bg-canvas hover:text-brand-plum focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
                     <ImageIcon size={16} />
                     <span>{file ? 'Substituir vídeo' : 'Selecionar vídeo'}</span>
                     <input type="file" accept="video/*" onChange={handleFileChange} className="sr-only" aria-label="Selecionar vídeo" />
@@ -1249,7 +1246,7 @@ export default function ApprovalSectionOrange() {
                       onClick={() => void generateCopy()}
                       disabled={generatingCopy || submitting}
                       title="Gerar legenda de Reels com IA a partir da casa e do que você escreveu"
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-control bg-brand-plum px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-60"
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
                     >
                       {generatingCopy ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
                       {generatingCopy ? 'Gerando…' : 'Gerar legenda'}
@@ -1288,7 +1285,7 @@ export default function ApprovalSectionOrange() {
                   type="button"
                   onClick={() => setIsModalOpen(false)}
                   disabled={submitting}
-                  className="min-h-11 rounded-control px-4 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                  className="min-h-11 rounded-control px-4 text-xs font-semibold text-ink-muted transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -1296,7 +1293,7 @@ export default function ApprovalSectionOrange() {
                   type="button"
                   onClick={handleSendForApproval}
                   disabled={submitting}
-                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
                 >
                   <Send size={14} />
                   {submitting ? 'Enviando...' : 'Enviar para aprovação'}
@@ -1332,33 +1329,33 @@ export default function ApprovalSectionOrange() {
 
       {versionModalOpen && selectedPost && (
         <div {...versionDismiss} {...versionDrop.dropProps} className="fixed inset-0 z-50 flex items-center justify-center bg-brand-plum/45 p-2 backdrop-blur-xs sm:p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-panel border border-border bg-surface md:flex-row">
+          <div role="dialog" aria-modal="true" aria-labelledby="new-version-title" className="relative flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden cartao rounded-panel md:flex-row">
             {versionDrop.dragging && <DropOverlay title="Solte o vídeo aqui" hint="MP4, MOV ou WEBM" />}
             <div className="flex-1 space-y-4 overflow-y-auto border-b border-border p-4 sm:p-6 md:border-b-0 md:border-r">
               <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                 <div>
-                  <h2 id="new-version-title" className="text-base font-semibold text-ink">
+                  <h2 id="new-version-title" className="text-[17px] font-semibold tracking-[-0.01em] text-ink">
                     Enviar versão {selectedPost.versions.length + 1}
                   </h2>
                   <p className="mt-1 text-xs text-ink-muted">
                     {selectedPost.house_label}. Vai para o mesmo link, e o aprovador vê esta versão e as anteriores.
                   </p>
                 </div>
-                <button type="button" aria-label="Fechar" onClick={closeVersionModal} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50">
+                <button type="button" aria-label="Fechar" onClick={closeVersionModal} disabled={submitting} className="flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted hover:bg-canvas hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50">
                   <X size={18} />
                 </button>
               </div>
 
               {selectedPost.client_feedback && (
                 <div>
-                  <h3 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-status-warning">O que foi pedido</h3>
+                  <h3 className="mb-1.5 text-[13px] font-semibold text-status-warning">O que foi pedido</h3>
                   <p className="whitespace-pre-line rounded-control border border-status-warning-border bg-status-warning-soft p-3 text-xs font-medium text-status-warning">
                     {selectedPost.client_feedback}
                   </p>
                 </div>
               )}
 
-              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-control border border-border bg-canvas px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-plum">
+              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-border bg-canvas px-4 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent">
                 <ImageIcon size={16} aria-hidden="true" />
                 {versionFile ? 'Trocar arquivo' : 'Escolher ou arrastar o vídeo corrigido'}
                 <input type="file" accept="video/*" onChange={handleVersionFile} className="sr-only" />
@@ -1373,7 +1370,7 @@ export default function ApprovalSectionOrange() {
                   rows={2}
                   maxLength={1000}
                   placeholder="Ex: troquei a cena de abertura pela vista da piscina."
-                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 />
               </label>
 
@@ -1384,7 +1381,7 @@ export default function ApprovalSectionOrange() {
                   onChange={(e) => { setVersionCaption(e.target.value); setVersionError(''); }}
                   rows={5}
                   maxLength={2200}
-                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum"
+                  className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 />
               </label>
 
@@ -1418,7 +1415,7 @@ export default function ApprovalSectionOrange() {
                   type="button"
                   onClick={() => void handleSendNewVersion()}
                   disabled={submitting}
-                  className="flex min-h-11 items-center gap-2 rounded-control bg-brand-plum px-4 text-xs font-semibold text-brand-lime transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum disabled:opacity-50"
+                  className="flex min-h-11 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
                 >
                   <Send size={14} aria-hidden="true" />
                   {submitting ? 'Enviando…' : `Enviar versão ${selectedPost.versions.length + 1}`}
@@ -1493,7 +1490,7 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
         role={finished ? 'alertdialog' : 'status'}
         aria-live="polite"
         aria-label={finished ? undefined : `Enviando ${what}`}
-        className="w-[min(22rem,100%)] rounded-panel border border-border bg-surface p-6 text-center shadow-[0_24px_60px_-24px_rgb(35_27_45/0.55)]"
+        className="w-[min(22rem,100%)] cartao rounded-panel p-6 text-center shadow-[0_24px_60px_-24px_rgb(35_27_45/0.55)]"
       >
         {(state.phase === 'sending' || state.phase === 'saving') && (
           <>
@@ -1525,7 +1522,7 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
             </span>
             <p className="mt-4 text-base font-semibold text-ink">{What} foi {state.kind === 'video' ? 'enviado' : 'enviada'} com sucesso!</p>
             <p className="mt-1 text-sm text-ink-muted">{state.message ?? 'Já está na fila de aprovação.'}</p>
-            <button type="button" onClick={onClose} autoFocus className="mt-5 min-h-11 w-full rounded-control bg-brand-plum px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+            <button type="button" onClick={onClose} autoFocus className="mt-5 min-h-11 w-full rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
               Ok
             </button>
           </>
@@ -1542,7 +1539,7 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
               <button type="button" onClick={onClose} className="min-h-11 rounded-control border border-border px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted">
                 Fechar
               </button>
-              <button type="button" onClick={onRetry} autoFocus className="min-h-11 rounded-control bg-brand-plum px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-plum-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum">
+              <button type="button" onClick={onRetry} autoFocus className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
                 Tentar de novo
               </button>
             </div>
@@ -1558,7 +1555,7 @@ function VersionTimeline({ versions }: { versions: ApprovalVersion[] }) {
   const latest = versions.at(-1)?.version;
   return (
     <div className="mt-4">
-      <h4 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+      <h4 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted">
         <History size={12} aria-hidden="true" /> Versões e respostas
       </h4>
       <ol className="space-y-2">

@@ -170,10 +170,10 @@ export function GrowthStats({ period }: GrowthStatsProps) {
 
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)]">
-      <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+      <section className="min-w-0 space-y-4 cartao rounded-panel p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-ink">Crescimento da comunidade</h2>
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Crescimento da comunidade</h2>
             <p className="mt-1 text-xs text-ink-muted">Evolução de seguidores e perfis seguidos</p>
           </div>
         </div>
@@ -195,9 +195,9 @@ export function GrowthStats({ period }: GrowthStatsProps) {
         </div>
       </section>
 
-      <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+      <section className="min-w-0 space-y-4 cartao rounded-panel p-4 sm:p-5">
         <div>
-          <h2 className="text-base font-semibold text-ink">Saldo de seguidores</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Saldo de seguidores</h2>
           <p className="mt-1 text-xs text-ink-muted">Entradas e saídas no período</p>
         </div>
 

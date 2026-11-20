@@ -64,10 +64,10 @@ export function ContentPerformance() {
   });
 
   return (
-    <section className="min-w-0 space-y-4 rounded-panel border border-border bg-surface p-4 sm:p-5">
+    <section className="min-w-0 space-y-4 cartao rounded-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-ink">Conteúdo de melhor desempenho</h2>
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">Conteúdo de melhor desempenho</h2>
           <p className="mt-1 text-xs text-ink-muted">Publicações recentes e principais indicadores</p>
         </div>
 
@@ -76,7 +76,7 @@ export function ContentPerformance() {
             type="button"
             onClick={() => setFilter('ALL')}
             aria-pressed={filter === 'ALL'}
-            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
               filter === 'ALL' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
@@ -86,7 +86,7 @@ export function ContentPerformance() {
             type="button"
             onClick={() => setFilter('REEL')}
             aria-pressed={filter === 'REEL'}
-            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
               filter === 'REEL' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
@@ -96,7 +96,7 @@ export function ContentPerformance() {
             type="button"
             onClick={() => setFilter('POST')}
             aria-pressed={filter === 'POST'}
-            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-plum ${
+            className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
               filter === 'POST' ? 'bg-surface text-ink' : 'text-ink-muted hover:text-ink'
             }`}
           >
@@ -108,7 +108,7 @@ export function ContentPerformance() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] border-collapse text-left">
           <thead className="bg-canvas">
-            <tr className="border-b border-border text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+            <tr className="border-b border-border text-[13px] font-semibold text-ink-muted">
               <th className="px-3 py-2.5 font-semibold">Conteúdo</th>
               <th className="px-3 py-2.5 font-semibold">Tipo</th>
               <th className="px-3 py-2.5 font-semibold">Visualizações</th>
@@ -134,7 +134,7 @@ export function ContentPerformance() {
                 </td>
                 <td className="px-3 py-2.5">
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                    item.type === 'REEL' ? 'bg-brand-plum text-white' : 'bg-canvas text-ink'
+                    item.type === 'REEL' ? 'bg-accent text-white' : 'bg-canvas text-ink'
                   }`}>
                     {item.type === 'REEL' ? <Video size={12} /> : <ImageIcon size={12} />}
                     {item.type}

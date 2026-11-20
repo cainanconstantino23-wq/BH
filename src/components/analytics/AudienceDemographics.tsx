@@ -19,7 +19,7 @@ export function AudienceDemographics({ data }: Props) {
   const malePercent = totalGender > 0 ? Math.round(((safeData.gender.male || 0) / totalGender) * 100) : 50;
 
   return (
-    <section className="space-y-5 rounded-panel border border-border bg-surface p-5 sm:p-6">
+    <section className="space-y-5 cartao rounded-panel p-5 sm:p-6">
       
       {/* Header do Bloco */}
       <div className="flex items-center justify-between border-b border-border pb-4">
@@ -39,7 +39,7 @@ export function AudienceDemographics({ data }: Props) {
         {/* 1. Género */}
         <div className="flex min-w-0 flex-col justify-between space-y-3 md:pr-5">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+            <span className="flex items-center gap-1.5 text-[13px] font-semiboldr text-ink-muted">
               <PieChart size={14} className="text-brand-plum" /> Género
             </span>
           </div>
@@ -64,7 +64,7 @@ export function AudienceDemographics({ data }: Props) {
 
         {/* 2. Faixa Etária */}
         <div className="min-w-0 space-y-3 border-t border-border pt-5 md:border-l md:border-t-0 md:pl-5 md:pr-5 md:pt-0">
-          <span className="block text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <span className="block text-[13px] font-semiboldr text-ink-muted">
             Faixa Etária Principal
           </span>
           <div className="space-y-2">
@@ -84,7 +84,7 @@ export function AudienceDemographics({ data }: Props) {
 
         {/* 3. Principais Cidades */}
         <div className="min-w-0 space-y-3 border-t border-border pt-5 md:border-l md:pl-5">
-          <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          <span className="flex items-center gap-1.5 text-[13px] font-semiboldr text-ink-muted">
             <MapPin size={14} className="text-brand-plum" /> Top Cidades
           </span>
           <div className="space-y-2.5">
