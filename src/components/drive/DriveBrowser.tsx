@@ -2,7 +2,8 @@
 
 import { OnScreen } from '@/components/drive/OnScreen';
 import { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Crop, Folder, FolderInput, HardDrive, Loader2, Plus, RefreshCw, Star, Users, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Crop, Folder, FolderInput, Loader2, Plus, RefreshCw, Search, Star, Users, X } from 'lucide-react';
+import type { DriveFolderHit } from '@/app/api/drive/search/route';
 import type { DriveEntry } from '@/app/api/drive/list/route';
 import { photoLimit, type CollectionKind, type CoverCollectionDetail, type CoverCollectionSummary, type EditedImage } from '@/lib/covers';
 import { DrivePhotoViewer } from '@/components/drive/DrivePhotoViewer';
@@ -12,12 +13,9 @@ import { DEFAULT_NEIGHBORHOODS, coverFolderLabel, guessHouseFromFileName, neighb
 // Aprovação de capa (mode 'capa'): toda foto escolhida é candidata a capa (sem ★).
 // Aprovação fotos (mode 'fotos'): no máximo 15 fotos (as do carrossel) e, entre elas, as capas marcadas com ★.
 
-type Source = 'root' | 'shared' | 'drives';
-const SOURCES: { key: Source; label: string; icon: typeof HardDrive }[] = [
-  { key: 'root', label: 'Meu Drive', icon: HardDrive },
-  { key: 'shared', label: 'Compartilhados comigo', icon: Users },
-  { key: 'drives', label: 'Drives compartilhados', icon: Folder },
-];
+// só "Compartilhados comigo": Meu Drive e drives compartilhados bloqueados (src/lib/google/driveAccess.ts)
+type Source = 'shared';
+const SOURCES: { key: Source; label: string; icon: typeof Users }[] = [{ key: 'shared', label: 'Compartilhados comigo', icon: Users }];
 
 interface Crumb { id: string; name: string }
 
@@ -37,7 +35,7 @@ export function DriveBrowser({
   onSaved: (collection: CoverCollectionDetail) => void;
   onNotConnected: () => void;
 }) {
-  const [source, setSource] = useState<Source>('root');
+  const source: Source = 'shared';
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<DriveEntry[] | null>(null);
   const [nextPage, setNextPage] = useState<string | null>(null);
@@ -49,6 +47,31 @@ export function DriveBrowser({
   const [saveOpen, setSaveOpen] = useState(false);
   // cortes feitos no editor antes de salvar na pasta (id do Drive → imagem cortada no R2)
   const [edits, setEdits] = useState<Map<string, EditedImage>>(new Map());
+  // busca em tudo de "Compartilhados comigo": pastas e fotos pelo nome
+  const [query, setQuery] = useState('');
+  const [hits, setHits] = useState<{ folders: DriveFolderHit[]; images: DriveEntry[] } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const isSearch = query.trim().length >= 2;
+
+  useEffect(() => {
+    const text = query.trim();
+    if (text.length < 2) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      fetch(`/api/drive/search?tudo=1&q=${encodeURIComponent(text)}`, { cache: 'no-store', signal: controller.signal })
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          setHits(response.ok ? { folders: data.folders ?? [], images: data.images ?? [] } : { folders: [], images: [] });
+        })
+        .catch(() => undefined)
+        .finally(() => !controller.signal.aborted && setSearching(false));
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   const folderId = path.length ? path[path.length - 1].id : source;
   const limit = photoLimit(mode);
@@ -78,6 +101,15 @@ export function DriveBrowser({
   }, [folderId, onNotConnected]);
 
   const openFolder = (entry: DriveEntry) => {
+    if (isSearch) {
+      // resultado da busca: abre a pasta direto (caminho a partir de "Compartilhados comigo")
+      const hit = hits?.folders.find((row) => row.id === entry.id);
+      setQuery('');
+      setHits(null);
+      setEntries(null);
+      setPath([{ id: entry.id, name: hit?.name ?? entry.name }]);
+      return;
+    }
     setEntries(null);
     setPath((current) => [...current, { id: entry.id, name: entry.name }]);
   };
@@ -85,12 +117,6 @@ export function DriveBrowser({
     if (depth === path.length) return;
     setEntries(null);
     setPath((current) => current.slice(0, depth));
-  };
-  const changeSource = (next: Source) => {
-    if (next === source && path.length === 0) return;
-    setEntries(null);
-    setSource(next);
-    setPath([]);
   };
 
   const loadMore = async () => {
@@ -144,8 +170,10 @@ export function DriveBrowser({
     });
   };
 
-  const images = entries?.filter((entry) => entry.kind === 'image') ?? [];
-  const folders = entries?.filter((entry) => entry.kind === 'folder') ?? [];
+  const images = isSearch ? hits?.images ?? [] : entries?.filter((entry) => entry.kind === 'image') ?? [];
+  const folders: DriveEntry[] = isSearch
+    ? (hits?.folders ?? []).map((hit) => ({ id: hit.id, name: hit.parentName ? `${hit.name} — em ${hit.parentName}` : hit.name, kind: 'folder' }))
+    : entries?.filter((entry) => entry.kind === 'folder') ?? [];
   const sourceLabel = SOURCES.find((item) => item.key === source)?.label ?? '';
   const allChosen = images.length > 0 && images.every((entry) => selected.has(entry.id));
   const carousel = mode === 'fotos';
@@ -169,24 +197,28 @@ export function DriveBrowser({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Origem das pastas">
-        {SOURCES.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={key === source}
-            onClick={() => changeSource(key)}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition-colors ${
-              key === source ? 'border-[var(--g-accent,#231b2d)] bg-[var(--g-accent,#231b2d)] text-white' : 'border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)]'
-            }`}
-          >
-            <Icon size={14} aria-hidden="true" /> {label}
-          </button>
-        ))}
-      </div>
+      <label className="relative block max-w-xl">
+        <span className="sr-only">Buscar no Drive</span>
+        <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--g-fg3,#746e68)]" aria-hidden="true" />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (event.target.value.trim().length < 2) setHits(null);
+          }}
+          placeholder="Buscar pastas e fotos em Compartilhados comigo"
+          className="min-h-11 w-full rounded-full border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] pl-10 pr-10 text-sm text-[var(--g-fg,#302d34)] placeholder:text-[var(--g-fg3,#746e68)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--g-accent,#231b2d)]"
+        />
+        {searching && <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin text-[var(--g-fg3,#746e68)]" aria-label="Buscando" />}
+      </label>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {isSearch ? (
+          <p className="text-sm font-semibold text-[var(--g-fg,#302d34)]">
+            {hits === null ? 'Buscando…' : `${hits.folders.length} ${hits.folders.length === 1 ? 'pasta' : 'pastas'} e ${hits.images.length} ${hits.images.length === 1 ? 'foto' : 'fotos'} com “${query.trim()}”`}
+          </p>
+        ) : (
         <nav aria-label="Caminho da pasta" className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
           {path.length > 0 && (
             <button type="button" onClick={() => goTo(path.length - 1)} aria-label="Voltar uma pasta" className="mr-1 flex h-8 w-8 items-center justify-center rounded-[var(--g-r-control,0.75rem)] text-[var(--g-fg3,#746e68)] hover:bg-[var(--g-fill,#f3f0e9)] hover:text-[var(--g-fg,#302d34)]">
@@ -208,6 +240,7 @@ export function DriveBrowser({
             </span>
           ))}
         </nav>
+        )}
         {images.length > 0 && (allChosen || selected.size + images.filter((entry) => !selected.has(entry.id)).length <= room) && (
           <button
             type="button"
@@ -228,7 +261,7 @@ export function DriveBrowser({
         )}
       </div>
 
-      {entries === null ? (
+      {!isSearch && entries === null ? (
         <p className="flex items-center gap-2 py-12 text-sm text-[var(--g-fg3,#746e68)]"><Loader2 size={16} className="animate-spin" aria-hidden="true" /> Abrindo pasta…</p>
       ) : (
         <>
@@ -269,13 +302,13 @@ export function DriveBrowser({
             </ul>
           )}
 
-          {nextPage && (
+          {nextPage && !isSearch && (
             <button type="button" onClick={() => void loadMore()} disabled={loadingMore} className="inline-flex min-h-10 items-center gap-2 rounded-[var(--g-r-control,0.75rem)] border border-[var(--g-line,#e8e4dc)] bg-[var(--g-sheet,#fffefa)] px-4 text-xs font-semibold text-[var(--g-fg,#302d34)] hover:bg-[var(--g-fill,#f3f0e9)] disabled:opacity-60">
               {loadingMore ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />} Carregar mais
             </button>
           )}
 
-          {!listError && folders.length === 0 && images.length === 0 && <p className="py-12 text-sm text-[var(--g-fg3,#746e68)]">Nenhuma pasta ou foto aqui.</p>}
+          {!listError && folders.length === 0 && images.length === 0 && (!isSearch || hits !== null) && <p className="py-12 text-sm text-[var(--g-fg3,#746e68)]">{isSearch ? 'Nada encontrado com esse nome.' : 'Nenhuma pasta ou foto aqui.'}</p>}
         </>
       )}
 

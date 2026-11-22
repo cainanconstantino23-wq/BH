@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search } from 'lucide-react';
+import { ArrowUpRight, Images, RefreshCw, Search } from 'lucide-react';
 import type { PrioritizedRow } from '@/lib/postagens';
+import { matchSavedHouse, type MatchableHouse } from '@/lib/house';
+import type { CoverStudioRequest } from '@/components/capas/CoverStudio';
 import { DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 
 // Tabela de postagens: a planilha "POSTAGENS INSTA 2025" do Drive, em ordem de prioridade (só leitura).
@@ -42,8 +44,39 @@ const ERRORS: Record<string, { title: string; text: string; reconnect?: boolean 
   sheet_not_found: { title: 'Aba POSTAGENS não encontrada', text: 'O arquivo foi achado, mas não tem uma aba chamada POSTAGENS.' },
 };
 
-export function PostagensTable() {
+/** Nome da casa como link: casa com capas salvas abre direto nela no "Selecionar capas"; sem capas, busca o nome no Drive. */
+function HouseLink({ casa, houseId, onOpen, className = '' }: { casa: string; houseId: number | null; onOpen?: (request: CoverStudioRequest) => void; className?: string }) {
+  if (!onOpen) return <span className={className}>{casa}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen({ houseId, search: casa })}
+      title={houseId ? 'Abrir as capas desta casa' : 'Procurar a pasta desta casa no Drive'}
+      className={`group inline-flex items-center gap-1.5 text-left underline-offset-4 hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${className}`}
+    >
+      {casa}
+      {houseId ? (
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent/10 px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.04em] text-accent no-underline">
+          <Images size={11} aria-hidden="true" /> Capas
+        </span>
+      ) : (
+        <ArrowUpRight size={14} className="shrink-0 text-ink-muted group-hover:text-accent" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
+export function PostagensTable({ onOpenCovers }: { onOpenCovers?: (request: CoverStudioRequest) => void } = {}) {
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [savedHouses, setSavedHouses] = useState<MatchableHouse[]>([]);
+
+  // casas já salvas no "Selecionar capas" (kind 'capa'), para ligar cada linha da planilha à casa
+  useEffect(() => {
+    fetch('/api/capa?tipo=capa', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setSavedHouses(((data?.collections ?? []) as (MatchableHouse & { favoriteCount: number })[]).filter((row) => row.favoriteCount > 0)))
+      .catch(() => undefined);
+  }, []);
   const [query, setQuery] = useState('');
   const [atualizado, setAtualizado] = useState('');
   const [qualif, setQualif] = useState('');
@@ -84,6 +117,8 @@ export function PostagensTable() {
         (showBlocked || !row.bloqueada),
       );
   }, [rows, query, atualizado, qualif, showBlocked]);
+
+  const houseIds = useMemo(() => new Map(rows.map((row) => [row.line, matchSavedHouse(row.casa, row.atualizado, savedHouses)])), [rows, savedHouses]);
 
   const control = 'min-h-10 rounded-control border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
@@ -191,7 +226,7 @@ export function PostagensTable() {
                     <tr key={row.line} className={`border-t border-border align-top ${row.bloqueada ? 'opacity-55' : ''}`}>
                       <td className="px-3 py-3 tabular-nums text-ink-muted">{rank}</td>
                       <td className="px-3 py-3">
-                        <p className="font-medium text-ink">{row.casa}</p>
+                        <p className="font-medium text-ink"><HouseLink casa={row.casa} houseId={houseIds.get(row.line) ?? null} onOpen={onOpenCovers} /></p>
                         <p className="text-xs text-ink-muted">{row.atualizado}</p>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
@@ -220,7 +255,7 @@ export function PostagensTable() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs tabular-nums text-ink-muted">#{rank} · {row.atualizado}</p>
-                      <p className="mt-0.5 font-medium text-ink">{row.casa}</p>
+                      <p className="mt-0.5 font-medium text-ink"><HouseLink casa={row.casa} houseId={houseIds.get(row.line) ?? null} onOpen={onOpenCovers} /></p>
                     </div>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.tone}`}>{badge.text}</span>
                   </div>

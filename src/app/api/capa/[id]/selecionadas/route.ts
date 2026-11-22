@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
 import { collectionName, loadCollection, logCoverActivity } from '@/lib/covers-server';
 import { parentsOf } from '@/lib/coverFolder-server';
+import { isSharedWithMe } from '@/lib/google/driveAccess';
 import { photoRecordLines, savedFileName } from '@/lib/coverDrive';
 import {
   DRIVE_ID,
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // a pasta precisa ser mesmo a pasta da casa: onde estão as fotos escolhidas
     const parents = await Promise.all(photos.map((photo) => parentsOf(photo.driveId).catch(() => [] as string[])));
     if (!parents.some((list) => list.includes(folderId))) return fail('wrong_folder', 400);
+    if (!(await isSharedWithMe(folderId))) return fail('blocked', 403);
 
     // "Capas Selecionadas" já existe? usa a mesma pasta (só acrescenta); senão cria
     const found = (await (

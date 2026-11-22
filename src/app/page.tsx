@@ -18,7 +18,7 @@ import { HistoryPanel, MyAccountPanel, PeoplePanel } from '@/components/team/Tea
 import { CoverApprovalPanel, DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 import { PostagensTable } from '@/components/postagens/PostagensTable';
 import { FeedPlanPanel } from '@/components/grade/FeedPlanPanel';
-import { CoverStudio } from '@/components/capas/CoverStudio';
+import { CoverStudio, type CoverStudioRequest } from '@/components/capas/CoverStudio';
 import {
   BarChart2,
   Sparkles,
@@ -213,6 +213,8 @@ export default function Home() {
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DashboardTab>('comunidade');
+  // Tabela de postagens → Selecionar capas já na casa (ou buscando o nome no Drive)
+  const [capasRequest, setCapasRequest] = useState<CoverStudioRequest | null>(null);
   const [instagramStatus, setInstagramStatus] = useState<InstagramStatus | null>(null);
   const [instagramNotice, setInstagramNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [driveNotice, setDriveNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -405,7 +407,7 @@ export default function Home() {
     },
     { id: 'postagens', label: 'Tabela de postagens', icon: Table2, active: activeTab === 'postagens', select: () => setActiveTab('postagens') },
     { id: 'grade', label: 'Aprovação da grade', icon: LayoutGrid, active: activeTab === 'grade', select: () => setActiveTab('grade') },
-    { id: 'capas', label: 'Selecionar capas', icon: Sparkles, active: activeTab === 'capas', select: () => setActiveTab('capas') },
+    { id: 'capas', label: 'Selecionar capas', icon: Sparkles, active: activeTab === 'capas', select: () => { setCapasRequest(null); setActiveTab('capas'); } },
   ];
 
   if (!currentUser) {
@@ -938,7 +940,7 @@ export default function Home() {
 
             {activeTab === 'postagens' && (
               <div key="postagens" className={`min-w-0 ${sectionEntranceClass}`}>
-                <PostagensTable />
+                <PostagensTable onOpenCovers={(request) => { setCapasRequest(request); setActiveTab('capas'); }} />
               </div>
             )}
 
@@ -950,7 +952,7 @@ export default function Home() {
 
             {activeTab === 'capas' && (
               <div key="capas" className={`min-w-0 ${sectionEntranceClass}`}>
-                <CoverStudio />
+                <CoverStudio request={capasRequest} />
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { DRIVE_ID, DriveNotConnectedError, clampThumbSize, driveThumbnail } from '@/lib/google/drive';
+import { isSharedWithMe } from '@/lib/google/driveAccess';
 import { PLAN_TOKEN, findPlanHouse } from '@/lib/feedPlan-server';
 import { collectionFolders, imageInFolders } from '@/lib/coverFolder-server';
 
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const house = await findPlanHouse(admin, token, request.nextUrl.searchParams.get('casa'));
       if (!house || !(await imageInFolders(fileId, await collectionFolders(admin, house.collectionId)))) return new Response(null, { status: 404 });
     }
+    if (!(await isSharedWithMe(fileId))) return new Response(null, { status: 404 });
     return await driveThumbnail(fileId, clampThumbSize(request.nextUrl.searchParams.get('s')), 'public, max-age=3600');
   } catch (error) {
     if (!(error instanceof DriveNotConnectedError)) console.error('Falha na imagem do link da grade:', error);

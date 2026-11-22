@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion, type Transition, type Variants } from 'motion/react';
-import { Check, ChevronLeft, ChevronRight, Crop, FolderOpen, HardDrive, Home, Loader2, Moon, Plus, Search, Star, Sun, Users, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Crop, Home, Loader2, Moon, Play, Plus, Search, Star, Sun, Trash2, Users, X } from 'lucide-react';
 import type { DriveEntry } from '@/app/api/drive/list/route';
 import type { DriveFolderHit } from '@/app/api/drive/search/route';
 import type { CoverCollectionDetail, CoverCollectionSummary, CoverPhoto, EditedImage } from '@/lib/covers';
@@ -92,12 +92,9 @@ const PRESS = { scale: 0.97 };
 const thumb = (id: string, size = 600) => `/api/drive/thumb/${encodeURIComponent(id)}?s=${size}`;
 const searchKey = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-type Source = 'root' | 'shared' | 'drives';
-const SOURCES: { key: Source; label: string; icon: typeof HardDrive }[] = [
-  { key: 'shared', label: 'Compartilhados', icon: Users },
-  { key: 'root', label: 'Meu Drive', icon: HardDrive },
-  { key: 'drives', label: 'Drives da equipe', icon: FolderOpen },
-];
+// só "Compartilhados comigo": Meu Drive e drives da equipe bloqueados (src/lib/google/driveAccess.ts)
+type Source = 'shared';
+const SOURCES: { key: Source; label: string; icon: typeof Users }[] = [{ key: 'shared', label: 'Compartilhados comigo', icon: Users }];
 interface Crumb { id: string; name: string }
 interface HouseFolder { id: string; name: string; parentName: string }
 type StudioView = 'drive' | 'casas';
@@ -171,14 +168,19 @@ function Mesh({ variant }: { variant: 'intro' | 'studio' }) {
   return <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background }} />;
 }
 
-export function CoverStudio() {
+/** Vindo da Tabela de postagens: abrir direto a casa salva (houseId) ou buscar o nome dela no Drive (search). */
+export interface CoverStudioRequest { houseId: number | null; search: string }
+
+export function CoverStudio({ request = null }: { request?: CoverStudioRequest | null }) {
   const reduce = useReducedMotion();
   const buttonRef = useRef<HTMLButtonElement>(null);
-  // o círculo nasce no botão e volta para ele (mesmo caminho na ida e na volta)
-  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [open, setOpen] = useState(false);
+  // o círculo nasce no botão e volta para ele (mesmo caminho na ida e na volta); pedido da tabela: abre já aberto, do centro
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(() => (request && typeof window !== 'undefined' ? { x: window.innerWidth / 2, y: window.innerHeight / 2 } : null));
+  const [open, setOpen] = useState(() => Boolean(request));
   const [closing, setClosing] = useState(false);
-  const [startView, setStartView] = useState<StudioView>('drive');
+  const [startView, setStartView] = useState<StudioView>(() => (request?.houseId ? 'casas' : 'drive'));
+  // o pedido vale só para a primeira abertura
+  const [pending, setPending] = useState(request);
   const housesButtonRef = useRef<HTMLButtonElement>(null);
   const [theme, setTheme] = useState<Theme>(() => {
     try {
@@ -206,6 +208,7 @@ export function CoverStudio() {
   );
 
   const start = (view: StudioView = 'drive') => {
+    setPending(null);
     setStartView(view);
     const rect = (view === 'casas' ? housesButtonRef : buttonRef).current?.getBoundingClientRect();
     setOrigin(rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -282,7 +285,7 @@ export function CoverStudio() {
             {/* a cor do botão cobre a tela e se dissolve no fundo do estúdio */}
             <motion.div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: APPLE.blue }} initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: reduce ? 0 : 0.45, duration: 0.5, ease: EASE_OUT }} />
             <Mesh variant="studio" />
-            <Studio initialView={startView} onClose={() => setClosing(true)} />
+            <Studio initialView={startView} initialHouseId={pending?.houseId ?? null} initialSearch={pending?.search ?? ''} onClose={() => setClosing(true)} />
           </motion.div>,
           document.body,
         )}
@@ -292,7 +295,7 @@ export function CoverStudio() {
 }
 
 /** Conteúdo do estúdio: pastas do Drive → fotos da casa → salvar. */
-function Studio({ initialView, onClose }: { initialView: StudioView; onClose: () => void }) {
+function Studio({ initialView, initialHouseId = null, initialSearch = '', onClose }: { initialView: StudioView; initialHouseId?: number | null; initialSearch?: string; onClose: () => void }) {
   const [drive, setDrive] = useState<'checking' | 'ok' | { canConnect: boolean }>('checking');
   const [view, setView] = useState<StudioView>(initialView);
   const [house, setHouse] = useState<HouseFolder | null>(null);
@@ -324,7 +327,7 @@ function Studio({ initialView, onClose }: { initialView: StudioView; onClose: ()
   if (view === 'casas') {
     return (
       <div className="relative flex h-full flex-col">
-        <SavedHouses onClose={onClose} onOpenDrive={() => setView('drive')} />
+        <SavedHouses initialOpenId={initialHouseId} onClose={onClose} onOpenDrive={() => setView('drive')} />
       </div>
     );
   }
@@ -381,7 +384,7 @@ function Studio({ initialView, onClose }: { initialView: StudioView; onClose: ()
               </motion.div>
             ) : (
               <motion.div key="browser" className="absolute inset-0" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40, transition: { duration: 0.2, ease: EASE_OUT } }} transition={{ duration: 0.32, ease: EASE_OUT }}>
-                <FolderBrowser saved={saved} onOpenHouse={setHouse} onClose={onClose} />
+                <FolderBrowser initialQuery={initialSearch} saved={saved} onOpenHouse={setHouse} onClose={onClose} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -469,14 +472,14 @@ function SearchField({ value, onChange, busy, placeholder }: { value: string; on
 }
 
 /** Pastas do Drive; a pasta com fotos abre a casa. Busca o Drive inteiro pelo nome da pasta. */
-function FolderBrowser({ saved, onOpenHouse, onClose }: { saved: Map<string, string>; onOpenHouse: (folder: HouseFolder) => void; onClose: () => void }) {
+function FolderBrowser({ initialQuery = '', saved, onOpenHouse, onClose }: { initialQuery?: string; saved: Map<string, string>; onOpenHouse: (folder: HouseFolder) => void; onClose: () => void }) {
   const [source, setSource] = useState<Source>('shared');
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<DriveEntry[] | null>(null);
   const [error, setError] = useState('');
   // direção da navegação: entrar desliza da direita, voltar da esquerda
   const [direction, setDirection] = useState(1);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [hits, setHits] = useState<DriveFolderHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   const isSearch = query.trim().length >= 2;
@@ -667,32 +670,45 @@ function FolderRow({ name, detail, done, onOpen }: { name: string; detail?: stri
 }
 
 /** Todas as fotos da pasta da casa: tocar abre grande (cortar, favoritar); ★ favorita direto. */
-function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; onBack: () => void; onClose: () => void; onSaved: (result: SavedResult) => void }) {
+/** addTo: abre a pasta para pôr mais capas numa casa já salva (as que já são capa aparecem marcadas e não entram de novo). */
+interface AddToHouse { id: number; label: string; existing: Set<string> }
+
+function HouseView({ folder, onBack, onClose, onSaved, addTo, backLabel = 'Pastas' }: { folder: HouseFolder; onBack: () => void; onClose: () => void; onSaved: (result: SavedResult) => void; addTo?: AddToHouse; backLabel?: string }) {
   const team = useTeam();
   const reduce = useReducedMotion();
   const [images, setImages] = useState<DriveEntry[] | null>(null);
+  const [videos, setVideos] = useState<DriveEntry[]>([]);
+  const [playing, setPlaying] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Map<string, EditedImage>>(new Map());
   const [viewing, setViewing] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [adding, setAdding] = useState('');
+  const [addError, setAddError] = useState('');
 
   // todas as páginas da pasta (pastas grandes passam de 300 arquivos)
   useEffect(() => {
     let active = true;
     (async () => {
       const all: DriveEntry[] = [];
+      const clips: DriveEntry[] = [];
       let page: string | null = null;
       try {
         do {
-          const response: Response = await fetch(`/api/drive/list?folder=${encodeURIComponent(folder.id)}${page ? `&page=${encodeURIComponent(page)}` : ''}`, { cache: 'no-store' });
+          // videos=1: os vídeos da pasta também vêm, só para assistir (não viram capa)
+          const response: Response = await fetch(`/api/drive/list?folder=${encodeURIComponent(folder.id)}&videos=1${page ? `&page=${encodeURIComponent(page)}` : ''}`, { cache: 'no-store' });
           const data = await response.json();
           if (!response.ok) throw new Error(String(response.status));
           all.push(...(data.entries as DriveEntry[]).filter((entry) => entry.kind === 'image'));
+          clips.push(...(data.entries as DriveEntry[]).filter((entry) => entry.kind === 'video'));
           page = data.nextPage;
-        } while (page && all.length < 1500);
-        if (active) setImages(all);
+        } while (page && all.length + clips.length < 1500);
+        if (active) {
+          setImages(all);
+          setVideos(clips);
+        }
       } catch {
         if (active) {
           setImages([]);
@@ -737,6 +753,15 @@ function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; 
     [images, favorites, edits],
   );
 
+  const addCovers = async () => {
+    if (!addTo || adding) return;
+    setAddError('');
+    const result = await saveCovers({ collectionId: addTo.id }, photos.filter((photo) => favorites.has(photo.driveId)), folder.id, setAdding);
+    setAdding('');
+    if ('error' in result) return setAddError(result.error);
+    onSaved(result);
+  };
+
   const back = () => {
     if (favorites.size > 0 && !window.confirm('Sair sem salvar? As capas favoritadas desta casa vão se perder.')) return;
     onBack();
@@ -746,9 +771,10 @@ function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; 
   return (
     <div className="relative h-full">
       <div className="h-full overflow-y-auto overscroll-contain">
-        <Toolbar onClose={onClose} onBack={back} backLabel="Pastas" title={folder.name} />
+        <Toolbar onClose={onClose} onBack={back} backLabel={backLabel} title={addTo ? `Adicionar a ${addTo.label}` : folder.name} />
         <div className="mx-auto max-w-6xl px-4 pb-40 pt-6 sm:px-8">
           <h1 className="text-[28px] font-bold leading-[1.1] tracking-[-0.022em] sm:text-[34px]">{folder.name}</h1>
+          {addTo && <p className="mt-1 text-[15px] font-semibold" style={{ color: APPLE.blue }}>Novas capas para {addTo.label}</p>}
           <p className="mt-1.5 text-[15px] text-[var(--fg2)]">
             Toque numa foto para ver grande e cortar. Favorite com a <Star size={13} className="inline -translate-y-px" aria-label="estrela" /> as que podem ser capa.
           </p>
@@ -758,9 +784,37 @@ function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; 
           ) : error ? (
             <p role="alert" className="mt-8 text-[15px]" style={{ color: APPLE.pink }}>{error}</p>
           ) : (
+            <>
+            {videos.length > 0 && (
+              <section aria-label="Vídeos da pasta" className="mt-6">
+                <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Vídeos <span className="font-normal text-[var(--fg3)]">· {videos.length}</span></h2>
+                <ul className="mt-3 flex gap-2.5 overflow-x-auto pb-2">
+                  {videos.map((video, index) => (
+                    <li key={video.id} className="w-[150px] shrink-0 sm:w-[180px]">
+                      <motion.button
+                        type="button"
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setPlaying(index)}
+                        aria-label={`Assistir ${video.name}`}
+                        className="relative block aspect-[9/16] w-full overflow-hidden rounded-[12px] bg-[var(--fill2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- quadro do vídeo pelo servidor */}
+                        <img src={thumb(video.id, 400)} alt="" loading="lazy" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }} />
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md"><Play size={18} fill="currentColor" aria-hidden="true" /></span>
+                        </span>
+                      </motion.button>
+                      <p className="mt-1 truncate text-[12px] text-[var(--fg3)]">{video.name}</p>
+                    </li>
+                  ))}
+                </ul>
+                {photos.length > 0 && <h2 className="mt-5 text-[17px] font-semibold tracking-[-0.01em]">Fotos <span className="font-normal text-[var(--fg3)]">· {photos.length}</span></h2>}
+              </section>
+            )}
             <motion.ul variants={list} initial="hidden" animate="show" className="mt-6 columns-2 gap-2.5 sm:columns-3 lg:columns-4 [&>li]:mb-2.5">
               {photos.map((photo, index) => {
                 const favorite = favorites.has(photo.driveId);
+                const already = addTo?.existing.has(photo.driveId) ?? false;
                 const ratio = photo.edited ? `${photo.edited.width} / ${photo.edited.height}` : photo.width && photo.height ? `${photo.width} / ${photo.height}` : '3 / 4';
                 return (
                   <motion.li key={photo.driveId} variants={index < 16 ? rise : undefined} className="relative break-inside-avoid">
@@ -782,6 +836,11 @@ function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; 
                         </span>
                       )}
                     </motion.button>
+                    {already ? (
+                      <span className="absolute right-2 top-2 inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-white backdrop-blur-md" style={{ background: 'rgba(48,209,88,0.9)' }}>
+                        <Check size={13} strokeWidth={2.6} aria-hidden="true" /> Já é capa
+                      </span>
+                    ) : (
                     <motion.button
                       type="button"
                       onClick={() => toggle(photo.driveId)}
@@ -793,30 +852,36 @@ function HouseView({ folder, onBack, onClose, onSaved }: { folder: HouseFolder; 
                     >
                       <Star size={17} fill={favorite ? 'currentColor' : 'none'} strokeWidth={2.2} aria-hidden="true" />
                     </motion.button>
+                    )}
                   </motion.li>
                 );
               })}
             </motion.ul>
+            </>
           )}
         </div>
       </div>
+
+      {playing !== null && videos[playing] && <VideoViewer videos={videos} index={playing} onIndex={setPlaying} onClose={() => setPlaying(null)} />}
 
       {/* barra flutuante de vidro, como a barra de ferramentas do Fotos */}
       <motion.div initial={reduce ? { opacity: 0 } : { y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ ...SHEET, delay: 0.15 }} className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <Material className="pointer-events-auto flex w-full max-w-xl items-center justify-between gap-4 rounded-full py-2 pl-5 pr-2">
           <p className="min-w-0 text-[15px] leading-tight">
             <span className="font-semibold tabular-nums">{favorites.size} {favorites.size === 1 ? 'capa' : 'capas'}</span>
-            <span className="text-[var(--fg3)]">{favorites.size === 0 ? ' · favorite com a ★' : cropped ? ` · ${cropped} ${cropped === 1 ? 'cortada' : 'cortadas'}` : ''}</span>
+            <span className="text-[var(--fg3)]">{adding ? ` · ${adding}` : favorites.size === 0 ? ' · favorite com a ★' : cropped ? ` · ${cropped} ${cropped === 1 ? 'cortada' : 'cortadas'}` : ''}</span>
+            {addError && <span role="alert" className="block text-[13px]" style={{ color: APPLE.pink }}>{addError}</span>}
           </p>
           <motion.button
             type="button"
             whileTap={PRESS}
-            disabled={favorites.size === 0 || !team.can('criar_publicacoes')}
-            onClick={() => setSaveOpen(true)}
+            disabled={favorites.size === 0 || !team.can('criar_publicacoes') || Boolean(adding)}
+            onClick={() => (addTo ? void addCovers() : setSaveOpen(true))}
             className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-5 text-[15px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] transition-opacity disabled:opacity-35"
             style={{ background: APPLE.blue }}
           >
-            Salvar casa
+            {adding && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+            {addTo ? (favorites.size > 0 ? `Adicionar ${favorites.size}` : 'Adicionar') : 'Salvar casa'}
           </motion.button>
         </Material>
       </motion.div>
@@ -874,6 +939,45 @@ const DRIVE_ERRORS: Record<string, string> = {
   drive_write_missing: 'Capas salvas no app, mas o Drive está só para leitura: reconecte o Google Drive para criar “Capas Selecionadas”.',
   drive_not_connected: 'Capas salvas no app, mas o acesso ao Drive expirou: reconecte para criar “Capas Selecionadas”.',
 };
+
+/** Grava as capas (casa nova ou já salva) e depois cria/completa "Capas Selecionadas" no Drive. Erro = mensagem para a tela. */
+async function saveCovers(
+  target: { collectionId: number } | { houseName: string; houseNumber: string; neighborhood: string },
+  photos: CoverPhoto[],
+  folderId: string,
+  onStep: (step: string) => void,
+): Promise<SavedResult | { error: string }> {
+  onStep('Salvando a casa…');
+  const payload = photos.map((photo) => ({ id: photo.driveId, name: photo.name, width: photo.width ?? undefined, height: photo.height ?? undefined, favorite: true, edited: photo.edited ?? undefined }));
+  const response = await fetch('/api/capa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify('collectionId' in target ? { collectionId: target.collectionId, photos: payload } : { ...target, photos: payload, kind: 'capa' }),
+  }).catch(() => null);
+  const data = response ? await response.json().catch(() => ({})) : {};
+  if (!response?.ok || !data.collection) return { error: 'Não foi possível salvar. Tente de novo.' };
+  const collection = data.collection as CoverCollectionDetail;
+  const label = coverFolderLabel(collection.houseName, collection.neighborhood, collection.houseNumber) || 'Casa';
+
+  // depois de salvar: as capas vão para "Capas Selecionadas" dentro da pasta da casa no Drive (só cria)
+  onStep('Criando “Capas Selecionadas” no Drive…');
+  const driveResponse = await fetch(`/api/capa/${collection.id}/selecionadas`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folderId, photos: photos.map((photo) => photo.driveId) }),
+  }).catch(() => null);
+  const drive = driveResponse ? await driveResponse.json().catch(() => ({})) : {};
+  if (!driveResponse?.ok) return { label, driveOk: false, drive: DRIVE_ERRORS[drive.error] ?? 'Capas salvas no app, mas não deu para criar “Capas Selecionadas” no Drive agora.' };
+  const saved = (drive.saved ?? []).length;
+  const failed = (drive.failed ?? []).length;
+  return {
+    label,
+    driveOk: failed === 0,
+    drive: failed
+      ? `${saved} no Drive em “Capas Selecionadas”; ${failed} não ${failed === 1 ? 'foi' : 'foram'}`
+      : `No Drive em “Capas Selecionadas”${drive.folder?.created ? ' (pasta nova)' : ''}`,
+  };
+}
 
 function SaveSheet({ folder, photos, onClose, onSaved }: { folder: HouseFolder; photos: CoverPhoto[]; onClose: () => void; onSaved: (result: SavedResult) => void }) {
   const reduce = useReducedMotion();
@@ -940,45 +1044,11 @@ function SaveSheet({ folder, photos, onClose, onSaved }: { folder: HouseFolder; 
     if (!merging && !houseName.trim() && !houseNumber.trim()) return setError('Informe o nome ou o número da casa.');
     setSaving(true);
     setError('');
-    setStep('Salvando a casa…');
-    const payload = photos.map((photo) => ({ id: photo.driveId, name: photo.name, width: photo.width ?? undefined, height: photo.height ?? undefined, favorite: true, edited: photo.edited ?? undefined }));
-    const response = await fetch('/api/capa', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(merging ? { collectionId: target, photos: payload } : { houseName, houseNumber, neighborhood, photos: payload, kind: 'capa' }),
-    }).catch(() => null);
-    const data = response ? await response.json().catch(() => ({})) : {};
-    if (!response?.ok || !data.collection) {
-      setSaving(false);
-      setStep('');
-      return setError('Não foi possível salvar. Tente de novo.');
-    }
-    const collection = data.collection as CoverCollectionDetail;
-    const label = coverFolderLabel(collection.houseName, collection.neighborhood, collection.houseNumber) || 'Casa';
-
-    // depois de salvar: as capas vão para "Capas Selecionadas" dentro da pasta da casa no Drive (só cria)
-    setStep('Criando “Capas Selecionadas” no Drive…');
-    const driveResponse = await fetch(`/api/capa/${collection.id}/selecionadas`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderId: folder.id, photos: photos.map((photo) => photo.driveId) }),
-    }).catch(() => null);
-    const drive = driveResponse ? await driveResponse.json().catch(() => ({})) : {};
+    const result = await saveCovers(merging ? { collectionId: target as number } : { houseName, houseNumber, neighborhood }, photos, folder.id, setStep);
     setSaving(false);
     setStep('');
-    if (driveResponse?.ok) {
-      const saved = (drive.saved ?? []).length;
-      const failed = (drive.failed ?? []).length;
-      onSaved({
-        label,
-        driveOk: failed === 0,
-        drive: failed
-          ? `${saved} no Drive em “Capas Selecionadas”; ${failed} não ${failed === 1 ? 'foi' : 'foram'}`
-          : `No Drive em “Capas Selecionadas”${drive.folder?.created ? ' (pasta nova)' : ''}`,
-      });
-    } else {
-      onSaved({ label, driveOk: false, drive: DRIVE_ERRORS[drive.error] ?? 'Capas salvas no app, mas não deu para criar “Capas Selecionadas” no Drive agora.' });
-    }
+    if ('error' in result) return setError(result.error);
+    onSaved(result);
   };
 
   // grupo de campos no estilo Ajustes do iOS
@@ -1200,11 +1270,33 @@ function SavedHud({ result }: { result: SavedResult }) {
 const coverSrc = (photo: CoverPhoto) => photo.edited?.url ?? thumb(photo.driveId, 800);
 
 /** Casas com capas selecionadas (pastas kind 'capa'): busca, cartões com a capa; tocar mostra as capas da casa. */
-function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDrive: () => void }) {
+function SavedHouses({ initialOpenId = null, onClose, onOpenDrive }: { initialOpenId?: number | null; onClose: () => void; onOpenDrive: () => void }) {
   const [houses, setHouses] = useState<CoverCollectionSummary[] | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(initialOpenId);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+
+  /** Apaga só o registro da casa no app (cover_collections); nada é tocado no Google Drive. */
+  const removeHouse = async (id: number) => {
+    setDeletingId(id);
+    setDeleteError('');
+    try {
+      const response = await fetch(`/api/capa/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        setDeleteError(response.status === 403 ? 'Você não tem permissão para excluir casas.' : 'Não foi possível excluir a casa. Tente de novo.');
+        return;
+      }
+      setHouses((rows) => rows?.filter((row) => row.id !== id) ?? rows);
+      setConfirmId(null);
+    } catch {
+      setDeleteError('Não foi possível excluir a casa. Tente de novo.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/capa?tipo=capa', { cache: 'no-store' })
@@ -1215,13 +1307,15 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
-      if (openId !== null) setOpenId(null);
+      // escolhendo fotos novas (Adicionar fotos): Esc não sai da tela e não perde a seleção
+      if (event.key !== 'Escape' || document.querySelector('[role="dialog"][aria-modal="true"], [data-adicionando]')) return;
+      if (confirmId !== null) setConfirmId(null);
+      else if (openId !== null) setOpenId(null);
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openId, onClose]);
+  }, [confirmId, openId, onClose]);
 
   const visible = useMemo(() => {
     const key = searchKey(query);
@@ -1242,7 +1336,7 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
           <motion.div key="casas" className="absolute inset-0 overflow-y-auto" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40, transition: { duration: 0.2, ease: EASE_OUT } }} transition={{ duration: 0.32, ease: EASE_OUT }}>
             <Toolbar onClose={onClose} title="Casas com capas selecionadas">
               <motion.button type="button" onClick={onOpenDrive} whileTap={PRESS} className="hidden h-9 items-center gap-1.5 rounded-full bg-[var(--fill2)] px-3.5 text-[14px] font-semibold hover:bg-[var(--fill3)] sm:inline-flex" style={{ color: APPLE.blue }}>
-                <Plus size={16} strokeWidth={2.4} aria-hidden="true" /> Selecionar mais
+                <Plus size={16} strokeWidth={2.4} aria-hidden="true" /> Adicionar Casa
               </motion.button>
             </Toolbar>
             <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-8">
@@ -1257,6 +1351,10 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
                   <SearchField value={query} onChange={setQuery} busy={false} placeholder="Buscar casa" />
                 </div>
               </div>
+
+              {deleteError && (
+                <p role="alert" className="mt-4 text-[14px]" style={{ color: APPLE.orange }}>{deleteError}</p>
+              )}
 
               {error ? (
                 <p className="mt-10 text-center text-[15px]" style={{ color: APPLE.orange }}>{error}</p>
@@ -1274,7 +1372,7 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
               ) : (
                 <motion.ul key={query} variants={list} initial="hidden" animate="show" className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {visible.map((row, index) => (
-                    <motion.li key={row.id} variants={index < 16 ? rise : undefined}>
+                    <motion.li key={row.id} layout variants={index < 16 ? rise : undefined} exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.18, ease: EASE_OUT } }} className="relative">
                       <motion.button
                         type="button"
                         whileTap={PRESS}
@@ -1295,6 +1393,41 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
                           <span className="block truncate text-[13px] text-[var(--fg3)]">{row.neighborhood || 'Sem bairro'}</span>
                         </span>
                       </motion.button>
+                      <motion.button
+                        type="button"
+                        whileTap={PRESS}
+                        onClick={() => { setDeleteError(''); setConfirmId(row.id); }}
+                        aria-label={`Excluir ${coverFolderLabel(row.houseName, null, row.houseNumber) || 'casa sem nome'}`}
+                        title="Excluir casa"
+                        className="absolute left-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md hover:bg-[#FF453A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
+                      >
+                        <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                      </motion.button>
+                      <AnimatePresence>
+                        {confirmId === row.id && (
+                          <motion.div
+                            role="alertdialog"
+                            aria-label="Confirmar exclusão da casa"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                            transition={{ duration: 0.2, ease: EASE_OUT }}
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-[18px] bg-black/70 p-4 text-center text-white backdrop-blur-md"
+                          >
+                            <Trash2 size={22} aria-hidden="true" style={{ color: '#FF453A' }} />
+                            <p className="text-[15px] font-semibold leading-snug">Excluir esta casa?</p>
+                            <p className="text-[12px] leading-snug text-white/75">Sai da lista e da grade. As fotos no Google Drive não são apagadas.</p>
+                            <div className="flex w-full flex-col gap-2">
+                              <motion.button type="button" whileTap={PRESS} disabled={deletingId === row.id} onClick={() => removeHouse(row.id)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-[14px] font-semibold text-white disabled:opacity-60" style={{ background: '#FF453A' }}>
+                                {deletingId === row.id ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null} Excluir
+                              </motion.button>
+                              <motion.button type="button" whileTap={PRESS} disabled={deletingId === row.id} onClick={() => setConfirmId(null)} autoFocus className="inline-flex h-9 items-center justify-center rounded-full bg-white/15 text-[14px] font-semibold text-white hover:bg-white/25">
+                                Cancelar
+                              </motion.button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </motion.li>
                   ))}
                 </motion.ul>
@@ -1307,29 +1440,187 @@ function SavedHouses({ onClose, onOpenDrive }: { onClose: () => void; onOpenDriv
   );
 }
 
-/** Capas selecionadas de uma casa (as favoritas, com o corte quando houver). */
+/** Abre por cima de tudo (direto no body), com as cores do tema do estúdio: dentro da lista que rola e desliza,
+ *  um "fixed" fica preso ao topo da lista em vez de cobrir a tela. */
+function StudioLayer({ children }: { children: ReactNode }) {
+  const { theme } = useContext(ThemeContext);
+  return createPortal(<div style={{ ...SF, ...THEME_VARS[theme] }} className="text-[var(--fg)]">{children}</div>, document.body);
+}
+
+/** Assistir um vídeo do Drive em tela cheia (setas trocam de vídeo; Esc fecha). */
+function VideoViewer({ videos, index, onIndex, onClose }: { videos: DriveEntry[]; index: number; onIndex: (index: number) => void; onClose: () => void }) {
+  const video = videos[index];
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose();
+      } else if (event.key === 'ArrowRight' && index < videos.length - 1) onIndex(index + 1);
+      else if (event.key === 'ArrowLeft' && index > 0) onIndex(index - 1);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [index, videos.length, onIndex, onClose]);
+
+  return createPortal(
+    <motion.div role="dialog" aria-modal="true" aria-label={`Vídeo ${video.name}`} className="fixed inset-0 z-[120] flex flex-col bg-black text-white" style={SF} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, ease: EASE_OUT }}>
+      <div className="flex items-center gap-3 px-3 pb-2 pt-[calc(0.75rem+env(safe-area-inset-top))]">
+        <button type="button" onClick={onClose} className="inline-flex h-9 items-center gap-0.5 rounded-full px-2 text-[17px] active:opacity-60" style={{ color: APPLE.blue }}>
+          <ChevronLeft size={22} aria-hidden="true" /> Voltar
+        </button>
+        <p className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold">{video.name}</p>
+        <span className="w-[76px] text-right text-[13px] tabular-nums text-white/60">{index + 1} de {videos.length}</span>
+      </div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <video key={video.id} src={`/api/drive/video/${encodeURIComponent(video.id)}`} poster={thumb(video.id, 1200)} controls autoPlay playsInline preload="metadata" className="max-h-full max-w-full rounded-[12px] bg-black" />
+        {index > 0 && (
+          <button type="button" onClick={() => onIndex(index - 1)} aria-label="Vídeo anterior" className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 backdrop-blur-md hover:bg-white/25 sm:flex">
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+        )}
+        {index < videos.length - 1 && (
+          <button type="button" onClick={() => onIndex(index + 1)} aria-label="Próximo vídeo" className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 backdrop-blur-md hover:bg-white/25 sm:flex">
+            <ChevronRight size={22} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </motion.div>,
+    document.body,
+  );
+}
+
+/** Capas selecionadas de uma casa (as favoritas, com o corte quando houver): tocar abre grande; "Adicionar fotos" abre a pasta da casa no Drive. */
 function SavedHouseCovers({ house, onBack, onClose }: { house: CoverCollectionSummary; onBack: () => void; onClose: () => void }) {
+  const team = useTeam();
   const [detail, setDetail] = useState<CoverCollectionDetail | null>(null);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [folders, setFolders] = useState<HouseFolder[] | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState('');
+  const [adding, setAdding] = useState<HouseFolder | null>(null);
+  const [done, setDone] = useState<SavedResult | null>(null);
+  const [confirmPhoto, setConfirmPhoto] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState('');
+
+  /** Tira a foto das capas desta casa (só no app; a cópia em "Capas Selecionadas" no Drive continua lá). */
+  const removeCover = async (driveId: string) => {
+    setRemoving(driveId);
+    setRemoveError('');
+    const response = await fetch(`/api/capa/${house.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photo: driveId, remove: true }),
+    }).catch(() => null);
+    setRemoving(null);
+    if (!response?.ok) {
+      setRemoveError(response?.status === 403 ? 'Você não tem permissão para tirar capas.' : 'Não foi possível tirar a capa. Tente de novo.');
+      return;
+    }
+    setConfirmPhoto(null);
+    setDetail((current) => current && { ...current, photos: current.photos.filter((row) => row.driveId !== driveId) });
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && confirmPhoto !== null) {
+        event.stopImmediatePropagation();
+        setConfirmPhoto(null);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [confirmPhoto]);
 
   useEffect(() => {
     fetch(`/api/capa/${house.id}`, { cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data) => setDetail(data.collection as CoverCollectionDetail))
       .catch(() => setError('Não foi possível abrir as capas desta casa.'));
-  }, [house.id]);
+  }, [house.id, reload]);
+
+  useEffect(() => {
+    if (!done) return;
+    const timer = window.setTimeout(() => setDone(null), done.driveOk ? 3200 : 7000);
+    return () => window.clearTimeout(timer);
+  }, [done]);
 
   const covers = detail?.photos.filter((photo) => photo.favorite) ?? [];
   const label = coverFolderLabel(house.houseName, house.neighborhood, house.houseNumber) || 'Casa sem nome';
+  const shortLabel = coverFolderLabel(house.houseName, null, house.houseNumber) || 'Casa sem nome';
+
+  // acha a pasta da casa no Drive (de onde vieram as capas); uma só = abre direto; várias = escolher
+  const openAdd = async () => {
+    setFindError('');
+    if (folders && folders.length > 0) {
+      if (folders.length === 1) setAdding(folders[0]);
+      return;
+    }
+    setFinding(true);
+    const response = await fetch(`/api/capa/${house.id}/pasta`, { cache: 'no-store' }).catch(() => null);
+    const data = response ? await response.json().catch(() => ({})) : {};
+    setFinding(false);
+    const found = (data.folders ?? []) as HouseFolder[];
+    if (!response?.ok || found.length === 0) {
+      setFindError(response?.status === 503 ? 'O Google Drive não está conectado. Reconecte para adicionar fotos.' : 'Não foi possível achar a pasta desta casa no Drive.');
+      return;
+    }
+    setFolders(found);
+    if (found.length === 1) setAdding(found[0]);
+  };
+
+  if (adding && detail) {
+    return (
+      <StudioLayer>
+      <div data-adicionando className="fixed inset-0 z-[80] bg-[var(--bg)]">
+        <HouseView
+          folder={adding}
+          backLabel="Capas"
+          addTo={{ id: house.id, label: shortLabel, existing: new Set(covers.map((photo) => photo.driveId)) }}
+          onBack={() => setAdding(null)}
+          onClose={onClose}
+          onSaved={(result) => {
+            setAdding(null);
+            setDone(result);
+            setReload((value) => value + 1);
+          }}
+        />
+      </div>
+      </StudioLayer>
+    );
+  }
 
   return (
     <>
-      <Toolbar onClose={onClose} onBack={onBack} backLabel="Casas" title={label} />
+      <Toolbar onClose={onClose} onBack={onBack} backLabel="Casas" title={label}>
+        {team.can('criar_publicacoes') && (
+          <motion.button type="button" onClick={() => void openAdd()} disabled={finding || !detail} whileTap={PRESS} className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold text-white disabled:opacity-50" style={{ background: APPLE.blue }}>
+            {finding ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={16} strokeWidth={2.4} aria-hidden="true" />} Adicionar fotos
+          </motion.button>
+        )}
+      </Toolbar>
       <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-8">
-        <h2 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] sm:text-[34px]">{coverFolderLabel(house.houseName, null, house.houseNumber) || 'Casa sem nome'}</h2>
+        <h2 className="text-[28px] font-bold leading-[1.1] tracking-[-0.025em] sm:text-[34px]">{shortLabel}</h2>
         <p className="mt-1 text-[15px] text-[var(--fg2)]">
           {[house.neighborhood, detail ? `${covers.length} ${covers.length === 1 ? 'capa selecionada' : 'capas selecionadas'}` : null].filter(Boolean).join(' · ')}
         </p>
+        {findError && <p role="alert" className="mt-3 text-[14px]" style={{ color: APPLE.orange }}>{findError}</p>}
+        {removeError && <p role="alert" className="mt-3 text-[14px]" style={{ color: APPLE.orange }}>{removeError}</p>}
+        {folders && folders.length > 1 && !adding && (
+          <div className="mt-4 rounded-[16px] bg-[var(--fill)] p-3">
+            <p className="px-1 text-[13px] text-[var(--fg2)]">As capas desta casa vêm de mais de uma pasta. Escolha onde procurar:</p>
+            <ul className="mt-2 grid gap-1.5">
+              {folders.map((folder) => (
+                <li key={folder.id}>
+                  <FolderRow name={folder.name} detail={folder.parentName || undefined} done={false} onOpen={() => setAdding(folder)} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {error ? (
           <p className="mt-10 text-center text-[15px]" style={{ color: APPLE.orange }}>{error}</p>
         ) : !detail ? (
@@ -1339,22 +1630,102 @@ function SavedHouseCovers({ house, onBack, onClose }: { house: CoverCollectionSu
         ) : (
           <motion.ul variants={list} initial="hidden" animate="show" className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {covers.map((photo, index) => (
-              <motion.li key={photo.driveId} variants={index < 16 ? rise : undefined} className="overflow-hidden rounded-[18px] bg-[var(--fill)]">
-                <span className="relative block aspect-[4/5] w-full overflow-hidden bg-[var(--fill2)]">
+              <motion.li key={photo.driveId} variants={index < 16 ? rise : undefined} className="relative overflow-hidden rounded-[18px] bg-[var(--fill)]">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setViewing(index)}
+                  aria-label={`Ver ${photo.name} grande`}
+                  className="group relative block aspect-[4/5] w-full overflow-hidden bg-[var(--fill2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={coverSrc(photo)} alt={photo.name} loading="lazy" className="h-full w-full object-cover" />
+                  <img src={coverSrc(photo)} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.03]" />
                   {photo.edited && (
                     <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[12px] font-semibold text-white backdrop-blur-md">
                       <Crop size={11} aria-hidden="true" /> Cortada
                     </span>
                   )}
-                </span>
+                </motion.button>
                 <span className="block truncate px-3 py-2 text-[13px] text-[var(--fg3)]">{photo.name}</span>
+                {team.can('editar_publicacoes') || team.can('criar_publicacoes') ? (
+                  <motion.button
+                    type="button"
+                    whileTap={PRESS}
+                    onClick={() => { setRemoveError(''); setConfirmPhoto(photo.driveId); }}
+                    aria-label={`Tirar ${photo.name} das capas`}
+                    title="Tirar das capas"
+                    className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md hover:bg-[#FF453A] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A84FF]"
+                  >
+                    <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                  </motion.button>
+                ) : null}
+                <AnimatePresence>
+                  {confirmPhoto === photo.driveId && (
+                    <motion.div
+                      role="alertdialog"
+                      aria-label="Confirmar: tirar a foto das capas"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, transition: { duration: 0.15 } }}
+                      transition={{ duration: 0.2, ease: EASE_OUT }}
+                      className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 p-4 text-center text-white backdrop-blur-md"
+                    >
+                      <Trash2 size={22} aria-hidden="true" style={{ color: '#FF453A' }} />
+                      <p className="text-[15px] font-semibold leading-snug">Tirar esta foto das capas?</p>
+                      <p className="text-[12px] leading-snug text-white/75">A foto continua no Google Drive.</p>
+                      <div className="flex w-full flex-col gap-2">
+                        <motion.button type="button" whileTap={PRESS} disabled={removing === photo.driveId} onClick={() => void removeCover(photo.driveId)} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-[14px] font-semibold text-white disabled:opacity-60" style={{ background: '#FF453A' }}>
+                          {removing === photo.driveId ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : null} Excluir
+                        </motion.button>
+                        <motion.button type="button" whileTap={PRESS} disabled={removing === photo.driveId} onClick={() => setConfirmPhoto(null)} autoFocus className="inline-flex h-9 items-center justify-center rounded-full bg-white/15 text-[14px] font-semibold text-white hover:bg-white/25">
+                          Cancelar
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.li>
             ))}
           </motion.ul>
         )}
       </div>
+
+      {viewing !== null && covers[viewing] && (
+        <StudioLayer>
+        <StudioPhotoViewer
+          photos={covers}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+          title={shortLabel}
+          src={(photo, size) => photo.edited?.url ?? thumb(photo.driveId, size)}
+          originalSrc={(photo) => thumb(photo.driveId, 4000)}
+          saving={uploading}
+          onSaveCrop={async (photo, file, size) => {
+            setUploading(true);
+            try {
+              const url = await uploadMedia(file);
+              const response = await fetch(`/api/capa/${house.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photo: photo.driveId, edited: { url, ...size } }),
+              });
+              if (!response.ok) throw new Error(String(response.status));
+              const edited: EditedImage = { url, ...size };
+              setDetail((current) => current && { ...current, photos: current.photos.map((row) => (row.driveId === photo.driveId ? { ...row, edited } : row)) });
+              return true;
+            } catch {
+              window.alert('Não foi possível salvar o corte. Tente de novo.');
+              return false;
+            } finally {
+              setUploading(false);
+            }
+          }}
+        />
+        </StudioLayer>
+      )}
+
+      <AnimatePresence>{done && <SavedHud result={done} />}</AnimatePresence>
     </>
   );
 }

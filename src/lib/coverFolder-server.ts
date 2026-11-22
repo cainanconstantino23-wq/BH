@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { driveFetch } from '@/lib/google/drive';
+import { onlyShared } from '@/lib/google/driveAccess';
 import { APPROVER_LABEL } from '@/lib/covers';
 
 // Pasta da casa no Drive para o link da aprovadora: as pastas onde estão as fotos já escolhidas pela equipe.
@@ -36,7 +37,8 @@ export async function collectionFolders(admin: SupabaseClient, collectionId: num
     .order('position', { ascending: true })
     .limit(5);
   const lists = await Promise.all((data ?? []).map((row) => parentsOf(String(row.drive_file_id)).catch(() => [])));
-  return [...new Set(lists.flat())];
+  // só pastas de "Compartilhados comigo" (Meu Drive bloqueado)
+  return onlyShared([...new Set(lists.flat())]);
 }
 
 const toImage = (file: RawImage): FolderImage => {

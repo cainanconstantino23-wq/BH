@@ -90,3 +90,41 @@ export function houseFromFolderName(folderName: string, parentName = '') {
   const neighborhood = parentName.replace(/\s*-\s*Trancoso$/i, '').trim();
   return { name: nickname || fallback, number, neighborhood };
 }
+
+// ── Tabela de postagens → casa salva no "Selecionar capas" ──
+// A planilha escreve "Aldeia de Itapororoca 05" (grupo "ALDEIA DE ITAPOROROCA"); a casa salva guarda apelido, número e bairro
+// (ex.: "Naoca", "05", "Itapororoca"). Casa quando o número bate (sem zeros à esquerda) e pelo menos uma palavra
+// do nome/bairro aparece na planilha; sem número dos dois lados, o nome tem que bater inteiro.
+
+const STOP_WORDS = new Set(['casa', 'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no', 'na', 'vila', 'condominio']);
+const words = (text: string) =>
+  withoutAccents(text)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 3 && !STOP_WORDS.has(word) && !/^\d+$/.test(word));
+const numbers = (text: string) => (withoutAccents(text).match(/\d+/g) ?? []).map((value) => String(Number(value)));
+const plain = (text: string) => words(text).join(' ');
+
+export interface MatchableHouse { id: number; houseName: string; houseNumber: string; neighborhood: string }
+
+/** A casa salva que corresponde à linha da planilha, ou null. Várias possíveis: a que tem mais palavras em comum. */
+export function matchSavedHouse(casa: string, grupo: string, houses: MatchableHouse[]): number | null {
+  const sheetWords = new Set(words(`${casa} ${grupo}`));
+  const sheetNumbers = new Set(numbers(casa));
+  let best: { id: number; score: number } | null = null;
+  for (const house of houses) {
+    const houseNumber = numbers(house.houseNumber).at(-1) ?? numbers(house.houseName).at(-1) ?? null;
+    const shared = [...new Set(words(`${house.houseName} ${house.neighborhood}`))].filter((word) => sheetWords.has(word)).length;
+    let score = 0;
+    if (houseNumber && sheetNumbers.size) {
+      if (!sheetNumbers.has(houseNumber) || shared === 0) continue;
+      score = 10 + shared;
+    } else if (!houseNumber && !sheetNumbers.size) {
+      const name = plain(house.houseName);
+      if (!name || name !== plain(casa)) continue;
+      score = 5 + shared;
+    } else continue;
+    if (!best || score > best.score) best = { id: house.id, score };
+  }
+  return best?.id ?? null;
+}

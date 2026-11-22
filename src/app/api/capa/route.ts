@@ -4,6 +4,7 @@ import { getActiveMember } from '@/lib/team-server';
 import { DRIVE_ID } from '@/lib/google/drive';
 import { COLLECTION_COLUMNS, LEGACY_COLLECTION_COLUMNS, PHOTO_COLUMNS, isMissingColumn, cleanEdited, collectionKind, collectionName, loadCollection, logCoverActivity, toPhoto, toSummary, touchCollection } from '@/lib/covers-server';
 import { parseKind, parsePlanned, photoLimit, type CollectionPostInfo } from '@/lib/covers';
+import { onlyShared } from '@/lib/google/driveAccess';
 
 // Pastas da aprovação de capa e da aprovação fotos (uma por casa). GET ?tipo=capa|fotos lista; POST cria uma pasta ou junta fotos numa existente.
 // Na aprovação fotos a pasta guarda no máximo 15 fotos (o carrossel).
@@ -82,6 +83,9 @@ export async function POST(request: NextRequest) {
   };
   const photos = (Array.isArray(body.photos) ? body.photos : []).filter((photo) => typeof photo?.id === 'string' && DRIVE_ID.test(photo.id) && photo.id !== 'root').slice(0, 500);
   if (photos.length === 0) return NextResponse.json({ error: 'no_photos' }, { status: 400, headers: noStore });
+  // só fotos de "Compartilhados comigo" (Meu Drive e drives compartilhados bloqueados)
+  const allowed = new Set(await onlyShared(photos.map((photo) => photo.id)).catch(() => [] as string[]));
+  if (photos.some((photo) => !allowed.has(photo.id))) return NextResponse.json({ error: 'blocked' }, { status: 403, headers: noStore });
 
   const admin = createAdminClient();
   let collectionId = Number(body.collectionId) || 0;

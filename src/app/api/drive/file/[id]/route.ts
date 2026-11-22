@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMember } from '@/lib/team-server';
 import { DRIVE_ID, DriveNotConnectedError, driveFetch } from '@/lib/google/drive';
+import { isSharedWithMe } from '@/lib/google/driveAccess';
 
 // Foto original do Drive, para o editor de recorte (mesma origem: o canvas pode exportar o corte).
 const MAX_BYTES = 60 * 1024 * 1024;
@@ -14,6 +15,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!DRIVE_ID.test(id) || id === 'root') return new NextResponse(null, { status: 400 });
 
   try {
+    // só o que veio de "Compartilhados comigo"
+    if (!(await isSharedWithMe(id))) return new NextResponse(null, { status: 403 });
     const meta = (await (await driveFetch(`/files/${id}`, { fields: 'mimeType,size', supportsAllDrives: 'true' })).json()) as {
       mimeType?: string;
       size?: string;

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { DRIVE_ID, DriveNotConnectedError, clampThumbSize, driveThumbnail } from '@/lib/google/drive';
+import { isSharedWithMe } from '@/lib/google/driveAccess';
 import { collectionFolders, imageInFolders } from '@/lib/coverFolder-server';
 
 // Imagem pública do link de capa: só entrega fotos daquela pasta de capa ou da pasta da casa no Drive ("Encontrar mais fotos").
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   try {
     if (!photo && !(await imageInFolders(fileId, await collectionFolders(admin, collection.id)).catch(() => null))) return new Response(null, { status: 404 });
+    if (!(await isSharedWithMe(fileId))) return new Response(null, { status: 404 });
     return await driveThumbnail(fileId, clampThumbSize(request.nextUrl.searchParams.get('s')), 'public, max-age=3600');
   } catch (error) {
     if (!(error instanceof DriveNotConnectedError)) console.error('Falha na imagem do link de capa:', error);
