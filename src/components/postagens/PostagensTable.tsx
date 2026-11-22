@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, Images, RefreshCw, Search } from 'lucide-react';
 import type { PrioritizedRow } from '@/lib/postagens';
 import { matchSavedHouse, type MatchableHouse } from '@/lib/house';
-import type { CoverStudioRequest } from '@/components/capas/CoverStudio';
+import { CoverStudioOverlay, type CoverStudioRequest } from '@/components/capas/CoverStudio';
 import { DRIVE_RETURN_KEY } from '@/components/drive/CoverApprovalPanel';
 
 // Tabela de postagens: a planilha "POSTAGENS INSTA 2025" do Drive, em ordem de prioridade (só leitura).
@@ -66,8 +66,11 @@ function HouseLink({ casa, houseId, onOpen, className = '' }: { casa: string; ho
   );
 }
 
-export function PostagensTable({ onOpenCovers }: { onOpenCovers?: (request: CoverStudioRequest) => void } = {}) {
+export function PostagensTable() {
   const [state, setState] = useState<State>({ status: 'loading' });
+  // capas da casa abertas por cima da tabela: fechar volta para cá do jeito que estava (busca, filtros, rolagem)
+  const [covers, setCovers] = useState<CoverStudioRequest | null>(null);
+  const onOpenCovers = setCovers;
   const [savedHouses, setSavedHouses] = useState<MatchableHouse[]>([]);
 
   // casas já salvas no "Selecionar capas" (kind 'capa'), para ligar cada linha da planilha à casa
@@ -274,6 +277,7 @@ export function PostagensTable({ onOpenCovers }: { onOpenCovers?: (request: Cove
           </ul>
         </>
       )}
+      {covers && <CoverStudioOverlay request={covers} backLabel="Tabela" onClose={() => setCovers(null)} />}
     </div>
   );
 }

@@ -171,17 +171,8 @@ function Mesh({ variant }: { variant: 'intro' | 'studio' }) {
 /** Vindo da Tabela de postagens: abrir direto a casa salva (houseId) ou buscar o nome dela no Drive (search). */
 export interface CoverStudioRequest { houseId: number | null; search: string }
 
-export function CoverStudio({ request = null }: { request?: CoverStudioRequest | null }) {
-  const reduce = useReducedMotion();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  // o círculo nasce no botão e volta para ele (mesmo caminho na ida e na volta); pedido da tabela: abre já aberto, do centro
-  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(() => (request && typeof window !== 'undefined' ? { x: window.innerWidth / 2, y: window.innerHeight / 2 } : null));
-  const [open, setOpen] = useState(() => Boolean(request));
-  const [closing, setClosing] = useState(false);
-  const [startView, setStartView] = useState<StudioView>(() => (request?.houseId ? 'casas' : 'drive'));
-  // o pedido vale só para a primeira abertura
-  const [pending, setPending] = useState(request);
-  const housesButtonRef = useRef<HTMLButtonElement>(null);
+/** Tema do estúdio (claro padrão; escuro se a pessoa escolheu, guardado em bh-capas-tema). */
+function useStudioTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       // tema claro é o padrão; escuro só se a pessoa escolheu
@@ -206,9 +197,65 @@ export function CoverStudio({ request = null }: { request?: CoverStudioRequest |
     }),
     [theme],
   );
+  return themeValue;
+}
+
+/**
+ * Estúdio aberto por cima de outra tela (Tabela de postagens): já na casa salva (houseId) ou buscando o nome no Drive.
+ * "Voltar" e o X fecham e devolvem para a tela de onde veio, do jeito que estava.
+ */
+export function CoverStudioOverlay({ request, backLabel, onClose }: { request: CoverStudioRequest; backLabel: string; onClose: () => void }) {
+  const reduce = useReducedMotion();
+  const themeValue = useStudioTheme();
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, []);
+
+  return (
+    <ThemeContext.Provider value={themeValue}>
+      {createPortal(
+        <motion.div
+          style={{ ...SF, ...THEME_VARS[themeValue.theme] }}
+          className="fixed inset-0 z-[70] overflow-hidden bg-[var(--bg)] text-[var(--fg)]"
+          initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
+          animate={closing ? { opacity: 0, scale: reduce ? 1 : 0.98 } : { opacity: 1, scale: 1 }}
+          transition={{ duration: closing ? 0.18 : 0.26, ease: EASE_OUT }}
+          onAnimationComplete={() => closing && onClose()}
+        >
+          <Mesh variant="studio" />
+          <Studio
+            initialView={request.houseId ? 'casas' : 'drive'}
+            initialHouseId={request.houseId}
+            initialSearch={request.search}
+            exitLabel={backLabel}
+            onClose={() => setClosing(true)}
+          />
+        </motion.div>,
+        document.body,
+      )}
+    </ThemeContext.Provider>
+  );
+}
+
+export function CoverStudio() {
+  const reduce = useReducedMotion();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // o círculo nasce no botão e volta para ele (mesmo caminho na ida e na volta)
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [startView, setStartView] = useState<StudioView>('drive');
+  const housesButtonRef = useRef<HTMLButtonElement>(null);
+  const themeValue = useStudioTheme();
+  const theme = themeValue.theme;
 
   const start = (view: StudioView = 'drive') => {
-    setPending(null);
     setStartView(view);
     const rect = (view === 'casas' ? housesButtonRef : buttonRef).current?.getBoundingClientRect();
     setOrigin(rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : { x: window.innerWidth / 2, y: window.innerHeight / 2 });
@@ -285,7 +332,7 @@ export function CoverStudio({ request = null }: { request?: CoverStudioRequest |
             {/* a cor do botão cobre a tela e se dissolve no fundo do estúdio */}
             <motion.div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: APPLE.blue }} initial={{ opacity: 1 }} animate={{ opacity: 0 }} transition={{ delay: reduce ? 0 : 0.45, duration: 0.5, ease: EASE_OUT }} />
             <Mesh variant="studio" />
-            <Studio initialView={startView} initialHouseId={pending?.houseId ?? null} initialSearch={pending?.search ?? ''} onClose={() => setClosing(true)} />
+            <Studio initialView={startView} onClose={() => setClosing(true)} />
           </motion.div>,
           document.body,
         )}
@@ -295,7 +342,8 @@ export function CoverStudio({ request = null }: { request?: CoverStudioRequest |
 }
 
 /** Conteúdo do estúdio: pastas do Drive → fotos da casa → salvar. */
-function Studio({ initialView, initialHouseId = null, initialSearch = '', onClose }: { initialView: StudioView; initialHouseId?: number | null; initialSearch?: string; onClose: () => void }) {
+/** exitLabel: aberto por cima de outra tela; o primeiro nível ganha "‹ exitLabel" que fecha (volta para lá). */
+function Studio({ initialView, initialHouseId = null, initialSearch = '', exitLabel, onClose }: { initialView: StudioView; initialHouseId?: number | null; initialSearch?: string; exitLabel?: string; onClose: () => void }) {
   const [drive, setDrive] = useState<'checking' | 'ok' | { canConnect: boolean }>('checking');
   const [view, setView] = useState<StudioView>(initialView);
   const [house, setHouse] = useState<HouseFolder | null>(null);
@@ -327,7 +375,7 @@ function Studio({ initialView, initialHouseId = null, initialSearch = '', onClos
   if (view === 'casas') {
     return (
       <div className="relative flex h-full flex-col">
-        <SavedHouses initialOpenId={initialHouseId} onClose={onClose} onOpenDrive={() => setView('drive')} />
+        <SavedHouses initialOpenId={initialHouseId} exitLabel={exitLabel} onClose={onClose} onOpenDrive={() => setView('drive')} />
       </div>
     );
   }
@@ -384,7 +432,7 @@ function Studio({ initialView, initialHouseId = null, initialSearch = '', onClos
               </motion.div>
             ) : (
               <motion.div key="browser" className="absolute inset-0" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40, transition: { duration: 0.2, ease: EASE_OUT } }} transition={{ duration: 0.32, ease: EASE_OUT }}>
-                <FolderBrowser initialQuery={initialSearch} saved={saved} onOpenHouse={setHouse} onClose={onClose} />
+                <FolderBrowser initialQuery={initialSearch} exitLabel={exitLabel} saved={saved} onOpenHouse={setHouse} onClose={onClose} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -472,7 +520,7 @@ function SearchField({ value, onChange, busy, placeholder }: { value: string; on
 }
 
 /** Pastas do Drive; a pasta com fotos abre a casa. Busca o Drive inteiro pelo nome da pasta. */
-function FolderBrowser({ initialQuery = '', saved, onOpenHouse, onClose }: { initialQuery?: string; saved: Map<string, string>; onOpenHouse: (folder: HouseFolder) => void; onClose: () => void }) {
+function FolderBrowser({ initialQuery = '', exitLabel, saved, onOpenHouse, onClose }: { initialQuery?: string; exitLabel?: string; saved: Map<string, string>; onOpenHouse: (folder: HouseFolder) => void; onClose: () => void }) {
   const [source, setSource] = useState<Source>('shared');
   const [path, setPath] = useState<Crumb[]>([]);
   const [entries, setEntries] = useState<DriveEntry[] | null>(null);
@@ -542,8 +590,8 @@ function FolderBrowser({ initialQuery = '', saved, onOpenHouse, onClose }: { ini
     <div className="h-full overflow-y-auto overscroll-contain">
       <Toolbar
         onClose={onClose}
-        onBack={path.length && !isSearch ? () => go(path.slice(0, -1)) : undefined}
-        backLabel={path.length > 1 ? path[path.length - 2].name : sourceLabel}
+        onBack={path.length && !isSearch ? () => go(path.slice(0, -1)) : exitLabel ? onClose : undefined}
+        backLabel={path.length && !isSearch ? (path.length > 1 ? path[path.length - 2].name : sourceLabel) : exitLabel ?? sourceLabel}
         title={isSearch ? 'Buscar no Drive' : current?.name ?? 'Selecionar capas'}
       />
 
@@ -1270,7 +1318,7 @@ function SavedHud({ result }: { result: SavedResult }) {
 const coverSrc = (photo: CoverPhoto) => photo.edited?.url ?? thumb(photo.driveId, 800);
 
 /** Casas com capas selecionadas (pastas kind 'capa'): busca, cartões com a capa; tocar mostra as capas da casa. */
-function SavedHouses({ initialOpenId = null, onClose, onOpenDrive }: { initialOpenId?: number | null; onClose: () => void; onOpenDrive: () => void }) {
+function SavedHouses({ initialOpenId = null, exitLabel, onClose, onOpenDrive }: { initialOpenId?: number | null; exitLabel?: string; onClose: () => void; onOpenDrive: () => void }) {
   const [houses, setHouses] = useState<CoverCollectionSummary[] | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -1310,12 +1358,12 @@ function SavedHouses({ initialOpenId = null, onClose, onOpenDrive }: { initialOp
       // escolhendo fotos novas (Adicionar fotos): Esc não sai da tela e não perde a seleção
       if (event.key !== 'Escape' || document.querySelector('[role="dialog"][aria-modal="true"], [data-adicionando]')) return;
       if (confirmId !== null) setConfirmId(null);
-      else if (openId !== null) setOpenId(null);
+      else if (openId !== null && !(exitLabel && openId === initialOpenId)) setOpenId(null);
       else onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [confirmId, openId, onClose]);
+  }, [confirmId, openId, onClose, exitLabel, initialOpenId]);
 
   const visible = useMemo(() => {
     const key = searchKey(query);
@@ -1330,11 +1378,11 @@ function SavedHouses({ initialOpenId = null, onClose, onOpenDrive }: { initialOp
       <AnimatePresence initial={false} mode="popLayout">
         {current ? (
           <motion.div key={`casa-${current.id}`} className="absolute inset-0 overflow-y-auto" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 40, transition: { duration: 0.2, ease: EASE_OUT } }} transition={{ duration: 0.32, ease: EASE_OUT }}>
-            <SavedHouseCovers house={current} onBack={() => setOpenId(null)} onClose={onClose} />
+            <SavedHouseCovers house={current} backLabel={exitLabel && openId === initialOpenId ? exitLabel : 'Casas'} onBack={() => (exitLabel && openId === initialOpenId ? onClose() : setOpenId(null))} onClose={onClose} />
           </motion.div>
         ) : (
           <motion.div key="casas" className="absolute inset-0 overflow-y-auto" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40, transition: { duration: 0.2, ease: EASE_OUT } }} transition={{ duration: 0.32, ease: EASE_OUT }}>
-            <Toolbar onClose={onClose} title="Casas com capas selecionadas">
+            <Toolbar onClose={onClose} onBack={exitLabel ? onClose : undefined} backLabel={exitLabel} title="Casas com capas selecionadas">
               <motion.button type="button" onClick={onOpenDrive} whileTap={PRESS} className="hidden h-9 items-center gap-1.5 rounded-full bg-[var(--fill2)] px-3.5 text-[14px] font-semibold hover:bg-[var(--fill3)] sm:inline-flex" style={{ color: APPLE.blue }}>
                 <Plus size={16} strokeWidth={2.4} aria-hidden="true" /> Adicionar Casa
               </motion.button>
@@ -1490,7 +1538,7 @@ function VideoViewer({ videos, index, onIndex, onClose }: { videos: DriveEntry[]
 }
 
 /** Capas selecionadas de uma casa (as favoritas, com o corte quando houver): tocar abre grande; "Adicionar fotos" abre a pasta da casa no Drive. */
-function SavedHouseCovers({ house, onBack, onClose }: { house: CoverCollectionSummary; onBack: () => void; onClose: () => void }) {
+function SavedHouseCovers({ house, backLabel = 'Casas', onBack, onClose }: { house: CoverCollectionSummary; backLabel?: string; onBack: () => void; onClose: () => void }) {
   const team = useTeam();
   const [detail, setDetail] = useState<CoverCollectionDetail | null>(null);
   const [error, setError] = useState('');
@@ -1595,7 +1643,7 @@ function SavedHouseCovers({ house, onBack, onClose }: { house: CoverCollectionSu
 
   return (
     <>
-      <Toolbar onClose={onClose} onBack={onBack} backLabel="Casas" title={label}>
+      <Toolbar onClose={onClose} onBack={onBack} backLabel={backLabel} title={label}>
         {team.can('criar_publicacoes') && (
           <motion.button type="button" onClick={() => void openAdd()} disabled={finding || !detail} whileTap={PRESS} className="inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-semibold text-white disabled:opacity-50" style={{ background: APPLE.blue }}>
             {finding ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Plus size={16} strokeWidth={2.4} aria-hidden="true" />} Adicionar fotos
