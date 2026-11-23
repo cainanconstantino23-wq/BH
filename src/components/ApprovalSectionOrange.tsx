@@ -5,9 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { uploadMedia } from '@/lib/uploadImage';
 import { MediaPreview } from '@/components/MediaPreview';
-import CreatePostModal, { type ApprovedPostInput } from '@/components/CreatePostModal';
-import { PublishStatusTag, publishStateOf } from '@/components/PublishStatusTag';
-import { PublishResultDialog, cancelScheduledPublish, publishToInstagram, type PublishResult } from '@/components/PublishResultDialog';
+import { StagePathBars, StageTimeline, STAGE_TONE, VideoTimeline } from '@/components/approval/VideoStages';
+import { STAGES, stageOf, stagePath, type ApprovalStage } from '@/lib/videoApproval';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
@@ -16,7 +15,7 @@ import { useFileDrop } from '@/lib/useFileDrop';
 import { MediaLightbox } from '@/components/media/MediaLightbox';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { findClosestFormat, findExactFormat, formatPlaceLabel, type InstagramFormat } from '@/lib/instagramFormats';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, Clock, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, History, ListChecks, RefreshCw, Crop, Check, Video } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, ListChecks, RefreshCw, Crop, Check, Video, ChevronRight } from 'lucide-react';
 
 interface ApprovalVersion {
   version: number;
@@ -66,9 +65,6 @@ const getErrorMessage = (error: unknown) => {
 
 const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name);
 
-const decisionLabel = (status: string) =>
-  status === 'approved' ? 'Aprovado' : status === 'changes_requested' ? 'Pediu ajustes' : status === 'rejected' ? 'Reprovado' : '';
-
 export default function ApprovalSectionOrange() {
   const team = useTeam();
   const [decisionComment, setDecisionComment] = useState('');
@@ -93,9 +89,17 @@ export default function ApprovalSectionOrange() {
   // data planejada: o vídeo já aparece na Grade do feed nessa data (planejamento do mês)
   const [plannedDate, setPlannedDate] = useState('');
   const [plannedHour, setPlannedHour] = useState(19);
-  // "Publicar" de um vídeo aprovado: tela de postagem (formato, legenda, data, horário)
-  const [publishPost, setPublishPost] = useState<ApprovedPostInput | null>(null);
-  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  // fila por etapas: grupos fechados ao entrar; tocar numa etapa abre só aquele
+  const [openStages, setOpenStages] = useState<Set<ApprovalStage>>(new Set());
+  // versão mostrada no detalhe (null = a atual)
+  const [viewVersion, setViewVersion] = useState<number | null>(null);
+  const toggleStage = (stage: ApprovalStage) =>
+    setOpenStages((current) => {
+      const next = new Set(current);
+      if (next.has(stage)) next.delete(stage);
+      else next.add(stage);
+      return next;
+    });
   const closeCreateModal = useCallback(() => setIsModalOpen(false), []);
   const createDismiss = useDismiss(isModalOpen, closeCreateModal, submitting || mediaLightboxOpen || imageEditorOpen);
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -714,106 +718,99 @@ export default function ApprovalSectionOrange() {
 
       {feedbackMessage && !isModalOpen && <p role="status" className="rounded-control border border-border bg-surface px-4 py-3 text-xs text-ink">{feedbackMessage}</p>}
 
+      <StageTimeline
+        counts={Object.fromEntries(STAGES.map((stage) => [stage.id, posts.filter((p) => stageOf(p.approval_status, p.versions.length) === stage.id).length])) as Record<ApprovalStage, number>}
+        active={openStages.size === 1 ? [...openStages][0] : null}
+        onPick={(stage) => setOpenStages(new Set([stage]))}
+      />
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.7fr)]">
         
         <div className="overflow-hidden cartao rounded-panel">
           <div className="flex items-center justify-between border-b border-border/70 p-4 text-[13px] font-semibold text-ink-muted">
-            <span>Fila de Aprovação</span>
+            <span>Fila de aprovação</span>
             <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-semibold text-brand-plum">{posts.length}</span>
           </div>
-          <div className="max-h-[600px] divide-y divide-border overflow-y-auto">
+          <div className="max-h-[640px] overflow-y-auto">
             {loading ? (
-              <div className="p-8 text-center text-xs text-ink-muted">A carregar...</div>
+              <div className="p-8 text-center text-xs text-ink-muted">Carregando…</div>
             ) : posts.length === 0 ? (
-              <div className="p-8 text-center text-xs text-ink-muted">Nenhum conteúdo em aprovação.</div>
+              <div className="p-8 text-center text-xs text-ink-muted">Nenhum vídeo em aprovação.</div>
             ) : (
-              <>
-                {[
-                  { key: 'aprovados', title: 'Aprovados', items: posts.filter((p) => p.approval_status === 'approved'), approved: true },
-                  { key: 'fila', title: 'Aguardando aprovação', items: posts.filter((p) => p.approval_status !== 'approved'), approved: false },
-                ].filter((group) => group.items.length > 0).map((group) => (
-                  <section key={group.key} aria-label={group.title}>
-                    <h3 className={`sticky top-0 z-10 flex items-center justify-between px-4 py-2 text-[13px] font-semibold ${
-                      group.approved ? 'bg-status-success-soft text-status-success' : 'bg-surface/90 text-ink-muted backdrop-blur-xl'
-                    }`}>
-                      <span className="flex items-center gap-1.5">
-                        {group.approved ? <CheckCircle2 size={13} aria-hidden="true" /> : <Clock size={13} aria-hidden="true" />}
-                        {group.title}
-                      </span>
-                      <span className="tabular-nums">{group.items.length}</span>
-                    </h3>
-                    <div className="divide-y divide-border">
-                      {group.items.map((p) => (
+              STAGES.map((stage) => {
+                const items = posts.filter((p) => stageOf(p.approval_status, p.versions.length) === stage.id);
+                const open = openStages.has(stage.id);
+                const tone = STAGE_TONE[stage.id];
+                return (
+                  <section key={stage.id} aria-label={stage.label} className="border-b border-border/70 last:border-b-0">
+                    <h3>
                       <button
-                        key={p.id}
                         type="button"
-                        aria-pressed={selectedPost?.id === p.id}
-                        onClick={() => setSelectedPost(p)}
-                        className={`flex min-h-[76px] w-full items-center gap-3 p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-accent ${
-                          selectedPost?.id === p.id
-                            ? 'bg-accent/10 shadow-[inset_3px_0_0_var(--color-accent)]'
-                            : p.approval_status === 'approved'
-                              ? 'bg-status-success-soft/40 shadow-[inset_3px_0_0_var(--color-status-success)] hover:bg-status-success-soft'
-                              : 'hover:bg-canvas/70'
-                        }`}
+                        aria-expanded={open}
+                        onClick={() => toggleStage(stage.id)}
+                        className="sticky top-0 z-10 flex min-h-11 w-full items-center gap-2 bg-surface/90 px-4 text-left text-[13px] font-semibold text-ink backdrop-blur-xl transition-colors hover:bg-surface-muted/80 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
                       >
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-control bg-canvas">
-                          <MediaPreview
-                            key={p.media_url}
-                            src={p.media_url}
-                            mediaType={p.media_type}
-                            alt={`Prévia da publicação de ${p.house_name}`}
-                            className="h-full w-full object-cover"
-                            cover
-                            muted
-                            loop
-                            autoPlay
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <span title={p.house_label} className="line-clamp-2 min-w-0 break-words text-sm font-semibold leading-snug text-ink">
-                              {p.house_label}
-                            </span>
-                            <span className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              p.approval_status === 'approved' ? 'border border-status-success-border bg-status-success-soft text-status-success' :
-                              p.approval_status === 'changes_requested' ? 'border border-status-warning-border bg-status-warning-soft text-status-warning' :
-                              p.approval_status === 'rejected' ? 'border border-status-danger-border bg-status-danger-soft text-status-danger' :
-                              'bg-canvas text-brand-plum'
-                            }`}>
-                              {p.approval_status === 'approved' ? <CheckCircle2 size={11} /> :
-                               p.approval_status === 'changes_requested' ? <AlertCircle size={11} /> :
-                               p.approval_status === 'rejected' ? <X size={11} /> : <Clock size={11} />}
-                              {p.approval_status === 'approved' ? 'Aprovado' :
-                               p.approval_status === 'changes_requested' ? 'Ajustes' :
-                               p.approval_status === 'rejected' ? 'Reprovado' : 'Pendente'}
-                            </span>
-                          </div>
-                          <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-                            {p.versions.length > 1 && (
-                              <span className="shrink-0 rounded bg-surface-muted px-1.5 py-px text-[10px] font-semibold text-ink">V{p.versions.length}</span>
-                            )}
-                            <span className="truncate">
-                              {p.scheduled_date && !p.auto_publish && p.publish_status !== 'published' ? `Planejado ${p.scheduled_date.split('-').reverse().slice(0, 2).join('/')} · ` : ''}
-                              {p.caption || 'Sem legenda'}
-                            </span>
-                          </p>
-                          {/* aprovação no selo acima; aqui a publicação no Instagram */}
-                          <div className="mt-1.5">
-                            <PublishStatusTag
-                              state={publishStateOf({ publishStatus: p.publish_status, autoPublish: p.auto_publish, scheduledDate: p.scheduled_date })}
-                              date={p.scheduled_date}
-                              hour={p.hour}
-                              noneLabel={p.approval_status === 'approved' ? 'Pronto para publicar' : 'Não publicado'}
-                            />
-                          </div>
-                        </div>
+                        <ChevronRight size={13} aria-hidden="true" className={`text-ink-muted transition-transform duration-200 ease-out motion-reduce:transition-none ${open ? 'rotate-90' : ''}`} />
+                        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${tone.dot}`} />
+                        {stage.label}
+                        <span className="ml-auto tabular-nums text-ink-muted">{items.length}</span>
                       </button>
-                      ))}
+                    </h3>
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                      <div className="overflow-hidden" inert={!open}>
+                        {items.length === 0 ? (
+                          <p className="px-4 pb-3 pt-1 text-xs text-ink-muted">Nenhum vídeo nesta etapa.</p>
+                        ) : (
+                          <div className="px-1.5 pb-1.5">
+                            {items.map((p) => {
+                              const selected = selectedPost?.id === p.id;
+                              const path = stagePath(p.approval_status, p.versions);
+                              const lastFeedback = p.versions.at(-1)?.feedback || p.client_feedback || '';
+                              const sentAt = p.versions.at(-1)?.created_at || p.created_at || '';
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  aria-pressed={selected}
+                                  onClick={() => { setSelectedPost(p); setViewVersion(null); }}
+                                  className={`grid w-full grid-cols-[2.75rem_1fr_auto] items-center gap-2.5 rounded-control p-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
+                                    selected ? 'bg-accent text-white' : 'hover:bg-surface-muted/80'
+                                  }`}
+                                >
+                                  <span className="h-11 w-11 overflow-hidden rounded-[0.6rem] bg-canvas">
+                                    <MediaPreview key={p.media_url} src={p.media_url} mediaType={p.media_type} alt="" className="h-full w-full object-cover" cover muted />
+                                  </span>
+                                  <span className="min-w-0">
+                                    <span title={p.house_label} className="block truncate text-[13px] font-semibold">{p.house_label}</span>
+                                    <span className={`mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] ${selected ? 'text-white/80' : 'text-ink-muted'}`}>
+                                      {p.versions.length > 1 && (
+                                        <span className={`shrink-0 rounded px-1 text-[10px] font-bold ${selected ? 'bg-white/20 text-white' : 'bg-surface-muted text-ink'}`}>V{p.versions.length}</span>
+                                      )}
+                                      <span className="truncate">
+                                        {stage.id === 'alteracao' && lastFeedback
+                                          ? `“${lastFeedback}”`
+                                          : stage.id === 'reprovado'
+                                            ? 'Não será publicado'
+                                            : p.scheduled_date
+                                              ? `Planejado ${p.scheduled_date.split('-').reverse().slice(0, 2).join('/')}`
+                                              : 'Sem data planejada'}
+                                      </span>
+                                    </span>
+                                    <StagePathBars path={path} label={`Caminho: ${path.map((id) => STAGES.find((s) => s.id === id)?.label).join(', ')}`} />
+                                  </span>
+                                  <span className={`self-start pt-0.5 text-[11px] tabular-nums ${selected ? 'text-white/80' : 'text-ink-muted'}`}>
+                                    {sentAt ? new Date(sentAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </section>
-                ))}
-              </>
+                );
+              })
             )}
           </div>
         </div>
@@ -824,11 +821,17 @@ export default function ApprovalSectionOrange() {
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
                 <div className="min-w-0 flex-1 basis-64">
                   <div className="flex flex-wrap items-center gap-2">
-                    {selectedPost.versions.length > 1 && (
-                      <span className="inline-flex rounded-full border border-border bg-canvas px-2.5 py-0.5 text-[10px] font-semibold text-ink">
-                        Versão {selectedPost.versions.length}
-                      </span>
-                    )}
+                    {(() => {
+                      const stage = stageOf(selectedPost.approval_status, selectedPost.versions.length);
+                      const tone = STAGE_TONE[stage];
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tone.soft} ${tone.text}`}>
+                          <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                          {STAGES.find((s) => s.id === stage)?.label}
+                          {selectedPost.versions.length > 1 ? ` · V${selectedPost.versions.length}` : ''}
+                        </span>
+                      );
+                    })()}
 
                     {/* Badge Realtime: Cliente Online */}
                     {activeViewers > 0 && (
@@ -903,79 +906,6 @@ export default function ApprovalSectionOrange() {
                 </div>
               </div>
 
-              {/* Destaque: vídeo aprovado logo no topo, com publicar / agendado / cancelar */}
-              {selectedPost.media_type === 'video' && selectedPost.approval_status === 'approved' && (
-                <div className="space-y-3 rounded-panel border-2 border-status-success-border bg-status-success-soft p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h4 className="flex items-center gap-2 text-base font-semibold text-status-success">
-                        <CheckCircle2 size={18} aria-hidden="true" />
-                        {selectedPost.publish_status === 'published' ? 'Vídeo publicado no Instagram' : selectedPost.auto_publish ? 'Vídeo aprovado e agendado' : 'Vídeo aprovado'}
-                      </h4>
-                      <p className="mt-1 text-sm text-ink">
-                        {selectedPost.publish_status === 'published'
-                          ? 'Publicado.'
-                          : selectedPost.publish_status === 'processing'
-                            ? 'Publicação em andamento (o Instagram está processando o vídeo).'
-                            : selectedPost.auto_publish && Boolean(selectedPost.scheduled_date)
-                              ? `Vai para o Instagram em ${(selectedPost.scheduled_date ?? '').split('-').reverse().join('/')}${selectedPost.hour !== null ? ` às ${String(selectedPost.hour).padStart(2, '0')}:00` : selectedPost.scheduled_time ? ` às ${selectedPost.scheduled_time}` : ''}.`
-                              : 'Pronto para publicar. Defina formato, legenda, data e horário.'}
-                      </p>
-                      {selectedPost.publish_status === 'error' && selectedPost.publish_error && (
-                        <p className="mt-1 text-xs text-status-danger">Última tentativa: {selectedPost.publish_error}</p>
-                      )}
-                    </div>
-                    {selectedPost.publish_status === 'published' ? (
-                      selectedPost.ig_permalink && (
-                        <a href={selectedPost.ig_permalink} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-plum underline underline-offset-2">Ver no Instagram</a>
-                      )
-                    ) : (
-                      team.can('editar_publicacoes') && team.can('reagendar_publicacoes') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPublishPost({
-                              id: Number(selectedPost.id),
-                              mediaUrl: selectedPost.media_url,
-                              isVideo: true,
-                              caption: selectedPost.caption,
-                              houseName: selectedPost.house_name,
-                              houseNumber: selectedPost.house_number,
-                              platform: selectedPost.platform,
-                              // abre com a data planejada (ou a agendada)
-                              scheduledDate: selectedPost.scheduled_date || undefined,
-                              hour: selectedPost.hour,
-                            });
-                          }}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-semibold text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                        >
-                          <Send size={14} aria-hidden="true" />
-                          {selectedPost.auto_publish && Boolean(selectedPost.scheduled_date) ? 'Editar publicação' : 'Publicar'}
-                        </button>
-                      )
-                    )}
-                  </div>
-                  {selectedPost.auto_publish && Boolean(selectedPost.scheduled_date) && selectedPost.publish_status !== 'published' && selectedPost.publish_status !== 'processing'
-                    && (team.can('publicar_instagram') || team.can('reagendar_publicacoes')) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!window.confirm('Cancelar o agendamento deste vídeo? Ele não vai mais ser publicado sozinho; continua aprovado e planejado na mesma data.')) return;
-                        const postId = selectedPost.id;
-                        void (async () => {
-                          setPublishResult({ state: 'working', text: 'Cancelando o agendamento…' });
-                          setPublishResult(await cancelScheduledPublish(postId));
-                          await refreshPosts();
-                        })();
-                      }}
-                      className="inline-flex min-h-10 items-center gap-2 rounded-control border border-status-danger-border bg-surface px-4 text-xs font-semibold text-status-danger hover:bg-status-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    >
-                      <XCircle size={14} aria-hidden="true" /> Cancelar agendamento
-                    </button>
-                  )}
-                </div>
-              )}
-
               {team.can('aprovar_publicacoes') && (
                 <div className="space-y-3 cartao rounded-panel p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1046,15 +976,37 @@ export default function ApprovalSectionOrange() {
               </div>}
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
-                <div className="flex max-h-[360px] min-h-[240px] items-center justify-center overflow-hidden rounded-panel bg-brand-plum">
-                  <MediaPreview
-                    key={selectedPost.media_url}
-                    src={selectedPost.media_url}
-                    mediaType={selectedPost.media_type}
-                    alt={`Mídia para ${selectedPost.house_label}`}
-                    controls={selectedPost.media_type === 'video'}
-                    className="h-full max-h-[360px] w-full object-contain"
-                  />
+                <div>
+                  {(() => {
+                    const shown = viewVersion !== null ? selectedPost.versions.find((version) => version.version === viewVersion) : undefined;
+                    const src = shown?.media_url || selectedPost.media_url;
+                    const type = shown ? (isVideoMedia(shown.media_url, shown.media_type) ? 'video' : 'image') : selectedPost.media_type;
+                    return (
+                      <div className="flex max-h-[360px] min-h-[240px] items-center justify-center overflow-hidden rounded-panel bg-brand-plum">
+                        <MediaPreview key={src} src={src} mediaType={type} alt={`Mídia para ${selectedPost.house_label}`} controls={type === 'video'} className="h-full max-h-[360px] w-full object-contain" />
+                      </div>
+                    );
+                  })()}
+                  {selectedPost.versions.length > 1 && (
+                    <div role="tablist" aria-label="Versões" className="mt-2 flex gap-1 rounded-control bg-surface-muted p-0.5">
+                      {selectedPost.versions.map((version) => {
+                        const current = version.version === selectedPost.versions.at(-1)?.version;
+                        const on = viewVersion === null ? current : viewVersion === version.version;
+                        return (
+                          <button
+                            key={version.version}
+                            type="button"
+                            role="tab"
+                            aria-selected={on}
+                            onClick={() => setViewVersion(current ? null : version.version)}
+                            className={`min-h-8 flex-1 rounded-[0.6rem] text-xs font-semibold transition-colors ${on ? 'bg-surface text-ink shadow-sm' : 'text-ink-muted hover:text-ink'}`}
+                          >
+                            V{version.version}{current ? ' · atual' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -1064,8 +1016,8 @@ export default function ApprovalSectionOrange() {
                       {selectedPost.caption || 'Sem legenda inserida.'}
                     </div>
 
-                    {selectedPost.versions.length > 1 ? (
-                      <VersionTimeline versions={selectedPost.versions} />
+                    {selectedPost.versions.length > 0 ? (
+                      <div className="mt-4"><VideoTimeline versions={selectedPost.versions} /></div>
                     ) : selectedPost.client_feedback ? (
                       <div className="mt-4">
                         <h4 className="mb-1.5 text-[13px] font-semibold text-status-warning">Feedback do cliente</h4>
@@ -1426,30 +1378,6 @@ export default function ApprovalSectionOrange() {
         </div>
       )}
 
-      {publishPost && (
-        <CreatePostModal
-          isOpen
-          approvedPost={publishPost}
-          allowPublishNow={team.can('publicar_instagram')}
-          onClose={() => setPublishPost(null)}
-          onPostCreated={(postId, publishNow, saved) => {
-            void (async () => {
-              if (publishNow && postId) {
-                setPublishResult({ state: 'working', text: 'Publicando no Instagram… vídeos podem levar alguns minutos.' });
-                setPublishResult(await publishToInstagram(postId));
-              } else if (saved) {
-                setPublishResult({ state: 'scheduled', ...saved });
-              }
-              await refreshPosts();
-            })();
-          }}
-        />
-      )}
-
-      {publishResult && (
-        <PublishResultDialog result={publishResult} label={selectedPost?.house_label} onClose={() => setPublishResult(null)} />
-      )}
-
       {sendState && (
         <SendProgress
           state={sendState}
@@ -1549,40 +1477,3 @@ function SendProgress({ state, onClose, onRetry }: { state: SendState; onClose: 
     </div>
   );
 }
-
-// Histórico do post para a equipe: cada versão com a resposta do aprovador.
-function VersionTimeline({ versions }: { versions: ApprovalVersion[] }) {
-  const latest = versions.at(-1)?.version;
-  return (
-    <div className="mt-4">
-      <h4 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-muted">
-        <History size={12} aria-hidden="true" /> Versões e respostas
-      </h4>
-      <ol className="space-y-2">
-        {[...versions].reverse().map((v) => {
-          const tone =
-            v.decision === 'approved' ? 'border-status-success-border bg-status-success-soft text-status-success'
-            : v.decision === 'changes_requested' ? 'border-status-warning-border bg-status-warning-soft text-status-warning'
-            : v.decision === 'rejected' ? 'border-status-danger-border bg-status-danger-soft text-status-danger'
-            : 'border-border bg-canvas text-ink-muted';
-          const when = v.created_at ? new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-          return (
-            <li key={v.version} className={`rounded-control border p-3 text-xs ${tone}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-semibold text-ink">
-                  V{v.version}
-                  {v.version === latest && <span className="ml-1 font-medium text-ink-muted">(atual)</span>}
-                </span>
-                <span className="font-semibold">{decisionLabel(v.decision) || (v.version === latest ? 'Aguardando resposta' : 'Sem resposta')}</span>
-              </div>
-              {when && <p className="mt-0.5 text-[11px] text-ink-muted">Enviada em {when}{v.created_by_label ? ` por ${v.created_by_label}` : ''}</p>}
-              {v.note && <p className="mt-1.5 text-ink"><span className="font-semibold">Mudou:</span> {v.note}</p>}
-              {v.feedback && <p className="mt-1.5 whitespace-pre-line font-medium">“{v.feedback}”</p>}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
