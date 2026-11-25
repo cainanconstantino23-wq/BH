@@ -5,8 +5,8 @@ import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { uploadMedia } from '@/lib/uploadImage';
 import { MediaPreview } from '@/components/MediaPreview';
-import { StagePathBars, StageTimeline, STAGE_TONE, VideoTimeline } from '@/components/approval/VideoStages';
-import { STAGES, stageOf, stagePath, type ApprovalStage } from '@/lib/videoApproval';
+import { GROUP_TONE, StagePathBars, StageTimeline, STAGE_TONE, VideoTimeline } from '@/components/approval/VideoStages';
+import { GROUPS, STAGES, groupOf, stageOf, stagePath, type ApprovalGroup } from '@/lib/videoApproval';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
@@ -89,11 +89,11 @@ export default function ApprovalSectionOrange() {
   // data planejada: o vídeo já aparece na Grade do feed nessa data (planejamento do mês)
   const [plannedDate, setPlannedDate] = useState('');
   const [plannedHour, setPlannedHour] = useState(19);
-  // fila por etapas: grupos fechados ao entrar; tocar numa etapa abre só aquele
-  const [openStages, setOpenStages] = useState<Set<ApprovalStage>>(new Set());
+  // fila em 3 grupos (Aguardando aprovação / Ajuste / Aprovado): fechados ao entrar; tocar num grupo abre só aquele
+  const [openStages, setOpenStages] = useState<Set<ApprovalGroup>>(new Set());
   // versão mostrada no detalhe (null = a atual)
   const [viewVersion, setViewVersion] = useState<number | null>(null);
-  const toggleStage = (stage: ApprovalStage) =>
+  const toggleStage = (stage: ApprovalGroup) =>
     setOpenStages((current) => {
       const next = new Set(current);
       if (next.has(stage)) next.delete(stage);
@@ -719,7 +719,7 @@ export default function ApprovalSectionOrange() {
       {feedbackMessage && !isModalOpen && <p role="status" className="rounded-control border border-border bg-surface px-4 py-3 text-xs text-ink">{feedbackMessage}</p>}
 
       <StageTimeline
-        counts={Object.fromEntries(STAGES.map((stage) => [stage.id, posts.filter((p) => stageOf(p.approval_status, p.versions.length) === stage.id).length])) as Record<ApprovalStage, number>}
+        counts={Object.fromEntries(GROUPS.map((group) => [group.id, posts.filter((p) => groupOf(stageOf(p.approval_status, p.versions.length)) === group.id).length])) as Record<ApprovalGroup, number>}
         active={openStages.size === 1 ? [...openStages][0] : null}
         onPick={(stage) => setOpenStages(new Set([stage]))}
       />
@@ -737,10 +737,10 @@ export default function ApprovalSectionOrange() {
             ) : posts.length === 0 ? (
               <div className="p-8 text-center text-xs text-ink-muted">Nenhum vídeo em aprovação.</div>
             ) : (
-              STAGES.map((stage) => {
-                const items = posts.filter((p) => stageOf(p.approval_status, p.versions.length) === stage.id);
+              GROUPS.map((stage) => {
+                const items = posts.filter((p) => groupOf(stageOf(p.approval_status, p.versions.length)) === stage.id);
                 const open = openStages.has(stage.id);
-                const tone = STAGE_TONE[stage.id];
+                const tone = GROUP_TONE[stage.id];
                 return (
                   <section key={stage.id} aria-label={stage.label} className="border-b border-border/70 last:border-b-0">
                     <h3>
@@ -759,12 +759,13 @@ export default function ApprovalSectionOrange() {
                     <div className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                       <div className="overflow-hidden" inert={!open}>
                         {items.length === 0 ? (
-                          <p className="px-4 pb-3 pt-1 text-xs text-ink-muted">Nenhum vídeo nesta etapa.</p>
+                          <p className="px-4 pb-3 pt-1 text-xs text-ink-muted">Nenhum vídeo neste grupo.</p>
                         ) : (
                           <div className="px-1.5 pb-1.5">
                             {items.map((p) => {
                               const selected = selectedPost?.id === p.id;
                               const path = stagePath(p.approval_status, p.versions);
+                              const itemStage = stageOf(p.approval_status, p.versions.length);
                               const lastFeedback = p.versions.at(-1)?.feedback || p.client_feedback || '';
                               const sentAt = p.versions.at(-1)?.created_at || p.created_at || '';
                               return (
@@ -787,9 +788,9 @@ export default function ApprovalSectionOrange() {
                                         <span className={`shrink-0 rounded px-1 text-[10px] font-bold ${selected ? 'bg-white/20 text-white' : 'bg-surface-muted text-ink'}`}>V{p.versions.length}</span>
                                       )}
                                       <span className="truncate">
-                                        {stage.id === 'alteracao' && lastFeedback
+                                        {itemStage === 'alteracao' && lastFeedback
                                           ? `“${lastFeedback}”`
-                                          : stage.id === 'reprovado'
+                                          : itemStage === 'reprovado'
                                             ? 'Não será publicado'
                                             : p.scheduled_date
                                               ? `Planejado ${p.scheduled_date.split('-').reverse().slice(0, 2).join('/')}`

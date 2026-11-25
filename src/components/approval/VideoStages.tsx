@@ -1,8 +1,8 @@
 'use client';
 
-import { Check, ChevronRight, Clock, PenLine, RotateCw, Upload, X } from 'lucide-react';
+import { Check, Clock, PenLine, RotateCw, Upload, X } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { STAGES, timelineEvents, type ApprovalStage, type TimelineVersion } from '@/lib/videoApproval';
+import { GROUPS, timelineEvents, type ApprovalGroup, type ApprovalStage, type TimelineVersion } from '@/lib/videoApproval';
 
 // Peças da Aprovação vídeos por etapas: cores, linha do tempo do topo e linha do tempo de cada vídeo.
 
@@ -14,44 +14,48 @@ export const STAGE_TONE: Record<ApprovalStage, { dot: string; text: string; soft
   reprovado: { dot: 'bg-status-danger', text: 'text-status-danger', soft: 'bg-status-danger-soft', icon: X },
 };
 
-/** Linha do tempo do topo: as 5 etapas com a contagem; tocar abre só aquele grupo da fila. */
-export function StageTimeline({ counts, active, onPick }: { counts: Record<ApprovalStage, number>; active: ApprovalStage | null; onPick: (stage: ApprovalStage) => void }) {
+/** Cores dos três grupos da fila. */
+export const GROUP_TONE: Record<ApprovalGroup, (typeof STAGE_TONE)[ApprovalStage]> = {
+  aguardando: STAGE_TONE.aguardando,
+  ajuste: STAGE_TONE.alteracao,
+  aprovado: STAGE_TONE.aprovado,
+};
+
+/** Topo da aba: os três grupos com a contagem; tocar abre só aquele grupo da fila. */
+export function StageTimeline({ counts, active, onPick }: { counts: Record<ApprovalGroup, number>; active: ApprovalGroup | null; onPick: (group: ApprovalGroup) => void }) {
   return (
-    <section aria-label="Etapas da aprovação" className="vidro rounded-panel p-3 sm:p-4">
-      <p className="mb-2.5 px-1 text-xs font-semibold text-ink-muted">Caminho de cada vídeo · toque numa etapa para abrir</p>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_1fr_1px_1fr_1fr] lg:items-stretch lg:gap-2">
-        {STAGES.map((stage, index) => {
-          const tone = STAGE_TONE[stage.id];
+    <section aria-label="Grupos da aprovação" className="vidro rounded-panel p-3 sm:p-4">
+      <p className="mb-2.5 px-1 text-xs font-semibold text-ink-muted">Onde está cada vídeo · toque num grupo para abrir</p>
+      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3 sm:gap-2">
+        {GROUPS.map((group) => {
+          const tone = GROUP_TONE[group.id];
           const Icon = tone.icon;
-          const on = active === stage.id;
+          const on = active === group.id;
           return (
-            <div key={stage.id} className="contents">
-              {index === 3 && <span aria-hidden="true" className="hidden self-center bg-border lg:block lg:h-3/4" />}
-              <button
-                type="button"
-                onClick={() => onPick(stage.id)}
-                aria-pressed={on}
-                className={`relative flex min-h-14 items-center gap-2.5 rounded-control px-2.5 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  on ? 'bg-accent/10 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]' : 'hover:bg-surface-muted/80'
-                }`}
-              >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white ${tone.dot}`}>
-                  <Icon size={15} strokeWidth={2.4} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold leading-tight text-ink">{stage.label}</span>
-                  <span className="block truncate text-[11px] text-ink-muted">{stage.hint}</span>
-                </span>
-                <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-muted">{counts[stage.id]}</span>
-                {index < 2 && <ChevronRight size={12} aria-hidden="true" className="absolute -right-2.5 top-1/2 hidden -translate-y-1/2 text-ink-muted/60 lg:block" />}
-              </button>
-            </div>
+            <button
+              key={group.id}
+              type="button"
+              onClick={() => onPick(group.id)}
+              aria-pressed={on}
+              className={`flex min-h-14 items-center gap-2.5 rounded-control px-2.5 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                on ? 'bg-accent/10 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-accent)_35%,transparent)]' : 'hover:bg-surface-muted/80'
+              }`}
+            >
+              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white ${tone.dot}`}>
+                <Icon size={15} strokeWidth={2.4} aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold leading-tight text-ink">{group.label}</span>
+                <span className="block truncate text-[11px] text-ink-muted">{group.hint}</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-ink-muted">{counts[group.id]}</span>
+            </button>
           );
         })}
       </div>
       <p className="mt-2.5 flex items-center gap-1.5 px-1 text-[11.5px] text-ink-muted">
         <RotateCw size={12} aria-hidden="true" className="text-status-warning" />
-        Ajustes pedidos → a equipe envia nova versão → volta para a Thereza responder
+        Ajuste → a equipe envia nova versão → volta para Aguardando aprovação
       </p>
     </section>
   );

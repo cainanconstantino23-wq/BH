@@ -23,6 +23,19 @@ export function stageOf(status: string, versionCount: number): ApprovalStage {
   return DECISION_STAGE[status] ?? (versionCount > 1 ? 'reenviado' : 'aguardando');
 }
 
+/** Grupos da fila (como na Edição do site Daime): cada etapa cai em um dos três. */
+export type ApprovalGroup = 'aguardando' | 'ajuste' | 'aprovado';
+
+export const GROUPS: { id: ApprovalGroup; label: string; hint: string; stages: ApprovalStage[] }[] = [
+  { id: 'aguardando', label: 'Aguardando aprovação', hint: 'V1 ou nova versão com a Thereza', stages: ['aguardando', 'reenviado'] },
+  { id: 'ajuste', label: 'Ajuste', hint: 'Ajustes pedidos ou reprovado', stages: ['alteracao', 'reprovado'] },
+  { id: 'aprovado', label: 'Aprovado', hint: 'Thereza aprovou', stages: ['aprovado'] },
+];
+
+export function groupOf(stage: ApprovalStage): ApprovalGroup {
+  return GROUPS.find((g) => g.stages.includes(stage))!.id;
+}
+
 interface VersionLike {
   version: number;
   decision: string;
