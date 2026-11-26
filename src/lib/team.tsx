@@ -118,6 +118,8 @@ export interface TeamMember {
   permissions: Permission[];
   created_at: string;
   approved_at: string | null;
+  /** Pastas do Drive (null/ausente = tudo); ler com parseDriveFolders(). */
+  drive_folders?: unknown;
 }
 
 export interface TeamSession {

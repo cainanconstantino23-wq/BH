@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Crop,
   FilePlus2,
+  FolderLock,
   FolderPlus,
   History,
   ImagePlus,
@@ -28,6 +29,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { parseDriveFolders } from '@/lib/google/driveScope';
+import { DriveFoldersEditor } from './DriveFoldersEditor';
 import {
   PERMISSION_GROUPS,
   PERMISSION_LABELS,
@@ -155,7 +158,7 @@ export function PeoplePanel() {
     const fetchMembers = async () => {
       const { data, error } = await supabase
         .from('team_members')
-        .select('user_id, email, full_name, role, status, permissions, created_at, approved_at')
+        .select('*')
         .order('created_at', { ascending: true });
       if (!active) return;
       if (error) setMessage({ tone: 'error', text: 'Não foi possível carregar a equipe. Recarregue a página.' });
@@ -335,6 +338,7 @@ export function PeoplePanel() {
           {active.map((member) => {
             const isMe = member.user_id === me.userId;
             const isEditing = editingId === member.user_id;
+            const driveFolders = parseDriveFolders(member.drive_folders);
             return (
               <li key={member.user_id} className="px-4 py-3">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -345,6 +349,12 @@ export function PeoplePanel() {
                     <p className="truncate text-xs text-ink-muted">
                       {member.email}, {PRESET_LABELS[presetFor(member.permissions)]} ({member.permissions.length} permissões)
                     </p>
+                    {driveFolders && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-status-info-soft px-2 py-0.5 text-[11px] font-semibold text-status-info">
+                        <FolderLock size={12} aria-hidden="true" />
+                        Drive: {driveFolders.length === 0 ? 'nenhuma pasta' : `${driveFolders.length} ${driveFolders.length === 1 ? 'pasta' : 'pastas'}`}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -406,6 +416,17 @@ export function PeoplePanel() {
                       >
                         Cancelar
                       </button>
+                    </div>
+                    <div className="border-t border-border pt-4">
+                      <DriveFoldersEditor
+                        key={JSON.stringify(driveFolders)}
+                        idPrefix={`edit-${member.user_id}`}
+                        value={driveFolders}
+                        busy={busyId === member.user_id}
+                        onSave={(next) =>
+                          void run(member.user_id, () => update(member.user_id, { drive_folders: next }), `Acesso ao Drive de ${displayName(member)} atualizado.`)
+                        }
+                      />
                     </div>
                   </div>
                 )}
@@ -607,6 +628,11 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
       const removed = permissionList(d.removidas);
       const note = [added && `Recebeu: ${added}`, removed && `Perdeu: ${removed}`].filter(Boolean).join('. ');
       return { icon: UserRoundCog, tone: 'text-status-info', text: `${who} alterou as permissões de ${str(d.pessoa)}`, note: note || undefined };
+    }
+    case 'equipe.drive_alterado': {
+      const folders = parseDriveFolders(d.pastas);
+      const scope = folders === null ? 'tudo' : folders.length === 0 ? 'nenhuma pasta' : `só ${folders.map((folder) => folder.name).join(', ')}`;
+      return { icon: FolderLock, tone: 'text-status-info', text: `${who} alterou o acesso ao Drive de ${str(d.pessoa)}: ${scope}` };
     }
     case 'capa.pasta_criada':
       return { icon: FolderPlus, tone: 'text-ink-muted', text: `${who} criou a pasta ${folderOf(d)}` };
