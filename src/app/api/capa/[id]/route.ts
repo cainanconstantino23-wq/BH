@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
+import { collectionVisibleTo } from '@/lib/coverFolder-server';
 import { cleanEdited, collectionKind, collectionName, isMissingColumn, loadCollection, logCoverActivity, saveEdited, touchCollection } from '@/lib/covers-server';
 import { parsePlanned } from '@/lib/covers';
 
@@ -13,6 +14,7 @@ const idFrom = async (params: Promise<{ id: string }>) => Number((await params).
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
   if (!member.can('ver_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const collection = await loadCollection(createAdminClient(), await idFrom(params)).catch(() => null);
   if (!collection) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
@@ -22,6 +24,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
   const id = await idFrom(params);
   const body = (await request.json().catch(() => ({}))) as {
     houseName?: string; neighborhood?: string; houseNumber?: string; photo?: string; favorite?: boolean; remove?: boolean; edited?: unknown;
@@ -108,6 +111,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
   if (!member.can('apagar_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const admin = createAdminClient();
   const id = await idFrom(params);

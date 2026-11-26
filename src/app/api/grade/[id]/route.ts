@@ -14,6 +14,8 @@ const planId = async (params: Promise<{ id: string }>) => Number((await params).
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('ver_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const admin = createAdminClient();
   try {
@@ -29,6 +31,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('criar_publicacoes') && !member.can('editar_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const id = await planId(params);
   const admin = createAdminClient();
@@ -62,6 +66,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('enviar_link_aprovacao')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const id = await planId(params);
   const { renew } = (await request.json().catch(() => ({}))) as { renew?: boolean };
@@ -87,6 +93,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('apagar_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const id = await planId(params);
   const admin = createAdminClient();

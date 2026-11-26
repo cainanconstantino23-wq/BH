@@ -10,6 +10,8 @@ const noStore = { 'Cache-Control': 'private, no-store' };
 export async function GET() {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('ver_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
   const admin = createAdminClient();
   const { data: rows, error } = await admin.from('feed_plans').select('*').order('start_date', { ascending: false }).limit(50);
@@ -24,6 +26,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a grade mistura casas de várias pastas: quem só vê algumas pastas do Drive não usa a grade
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
   if (!member.can('criar_publicacoes')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
 
   const body = (await request.json().catch(() => ({}))) as { startDate?: unknown; days?: unknown; hour?: unknown; collectionIds?: unknown };

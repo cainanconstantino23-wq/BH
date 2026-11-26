@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
 import { collectionName, loadCollection, logCoverActivity } from '@/lib/covers-server';
-import { parentsOf } from '@/lib/coverFolder-server';
+import { collectionVisibleTo, parentsOf } from '@/lib/coverFolder-server';
 import { canSeeDriveItem } from '@/lib/google/driveAccess';
 import { photoRecordLines, savedFileName } from '@/lib/coverDrive';
 import {
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const member = await getActiveMember();
   if (!member) return fail('unauthorized', 401);
   if (!member.can('criar_publicacoes') && !member.can('editar_publicacoes')) return fail('forbidden', 403);
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return fail('not_found', 404);
 
   const id = Number((await params).id) || 0;
   const body = (await request.json().catch(() => ({}))) as { folderId?: unknown; photos?: unknown };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
-import { collectionFolders } from '@/lib/coverFolder-server';
+import { collectionVisibleTo, collectionFolders } from '@/lib/coverFolder-server';
 import { onlyVisible } from '@/lib/google/driveAccess';
 import { DriveNotConnectedError, driveFetch } from '@/lib/google/drive';
 
@@ -20,6 +20,7 @@ const folderMeta = async (id: string): Promise<FolderMeta> =>
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
   const id = Number((await params).id) || 0;
   if (!id) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 

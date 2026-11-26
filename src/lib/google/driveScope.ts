@@ -8,9 +8,10 @@ export interface DriveFolder {
 
 const FOLDER_ID = /^[\w-]{10,}$/;
 
-/** Lê a coluna drive_folders: não-lista = null (tudo); itens inválidos são descartados. */
+/** Lê a coluna drive_folders: null/ausente = null (tudo); outro valor que não é lista = [] (nada); itens inválidos são descartados. */
 export function parseDriveFolders(value: unknown): DriveFolder[] | null {
-  if (!Array.isArray(value)) return null;
+  if (value === null || value === undefined) return null;
+  if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is DriveFolder => {
       const row = item as Partial<DriveFolder> | null;

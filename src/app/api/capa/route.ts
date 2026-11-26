@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
+import { collectionVisibleTo, visibleCollections } from '@/lib/coverFolder-server';
 import { DRIVE_ID } from '@/lib/google/drive';
 import { COLLECTION_COLUMNS, LEGACY_COLLECTION_COLUMNS, PHOTO_COLUMNS, isMissingColumn, cleanEdited, collectionKind, collectionName, loadCollection, logCoverActivity, toPhoto, toSummary, touchCollection } from '@/lib/covers-server';
 import { parseKind, parsePlanned, photoLimit, type CollectionPostInfo } from '@/lib/covers';
@@ -32,7 +33,8 @@ export async function GET(request: NextRequest) {
     console.error('Falha ao listar pastas de capa:', error.message);
     return NextResponse.json({ error: 'list_failed' }, { status: 500, headers: noStore });
   }
-  const rows = (rawRows ?? []) as unknown as Record<string, unknown>[];
+  // pessoa com pastas do Drive escolhidas: só as casas que vêm dessas pastas
+  const rows = await visibleCollections(admin, member, (rawRows ?? []) as unknown as Record<string, unknown>[]);
   const ids = rows.map((row) => Number(row.id));
   const { data: photoRows } = ids.length
     ? await admin.from('cover_collection_photos').select(PHOTO_COLUMNS).in('collection_id', ids).order('position', { ascending: true })
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
   if (collectionId) {
     const existingKind = await collectionKind(admin, collectionId);
     if (!existingKind) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
+    if (!(await collectionVisibleTo(admin, member, collectionId))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
     kind = existingKind;
   }
   const limit = photoLimit(kind);

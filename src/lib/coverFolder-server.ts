@@ -2,7 +2,8 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { driveFetch } from '@/lib/google/drive';
-import { onlyShared } from '@/lib/google/driveAccess';
+import { onlyShared, onlyVisible } from '@/lib/google/driveAccess';
+import type { DriveFolder } from '@/lib/google/driveScope';
 import { APPROVER_LABEL } from '@/lib/covers';
 
 // Pasta da casa no Drive para o link da aprovadora: as pastas onde estão as fotos já escolhidas pela equipe.
@@ -39,6 +40,25 @@ export async function collectionFolders(admin: SupabaseClient, collectionId: num
   const lists = await Promise.all((data ?? []).map((row) => parentsOf(String(row.drive_file_id)).catch(() => [])));
   // só pastas de "Compartilhados comigo" (Meu Drive bloqueado)
   return onlyShared([...new Set(lists.flat())]);
+}
+
+type DriveMember = { driveFolders: DriveFolder[] | null };
+
+/**
+ * Pastas do Drive por pessoa: a casa (pasta de capa/fotos) é visível se alguma pasta do Drive de onde vieram as fotos
+ * está nas pastas da pessoa. Quem vê tudo (driveFolders null) vê todas as casas.
+ */
+export async function collectionVisibleTo(admin: SupabaseClient, member: DriveMember, collectionId: number): Promise<boolean> {
+  if (!member.driveFolders) return true;
+  const folders = await collectionFolders(admin, collectionId).catch(() => [] as string[]);
+  return (await onlyVisible(member, folders)).length > 0;
+}
+
+/** Só as casas visíveis para a pessoa, na mesma ordem. */
+export async function visibleCollections<T extends Record<string, unknown>>(admin: SupabaseClient, member: DriveMember, rows: T[]): Promise<T[]> {
+  if (!member.driveFolders) return rows;
+  const checks = await Promise.all(rows.map((row) => collectionVisibleTo(admin, member, Number(row.id))));
+  return rows.filter((_, index) => checks[index]);
 }
 
 const toImage = (file: RawImage): FolderImage => {

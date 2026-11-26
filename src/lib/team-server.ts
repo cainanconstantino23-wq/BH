@@ -26,7 +26,7 @@ export async function getActiveMember(): Promise<ActiveMember | null> {
   const read = (columns: string) => supabase.from('team_members').select(columns).eq('user_id', user.id).maybeSingle();
   let { data, error } = await read('status, permissions, full_name, email, drive_folders');
   // migração 20261126_drive_pastas_membro.sql ainda não rodada: lê sem a coluna (todos veem o Drive como antes)
-  if (error && /drive_folders/.test(error.message)) ({ data, error } = await read('status, permissions, full_name, email'));
+  if (error?.code === '42703') ({ data, error } = await read('status, permissions, full_name, email'));
   const member = data as { status?: string; permissions?: string[]; full_name?: string | null; email?: string | null; drive_folders?: unknown } | null;
 
   if (!member || member.status !== 'ativo') return null;

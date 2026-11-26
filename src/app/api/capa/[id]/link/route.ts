@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
+import { collectionVisibleTo } from '@/lib/coverFolder-server';
 import { collectionKind, collectionName, logCoverActivity } from '@/lib/covers-server';
 
 // Link público da pasta (só as favoritas). Devolve o atual; { renew: true } troca por um novo e o antigo para de funcionar.
@@ -11,6 +12,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
   if (!member.can('enviar_link_aprovacao')) return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: noStore });
+  if (!(await collectionVisibleTo(createAdminClient(), member, Number((await params).id) || 0))) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 
   const id = Number((await params).id) || 0;
   const { renew } = (await request.json().catch(() => ({}))) as { renew?: boolean };

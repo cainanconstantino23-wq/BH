@@ -30,3 +30,9 @@ test('parseDriveFolders', () => {
   assert.deepEqual(parseDriveFolders([]), []);
   assert.deepEqual(parseDriveFolders([{ id: '1AbCdEfGhIjK', name: 'Teste' }, { id: 'x' }, 5]), [{ id: '1AbCdEfGhIjK', name: 'Teste' }]);
 });
+
+test('valor estranho na coluna restringe (nada), não libera tudo', () => {
+  assert.deepEqual(parseDriveFolders({}), []);
+  assert.deepEqual(parseDriveFolders('x'), []);
+  assert.deepEqual(parseDriveFolders(0), []);
+});
