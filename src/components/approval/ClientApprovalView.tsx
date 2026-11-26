@@ -19,6 +19,8 @@ export interface ClientApprovalVersion {
   decision: ApprovalDecision | null;
   feedback?: string;
   respondedAt?: string;
+  /** A decisão foi marcada pela equipe no painel, não pela aprovadora. */
+  decidedByTeam?: boolean;
 }
 
 export interface ClientApprovalMessage {
@@ -317,7 +319,11 @@ export function ClientApprovalView({ post, onRespond, onMessage, backHref }: Cli
             )}
             {answered ? (
               <>
-                <AnsweredState status={post.approvalStatus as ApprovalDecision} feedback={post.clientFeedback} />
+                <AnsweredState
+                  status={post.approvalStatus as ApprovalDecision}
+                  feedback={post.clientFeedback}
+                  byTeam={versions.find((v) => v.version === currentVersion)?.decidedByTeam ?? false}
+                />
                 {backHref && (
                   <Link
                     href={backHref}
@@ -438,7 +444,13 @@ export function ClientApprovalView({ post, onRespond, onMessage, backHref }: Cli
   );
 }
 
-function AnsweredState({ status, feedback }: { status: ApprovalDecision; feedback?: string }) {
+const TEAM_TITLE: Record<ApprovalDecision, string> = {
+  approved: 'A equipe marcou como aprovado',
+  changes_requested: 'A equipe marcou para ajustes',
+  rejected: 'A equipe marcou como reprovado',
+};
+
+function AnsweredState({ status, feedback, byTeam }: { status: ApprovalDecision; feedback?: string; byTeam: boolean }) {
   const option = decisions[status] ?? decisions.approved;
   const Icon = option.icon;
 
@@ -451,12 +463,12 @@ function AnsweredState({ status, feedback }: { status: ApprovalDecision; feedbac
         >
           <Icon size={20} strokeWidth={2} />
         </span>
-        <h2 className="text-[1.75rem] font-light leading-tight text-bh-tinta">{option.doneTitle}</h2>
+        <h2 className="text-[1.75rem] font-light leading-tight text-bh-tinta">{byTeam ? TEAM_TITLE[status] ?? option.doneTitle : option.doneTitle}</h2>
       </div>
       <p className="mt-3 text-base text-bh-tinta-suave">
-        Sua resposta foi registrada e a equipe Bahia Homes já pode vê-la.
+        {byTeam ? 'A equipe Bahia Homes atualizou o status deste conteúdo. Se quiser, escreva na conversa abaixo.' : 'Sua resposta foi registrada e a equipe Bahia Homes já pode vê-la.'}
       </p>
-      {feedback && (
+      {feedback && !byTeam && (
         <blockquote className="mt-5 border-l-2 border-bh-linha pl-4 text-base leading-[1.65] text-bh-tinta">
           {feedback}
         </blockquote>
@@ -497,14 +509,14 @@ function VersionHistory({
               {option && Icon ? (
                 <p className={`mt-1.5 flex items-center gap-1.5 text-[0.95rem] font-medium ${option.accent.split(' ').find((c) => c.startsWith('text-'))}`}>
                   <Icon aria-hidden="true" size={15} strokeWidth={2} />
-                  {option.doneTitle}
+                  {v.decidedByTeam ? TEAM_TITLE[v.decision as ApprovalDecision] : option.doneTitle}
                 </p>
               ) : (
                 <p className="mt-1.5 text-[0.95rem] text-bh-tinta-suave">
                   {v.version === currentVersion ? 'Aguardando sua resposta' : 'Sem resposta'}
                 </p>
               )}
-              {v.feedback && (
+              {v.feedback && !v.decidedByTeam && (
                 <p className="mt-2 whitespace-pre-line text-base leading-[1.6] text-bh-tinta">“{v.feedback}”</p>
               )}
             </li>

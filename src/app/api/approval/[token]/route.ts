@@ -33,7 +33,9 @@ function cleanToken(raw: string) {
   return TOKEN_PATTERN.test(token) ? token : null;
 }
 
-const VERSION_COLUMNS = 'version, media_url, media_type, caption, note, created_at, decision, feedback, responded_at';
+const VERSION_COLUMNS = 'version, media_url, media_type, caption, note, created_at, decision, feedback, responded_at, responded_by_label';
+// Rótulo gravado pelo banco quando a resposta veio deste link (sem login).
+const LINK_RESPONDER = 'Aprovador pelo link';
 
 function mediaKind(url: string, type: string): 'image' | 'video' {
   const rawType = type.toLowerCase();
@@ -53,6 +55,8 @@ function toClientVersion(row: Record<string, unknown>): ClientApprovalVersion {
     decision: DECISIONS.includes(decision) ? decision : null,
     feedback: readString(row.feedback),
     respondedAt: readString(row.responded_at),
+    // decisão marcada por alguém da equipe no painel (não pela aprovadora no link)
+    decidedByTeam: DECISIONS.includes(decision) && Boolean(readString(row.responded_by_label)) && readString(row.responded_by_label) !== LINK_RESPONDER,
   };
 }
 
