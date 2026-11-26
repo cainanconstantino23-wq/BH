@@ -68,3 +68,18 @@ test('groupOf junta as etapas em Aguardando aprovação, Ajuste e Aprovado', () 
   assert.equal(groupOf('aprovado'), 'aprovado');
   assert.deepEqual(GROUPS.flatMap((g) => g.stages).sort(), STAGES.map((s) => s.id).sort());
 });
+
+test('resposta anterior fica no caminho e na linha do tempo depois de voltar para aguardando', () => {
+  const past = { decision: 'changes_requested', feedback: 'não quero postar esse reels ainda', responded_at: '2026-11-26T13:34:10Z', responded_by_label: 'Aprovador pelo link', reopened_at: '2026-11-26T21:12:16Z', reopened_by: 'Cainan' };
+  const versions = [{ ...v(1), history: [past] }];
+  assert.deepEqual(stagePath('pending', versions), ['aguardando', 'alteracao', 'aguardando']);
+  assert.deepEqual(
+    timelineEvents(versions).map((e) => [e.kind, e.stage, e.text]),
+    [
+      ['enviado', 'aguardando', ''],
+      ['resposta', 'alteracao', 'não quero postar esse reels ainda'],
+      ['reaberto', 'aguardando', ''],
+      ['esperando', 'aguardando', ''],
+    ],
+  );
+});

@@ -92,7 +92,7 @@ export function VideoTimeline({ versions }: { versions: TimelineVersion[] }) {
       <ol className="cartao rounded-panel px-3 py-1">
         {events.map((event, index) => {
           const tone = STAGE_TONE[event.stage];
-          const Icon = event.kind === 'enviado' ? Upload : tone.icon;
+          const Icon = event.kind === 'enviado' || event.kind === 'reaberto' ? Upload : tone.icon;
           const last = index === events.length - 1;
           return (
             <li key={`${event.kind}-${event.version}-${index}`} className="relative grid grid-cols-[1.25rem_1fr] gap-2.5 py-2.5">
@@ -100,7 +100,7 @@ export function VideoTimeline({ versions }: { versions: TimelineVersion[] }) {
               {event.kind === 'esperando' ? (
                 <span aria-hidden="true" className="mt-0.5 h-5 w-5 rounded-full border-[1.5px] border-dashed border-ink-muted/60" />
               ) : (
-                <span aria-hidden="true" className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white ${event.kind === 'enviado' ? STAGE_TONE[event.stage].dot : tone.dot}`}>
+                <span aria-hidden="true" className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full text-white ${tone.dot}`}>
                   <Icon size={11} strokeWidth={2.8} />
                 </span>
               )}
@@ -108,6 +108,8 @@ export function VideoTimeline({ versions }: { versions: TimelineVersion[] }) {
                 <p className={`text-[13px] font-semibold ${event.kind === 'esperando' ? 'text-ink-muted' : 'text-ink'}`}>
                   {event.kind === 'esperando'
                     ? 'Aguardando a resposta da Thereza'
+                    : event.kind === 'reaberto'
+                      ? 'Voltou para aguardando aprovação'
                     : event.kind === 'enviado'
                       ? EVENT_TITLE.enviado(event.version)
                       : EVENT_TITLE[event.stage as 'aprovado' | 'alteracao' | 'reprovado']}

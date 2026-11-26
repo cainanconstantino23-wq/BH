@@ -6,7 +6,7 @@ import { isVideoMedia } from '@/lib/media';
 import { uploadMedia } from '@/lib/uploadImage';
 import { MediaPreview } from '@/components/MediaPreview';
 import { GROUP_TONE, StagePathBars, StageTimeline, STAGE_TONE, VideoTimeline } from '@/components/approval/VideoStages';
-import { GROUPS, STAGES, groupOf, stageOf, stagePath, type ApprovalGroup } from '@/lib/videoApproval';
+import { GROUPS, STAGES, groupOf, stageOf, stagePath, type ApprovalGroup, type PastResponse } from '@/lib/videoApproval';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
@@ -29,6 +29,7 @@ interface ApprovalVersion {
   feedback: string;
   responded_at: string;
   responded_by_label: string;
+  history: PastResponse[];
 }
 
 interface ApprovalPost {
@@ -142,13 +143,14 @@ export default function ApprovalSectionOrange() {
     if (error) throw error;
 
     // Versões de cada post (V1, V2...). Sem a tabela, a fila funciona só com a versão atual.
-    const { data: versionData, error: versionError } = await supabase
-      .from('post_versions')
-      .select('post_id, version, media_url, media_type, caption, note, created_at, created_by_label, decision, feedback, responded_at, responded_by_label')
-      .order('version', { ascending: true });
+    // history (respostas anteriores) vem da migração 20261126b; sem ela, lê sem a coluna.
+    const versionColumns = 'post_id, version, media_url, media_type, caption, note, created_at, created_by_label, decision, feedback, responded_at, responded_by_label';
+    const readVersions = (columns: string) => supabase.from('post_versions').select(columns).order('version', { ascending: true });
+    let { data: versionData, error: versionError } = await readVersions(`${versionColumns}, history`);
+    if (versionError) ({ data: versionData, error: versionError } = await readVersions(versionColumns));
     if (versionError) console.warn('Não foi possível carregar as versões:', versionError.message);
     const versionsByPost = new Map<string, ApprovalVersion[]>();
-    for (const raw of (versionData ?? []) as Record<string, unknown>[]) {
+    for (const raw of (versionData ?? []) as unknown as Record<string, unknown>[]) {
       const text = (value: unknown) => (typeof value === 'string' ? value : '');
       const key = String(raw.post_id);
       const list = versionsByPost.get(key) ?? [];
@@ -164,6 +166,14 @@ export default function ApprovalSectionOrange() {
         feedback: text(raw.feedback),
         responded_at: text(raw.responded_at),
         responded_by_label: text(raw.responded_by_label),
+        history: (Array.isArray(raw.history) ? raw.history : []).map((h: Record<string, unknown>) => ({
+          decision: text(h.decision),
+          feedback: text(h.feedback),
+          responded_at: text(h.responded_at),
+          responded_by_label: text(h.responded_by_label),
+          reopened_at: text(h.reopened_at),
+          reopened_by: text(h.reopened_by),
+        })),
       });
       versionsByPost.set(key, list);
     }

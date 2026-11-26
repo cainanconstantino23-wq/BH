@@ -36,9 +36,21 @@ export function groupOf(stage: ApprovalStage): ApprovalGroup {
   return GROUPS.find((g) => g.stages.includes(stage))!.id;
 }
 
+/** Resposta anterior na mesma versão (a equipe voltou o vídeo para aguardando, ou veio outra resposta). */
+export interface PastResponse {
+  decision: string;
+  feedback: string;
+  responded_at: string;
+  responded_by_label: string;
+  /** Preenchido quando a equipe devolveu o vídeo para "Aguardando aprovação". */
+  reopened_at: string;
+  reopened_by: string;
+}
+
 interface VersionLike {
   version: number;
   decision: string;
+  history?: PastResponse[];
 }
 
 /** Caminho do vídeo: cada envio (aguardando / reenviado) seguido da resposta, se houve. */
@@ -49,8 +61,15 @@ export function stagePath(status: string, versions: VersionLike[]): ApprovalStag
   }
   return versions.flatMap((v, index) => {
     const sent: ApprovalStage = index === 0 ? 'aguardando' : 'reenviado';
+    const path: ApprovalStage[] = [sent];
+    for (const past of v.history ?? []) {
+      const old = DECISION_STAGE[past.decision];
+      if (old) path.push(old);
+      if (past.reopened_at) path.push(sent);
+    }
     const answer = DECISION_STAGE[v.decision];
-    return answer ? [sent, answer] : [sent];
+    if (answer) path.push(answer);
+    return path;
   });
 }
 
@@ -64,7 +83,7 @@ export interface TimelineVersion extends VersionLike {
 }
 
 export interface TimelineEvent {
-  kind: 'enviado' | 'resposta' | 'esperando';
+  kind: 'enviado' | 'resposta' | 'reaberto' | 'esperando';
   stage: ApprovalStage;
   version: number;
   /** ISO; vazio em "esperando". */
@@ -80,6 +99,11 @@ export function timelineEvents(versions: TimelineVersion[]): TimelineEvent[] {
   versions.forEach((v, index) => {
     const sent: ApprovalStage = index === 0 ? 'aguardando' : 'reenviado';
     events.push({ kind: 'enviado', stage: sent, version: v.version, at: v.created_at, by: v.created_by_label, text: v.note });
+    for (const past of v.history ?? []) {
+      const old = DECISION_STAGE[past.decision];
+      if (old) events.push({ kind: 'resposta', stage: old, version: v.version, at: past.responded_at, by: past.responded_by_label, text: past.feedback });
+      if (past.reopened_at) events.push({ kind: 'reaberto', stage: sent, version: v.version, at: past.reopened_at, by: past.reopened_by, text: '' });
+    }
     const answer = DECISION_STAGE[v.decision];
     if (answer) events.push({ kind: 'resposta', stage: answer, version: v.version, at: v.responded_at, by: v.responded_by_label, text: v.feedback });
     else if (index === versions.length - 1) events.push({ kind: 'esperando', stage: sent, version: v.version, at: '', by: '', text: '' });
