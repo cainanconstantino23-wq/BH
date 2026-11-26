@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { driveFetch } from '@/lib/google/drive';
+import { type DriveFolder, isWithinFolders } from '@/lib/google/driveScope';
 
 // REGRA DO PROJETO (21/11/2026): o app só enxerga o que está em "Compartilhados comigo" no Drive conectado.
 // "Meu Drive" e os drives compartilhados (de equipe) ficam bloqueados para todos, inclusive por ID direto.
@@ -43,6 +44,39 @@ export async function isSharedWithMe(fileId: string): Promise<boolean> {
   }
   // chegou na raiz do Meu Drive (sem pasta de cima) ou subiu demais
   return remember(seen, false);
+}
+
+// ---------------------------------------------------------------
+// Pastas por pessoa (26/11/2026): membro com team_members.drive_folders só vê essas pastas e o que está abaixo.
+// A regra de cima (Compartilhados comigo) vale antes; a de pastas só restringe mais.
+
+type DriveMember = { driveFolders: DriveFolder[] | null } | null;
+
+const parentCache = new Map<string, { parents: string[]; at: number }>();
+
+const cachedParents = async (id: string): Promise<string[] | null> => {
+  const hit = parentCache.get(id);
+  if (hit && Date.now() - hit.at < TTL) return hit.parents;
+  const row = await meta(id).catch(() => null);
+  if (!row) return null;
+  if (parentCache.size > 5000) parentCache.clear();
+  const parents = row.parents ?? [];
+  parentCache.set(id, { parents, at: Date.now() });
+  return parents;
+};
+
+/** O membro pode ver este arquivo ou pasta? (Compartilhados comigo + pastas dele, se restrito.) */
+export async function canSeeDriveItem(member: DriveMember, id: string): Promise<boolean> {
+  if (!(await isSharedWithMe(id))) return false;
+  const folders = member?.driveFolders;
+  if (!folders) return true;
+  return isWithinFolders(id, new Set(folders.map((folder) => folder.id)), cachedParents);
+}
+
+/** Só os IDs que o membro pode ver, na mesma ordem. */
+export async function onlyVisible(member: DriveMember, ids: string[]): Promise<string[]> {
+  const checks = await Promise.all(ids.map(async (id) => ((await canSeeDriveItem(member, id)) ? id : null)));
+  return checks.filter((id): id is string => id !== null);
 }
 
 /** Só os IDs liberados, na mesma ordem. */
