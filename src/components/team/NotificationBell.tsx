@@ -8,7 +8,7 @@ import { describeActivity, type ActivityRow } from '@/components/team/TeamPanel'
 
 // Ações que geram notificação para quem acompanha o histórico.
 const NOTIFY_ACTIONS = [
-  'post.criado', 'post.aprovado', 'post.ajustes_solicitados', 'post.reprovado', 'equipe.cadastro',
+  'post.criado', 'post.aprovado', 'post.ajustes_solicitados', 'post.reprovado', 'post.mensagem', 'equipe.cadastro',
   'capa.respondido', 'capa.capas_adicionadas_aprovadora', 'grade.aprovada', 'grade.casa_recusada', 'grade.cortes_salvos', 'grade.cortes_drive_falhou',
 ];
 

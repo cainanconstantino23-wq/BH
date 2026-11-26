@@ -75,6 +75,36 @@ export default function ClientApprovalPage() {
     };
   }, [token, isReady]);
 
+  // Página aberta: busca mensagens novas da equipe a cada 20 s (sem contar acesso)
+  useEffect(() => {
+    if (!token || !isReady) return;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      fetch(`/api/approval/${encodeURIComponent(token)}?atualizar=1`, { cache: 'no-store' })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const { post } = (await response.json()) as { post: ClientApprovalPost };
+          setState((prev) => (prev.status === 'ready' ? { status: 'ready', post } : prev));
+        })
+        .catch(() => {});
+    }, 20000);
+    return () => window.clearInterval(timer);
+  }, [token, isReady]);
+
+  const handleMessage = async (message: string) => {
+    const response = await fetch(`/api/approval/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    const result = (await response.json().catch(() => ({}))) as { post?: ClientApprovalPost; error?: string };
+    if (response.ok && result.post) {
+      setState({ status: 'ready', post: result.post });
+      return;
+    }
+    throw new Error(responseErrors[result.error ?? ''] ?? `erro ${response.status}`);
+  };
+
   const handleRespond = async (decision: ApprovalDecision, feedback: string, version: number) => {
     const response = await fetch(`/api/approval/${encodeURIComponent(token)}`, {
       method: 'POST',
@@ -112,7 +142,7 @@ export default function ClientApprovalPage() {
     );
   }
 
-  return <ClientApprovalView key={state.post.currentVersion ?? 1} post={state.post} onRespond={handleRespond} backHref={backHref} />;
+  return <ClientApprovalView key={state.post.currentVersion ?? 1} post={state.post} onRespond={handleRespond} onMessage={handleMessage} backHref={backHref} />;
 }
 
 function StatusScreen({ children }: { children: React.ReactNode }) {

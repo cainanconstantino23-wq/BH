@@ -110,3 +110,43 @@ export function timelineEvents(versions: TimelineVersion[]): TimelineEvent[] {
   });
   return events;
 }
+
+/** Rótulo gravado pelo banco quando a resposta veio do link (sem login). */
+export const LINK_RESPONDER = 'Aprovador pelo link';
+
+export interface ChatMessage {
+  id: number;
+  author_kind: 'equipe' | 'aprovadora';
+  author_id: string;
+  author_label: string;
+  body: string;
+  created_at: string;
+}
+
+export type ChatItem =
+  | { kind: 'enviado'; stage: ApprovalStage; version: number; at: string; by: string; text: string }
+  /** Decisão: fromLink = resposta da Thereza pelo link; senão alguém da equipe mudou o status. */
+  | { kind: 'decisao'; stage: ApprovalStage; version: number; at: string; by: string; text: string; fromLink: boolean }
+  | { kind: 'reaberto'; stage: ApprovalStage; version: number; at: string; by: string }
+  | { kind: 'mensagem'; message: ChatMessage; at: string }
+  | { kind: 'esperando'; stage: ApprovalStage };
+
+/** Conversa do vídeo: envios, decisões e mensagens em ordem de horário; "esperando" no fim, se for o caso. */
+export function chatItems(versions: TimelineVersion[], messages: ChatMessage[]): ChatItem[] {
+  const timed: Exclude<ChatItem, { kind: 'esperando' }>[] = [];
+  let waiting: ChatItem | null = null;
+  for (const event of timelineEvents(versions)) {
+    if (event.kind === 'esperando') waiting = { kind: 'esperando', stage: event.stage };
+    else if (event.kind === 'resposta')
+      timed.push({ kind: 'decisao', stage: event.stage, version: event.version, at: event.at, by: event.by, text: event.text, fromLink: !event.by || event.by === LINK_RESPONDER });
+    else if (event.kind === 'reaberto') timed.push({ kind: 'reaberto', stage: event.stage, version: event.version, at: event.at, by: event.by });
+    else timed.push({ kind: 'enviado', stage: event.stage, version: event.version, at: event.at, by: event.by, text: event.text });
+  }
+  for (const message of messages) timed.push({ kind: 'mensagem', message, at: message.created_at });
+  const time = (at: string) => (at ? new Date(at).getTime() : 0);
+  const sorted = timed
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => time(a.item.at) - time(b.item.at) || a.index - b.index)
+    .map(({ item }) => item);
+  return waiting ? [...sorted, waiting] : sorted;
+}

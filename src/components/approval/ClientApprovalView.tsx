@@ -21,6 +21,14 @@ export interface ClientApprovalVersion {
   respondedAt?: string;
 }
 
+export interface ClientApprovalMessage {
+  id: number;
+  from: 'equipe' | 'aprovadora';
+  author: string;
+  text: string;
+  at: string;
+}
+
 export interface ClientApprovalPost {
   houseName: string;
   caption: string;
@@ -33,11 +41,14 @@ export interface ClientApprovalPost {
   clientFeedback?: string;
   currentVersion?: number;
   versions?: ClientApprovalVersion[];
+  messages?: ClientApprovalMessage[];
 }
 
 interface ClientApprovalViewProps {
   post: ClientApprovalPost;
   onRespond: (decision: ApprovalDecision, feedback: string, version: number) => Promise<void>;
+  /** Mensagem para a equipe no chat (não muda a resposta). */
+  onMessage?: (message: string) => Promise<void>;
   /** Quando o post foi aberto pela lista de aprovação: volta para ela. */
   backHref?: string;
 }
@@ -135,7 +146,7 @@ function formatSentAt(value?: string) {
 
 const isTallFormat = (format?: string) => ['REEL', 'STORY'].includes((format ?? '').toUpperCase());
 
-export function ClientApprovalView({ post, onRespond, backHref }: ClientApprovalViewProps) {
+export function ClientApprovalView({ post, onRespond, onMessage, backHref }: ClientApprovalViewProps) {
   const [choice, setChoice] = useState<ApprovalDecision | null>(null);
   const [feedback, setFeedback] = useState(post.clientFeedback ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -418,6 +429,8 @@ export function ClientApprovalView({ post, onRespond, backHref }: ClientApproval
             )}
           </section>
 
+          {onMessage && <Conversation messages={post.messages ?? []} onSend={onMessage} />}
+
           {hasVersions && <VersionHistory versions={versions} currentVersion={currentVersion} onView={setViewedVersion} />}
         </div>
       </div>
@@ -498,6 +511,85 @@ function VersionHistory({
           );
         })}
       </ol>
+    </section>
+  );
+}
+
+function Conversation({ messages, onSend }: { messages: ClientApprovalMessage[]; onSend: (message: string) => Promise<void> }) {
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const fieldId = useId();
+
+  const send = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const message = text.trim();
+    if (!message || sending) return;
+    setSending(true);
+    setError('');
+    try {
+      await onSend(message);
+      setText('');
+    } catch (err) {
+      const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
+      setError(`A mensagem não foi enviada${detail}. Tente de novo.`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <section className="mt-10 border-t border-bh-linha pt-6" aria-label="Conversa com a equipe">
+      <h2 className="text-[1.375rem] font-normal text-bh-tinta">Conversa com a equipe</h2>
+      {messages.length === 0 ? (
+        <p className="mt-2 text-[0.95rem] text-bh-tinta-suave">Nenhuma mensagem ainda. Escreva se quiser falar com a equipe.</p>
+      ) : (
+        <ol className="mt-4 space-y-3" aria-live="polite">
+          {messages.map((m) => {
+            const mine = m.from === 'aprovadora';
+            return (
+              <li key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                <div className="max-w-[85%]">
+                  <p className={`mb-1 text-[0.85rem] text-bh-tinta-suave ${mine ? 'text-right' : ''}`}>
+                    {mine ? 'Você' : m.author}
+                    {formatSentAt(m.at) ? ` · ${formatSentAt(m.at)}` : ''}
+                  </p>
+                  <p
+                    className={`whitespace-pre-line rounded-2xl px-4 py-2.5 text-base leading-[1.55] ${
+                      mine ? 'rounded-tr-md bg-bh-mata text-white' : 'rounded-tl-md border border-bh-linha bg-bh-papel text-bh-tinta'
+                    }`}
+                  >
+                    {m.text}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      <form onSubmit={send} className="mt-5">
+        <label htmlFor={fieldId} className="block text-[0.95rem] font-medium text-bh-tinta">
+          Escrever para a equipe
+        </label>
+        <textarea
+          id={fieldId}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={3}
+          maxLength={2000}
+          className="mt-2 w-full resize-y rounded-xl border border-bh-linha bg-bh-papel p-3.5 text-base leading-[1.55] text-bh-tinta placeholder:text-bh-tinta-suave focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata"
+          placeholder="Sua mensagem"
+        />
+        {error && <p role="alert" className="mt-2 text-[0.95rem] text-bh-madeira">{error}</p>}
+        <button
+          type="submit"
+          disabled={sending || !text.trim()}
+          className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-bh-tinta/85 px-5 text-base font-medium text-white transition-colors duration-150 ease-out hover:bg-bh-tinta focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bh-mata disabled:opacity-50"
+        >
+          {sending && <LoaderCircle aria-hidden="true" size={18} className="animate-spin motion-reduce:animate-none" />}
+          {sending ? 'Enviando…' : 'Enviar mensagem'}
+        </button>
+      </form>
     </section>
   );
 }

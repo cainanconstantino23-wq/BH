@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { isVideoMedia } from '@/lib/media';
 import { uploadMedia } from '@/lib/uploadImage';
 import { MediaPreview } from '@/components/MediaPreview';
-import { GROUP_TONE, StagePathBars, StageTimeline, STAGE_TONE, VideoTimeline } from '@/components/approval/VideoStages';
-import { GROUPS, STAGES, groupOf, stageOf, stagePath, type ApprovalGroup, type PastResponse } from '@/lib/videoApproval';
+import { GROUP_TONE, StagePathBars, StageTimeline, STAGE_TONE } from '@/components/approval/VideoStages';
+import { ApprovalChat } from '@/components/approval/ApprovalChat';
+import { GROUPS, STAGES, groupOf, stageOf, stagePath, type ApprovalGroup, type ChatMessage, type PastResponse } from '@/lib/videoApproval';
 import { useTeam } from '@/lib/team';
 import { useDismiss } from '@/lib/useDismiss';
 import { guessHouseFromFileName, houseLabel } from '@/lib/house';
@@ -15,7 +16,7 @@ import { useFileDrop } from '@/lib/useFileDrop';
 import { MediaLightbox } from '@/components/media/MediaLightbox';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { findClosestFormat, findExactFormat, formatPlaceLabel, type InstagramFormat } from '@/lib/instagramFormats';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, ListChecks, RefreshCw, Crop, Check, Video, ChevronRight, Clock } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, CheckCircle2, AlertCircle, Eye, Sparkles, Loader2, Upload, ListChecks, RefreshCw, Crop, Check, Video, ChevronRight } from 'lucide-react';
 
 interface ApprovalVersion {
   version: number;
@@ -38,6 +39,7 @@ interface ApprovalPost {
   house_number: string;
   house_label: string;
   versions: ApprovalVersion[];
+  messages: ChatMessage[];
   caption: string;
   media_url: string;
   media_type: 'image' | 'video';
@@ -68,8 +70,7 @@ const isVideoFile = (file: File) => file.type.startsWith('video/') || /\.(mp4|mo
 
 export default function ApprovalSectionOrange() {
   const team = useTeam();
-  const [decisionComment, setDecisionComment] = useState('');
-  const [deciding, setDeciding] = useState(false);
+  const refreshPostsRef = useRef<() => Promise<void>>(async () => {});
   const [posts, setPosts] = useState<ApprovalPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPost, setSelectedPost] = useState<ApprovalPost | null>(null);
@@ -178,6 +179,27 @@ export default function ApprovalSectionOrange() {
       versionsByPost.set(key, list);
     }
 
+    // Conversa de cada vídeo (migração 20261126c). Sem a tabela, o chat mostra só envios e decisões.
+    const { data: messageData, error: messageError } = await supabase
+      .from('post_messages')
+      .select('id, post_id, author_kind, author_id, author_label, body, created_at')
+      .order('created_at', { ascending: true });
+    if (messageError) console.warn('Não foi possível carregar as mensagens:', messageError.message);
+    const messagesByPost = new Map<string, ChatMessage[]>();
+    for (const raw of (messageData ?? []) as Record<string, unknown>[]) {
+      const key = String(raw.post_id);
+      const list = messagesByPost.get(key) ?? [];
+      list.push({
+        id: Number(raw.id),
+        author_kind: raw.author_kind === 'aprovadora' ? 'aprovadora' : 'equipe',
+        author_id: typeof raw.author_id === 'string' ? raw.author_id : '',
+        author_label: typeof raw.author_label === 'string' ? raw.author_label : '',
+        body: typeof raw.body === 'string' ? raw.body : '',
+        created_at: typeof raw.created_at === 'string' ? raw.created_at : '',
+      });
+      messagesByPost.set(key, list);
+    }
+
     // Aprovação vídeos lista só vídeos; fotos e carrosséis ficam na Aprovação fotos.
     const rows = ((data ?? []) as Record<string, unknown>[]).filter((item) => {
       const text = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -203,6 +225,7 @@ export default function ApprovalSectionOrange() {
         house_number: houseNumberValue,
         house_label: houseLabel(houseNameValue, houseNumberValue) || 'Casa',
         versions: versionsByPost.get(String(id)) ?? [],
+        messages: messagesByPost.get(String(id)) ?? [],
         approval_status: stringValue(item.approval_status) || 'pending',
         approval_token: stringValue(item.approval_token) || String(id),
         views_count: typeof item.views_count === 'number' ? item.views_count : 0,
@@ -286,7 +309,16 @@ export default function ApprovalSectionOrange() {
       )
       .subscribe();
 
+    // 3. Mensagem nova (da Thereza pelo link) ou apagada: recarrega a conversa
+    const chatChannel = supabase
+      .channel(`chat_${selectedPost.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_messages', filter: `post_id=eq.${selectedPost.id}` }, () => {
+        void refreshPostsRef.current();
+      })
+      .subscribe();
+
     return () => {
+      supabase.removeChannel(chatChannel);
       supabase.removeChannel(presenceChannel);
       supabase.removeChannel(dbChannel);
     };
@@ -322,6 +354,9 @@ export default function ApprovalSectionOrange() {
       setFeedbackMessage(`Não foi possível atualizar a fila: ${getErrorMessage(error)}`);
     }
   };
+  useEffect(() => {
+    refreshPostsRef.current = refreshPosts;
+  });
 
   const readMediaDims = (selectedFile: File) => {
     setMediaDims(null);
@@ -592,28 +627,6 @@ export default function ApprovalSectionOrange() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const decide = async (postId: string | number, status: 'pending' | 'approved' | 'changes_requested' | 'rejected') => {
-    if (status === 'changes_requested' && !decisionComment.trim()) {
-      setFeedbackMessage('Escreva o que precisa mudar antes de pedir ajustes.');
-      return;
-    }
-    setDeciding(true);
-    const { error } = await supabase
-      .from('posts')
-      .update({ approval_status: status, client_feedback: status === 'pending' ? null : decisionComment.trim() || null })
-      .eq('id', postId);
-    setDeciding(false);
-    if (error) {
-      setFeedbackMessage(`Não foi possível registrar a decisão: ${getErrorMessage(error)}`);
-      return;
-    }
-    setDecisionComment('');
-    await refreshPosts();
-    setFeedbackMessage(
-      status === 'approved' ? 'Publicação aprovada.' : status === 'changes_requested' ? 'Pedido de ajustes registrado.' : status === 'pending' ? 'Voltou para aguardando aprovação.' : 'Publicação reprovada.',
-    );
   };
 
   const copyApprovalLink = async (rawToken: string, postId: string | number) => {
@@ -917,52 +930,6 @@ export default function ApprovalSectionOrange() {
                 </div>
               </div>
 
-              {team.can('aprovar_publicacoes') && (
-                <div className="space-y-3 cartao rounded-panel p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-ink">Sua decisão</h4>
-                    {selectedPost.approval_status !== 'pending' && (
-                      <span className="text-xs text-ink-muted">
-                        Situação atual:{' '}
-                        {selectedPost.approval_status === 'approved' ? 'aprovado' : selectedPost.approval_status === 'changes_requested' ? 'ajustes pedidos' : selectedPost.approval_status === 'rejected' ? 'reprovado' : 'pendente'}
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    value={decisionComment}
-                    onChange={(event) => setDecisionComment(event.target.value)}
-                    rows={2}
-                    maxLength={2000}
-                    aria-label="Comentário da decisão"
-                    placeholder="Comentário (obrigatório para pedir ajustes)"
-                    className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  />
-                  <div role="group" aria-label="Status da aprovação" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {([
-                      ['pending', 'Aguardando aprovação', Clock, 'border border-border bg-white/80 text-ink hover:bg-surface-muted', 'ring-2 ring-ink/40'],
-                      ['approved', 'Aprovar', CheckCircle2, 'bg-accent text-white hover:bg-accent-hover', 'ring-2 ring-accent/50'],
-                      ['changes_requested', 'Pedir ajustes', MessageSquareWarning, 'border border-status-warning-border bg-status-warning-soft text-status-warning hover:bg-status-warning-border', 'ring-2 ring-status-warning/50'],
-                      ['rejected', 'Reprovar', XCircle, 'border border-status-danger-border bg-status-danger-soft text-status-danger hover:bg-status-danger-border', 'ring-2 ring-status-danger/50'],
-                    ] as const).map(([value, label, Icon, tone, ring]) => {
-                      const current = (selectedPost.approval_status || 'pending') === value;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={current}
-                          disabled={deciding || current}
-                          onClick={() => void decide(selectedPost.id, value)}
-                          title={current ? 'Status atual' : undefined}
-                          className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ${tone} ${current ? `${ring} ring-offset-1 disabled:opacity-100` : 'disabled:opacity-50'}`}
-                        >
-                          <Icon size={14} aria-hidden="true" /> {current && value === 'approved' ? 'Aprovado' : current && value === 'changes_requested' ? 'Ajustes pedidos' : current && value === 'rejected' ? 'Reprovado' : label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
               {team.can('enviar_link_aprovacao') && <div className="space-y-3 rounded-panel border border-border bg-canvas p-4">
                 <label htmlFor="approval-link" className="block text-[13px] font-semibold text-ink-muted">
                   Link exclusivo de aprovação para o cliente
@@ -1040,7 +1007,23 @@ export default function ApprovalSectionOrange() {
                     </div>
 
                     {selectedPost.versions.length > 0 ? (
-                      <div className="mt-4"><VideoTimeline versions={selectedPost.versions} /></div>
+                      <div className="mt-4">
+                        <ApprovalChat
+                          key={`${selectedPost.id}-${selectedPost.approval_status}`}
+                          postId={selectedPost.id}
+                          status={selectedPost.approval_status}
+                          versions={selectedPost.versions}
+                          messages={selectedPost.messages}
+                          currentVersion={selectedPost.versions.at(-1)?.version ?? 1}
+                          userId={team.userId}
+                          canDecide={team.can('aprovar_publicacoes')}
+                          canWrite={team.can('aprovar_publicacoes') || team.can('enviar_link_aprovacao') || team.can('editar_publicacoes')}
+                          onChanged={async (notice) => {
+                            await refreshPosts();
+                            setFeedbackMessage(notice);
+                          }}
+                        />
+                      </div>
                     ) : selectedPost.client_feedback ? (
                       <div className="mt-4">
                         <h4 className="mb-1.5 text-[13px] font-semibold text-status-warning">Feedback do cliente</h4>

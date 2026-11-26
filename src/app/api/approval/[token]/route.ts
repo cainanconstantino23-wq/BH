@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import type {
   ApprovalDecision,
   ApprovalStatus,
+  ClientApprovalMessage,
   ClientApprovalPost,
   ClientApprovalVersion,
 } from '@/components/approval/ClientApprovalView';
@@ -55,7 +56,18 @@ function toClientVersion(row: Record<string, unknown>): ClientApprovalVersion {
   };
 }
 
-function toClientPost(row: Record<string, unknown>, versionRows: Record<string, unknown>[]): ClientApprovalPost {
+function toClientMessage(row: Record<string, unknown>): ClientApprovalMessage {
+  const team = row.author_kind === 'equipe';
+  return {
+    id: Number(row.id),
+    from: team ? 'equipe' : 'aprovadora',
+    author: team ? readString(row.author_label) || 'Equipe' : 'Você',
+    text: readString(row.body),
+    at: readString(row.created_at),
+  };
+}
+
+function toClientPost(row: Record<string, unknown>, versionRows: Record<string, unknown>[], messageRows: Record<string, unknown>[] = []): ClientApprovalPost {
   const mediaUrl = readString(row.image_url);
   const status = readString(row.approval_status) as ApprovalStatus;
   const versions = versionRows.map(toClientVersion).sort((a, b) => a.version - b.version);
@@ -72,6 +84,7 @@ function toClientPost(row: Record<string, unknown>, versionRows: Record<string, 
     clientFeedback: readString(row.client_feedback),
     currentVersion: versions.at(-1)?.version ?? 1,
     versions,
+    messages: messageRows.map(toClientMessage),
   };
 }
 
@@ -89,6 +102,20 @@ async function loadVersions(supabase: ReturnType<typeof createAdminClient>, post
   return (data ?? []) as Record<string, unknown>[];
 }
 
+// Conversa com a equipe (migração 20261126c). Sem a tabela, o link funciona sem o chat.
+async function loadMessages(supabase: ReturnType<typeof createAdminClient>, postId: unknown) {
+  const { data, error } = await supabase
+    .from('post_messages')
+    .select('id, author_kind, author_label, body, created_at')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('Não foi possível carregar as mensagens do post:', error.message);
+    return [];
+  }
+  return (data ?? []) as Record<string, unknown>[];
+}
+
 async function findPost(token: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -99,7 +126,7 @@ async function findPost(token: string) {
   return { supabase, row: data as Record<string, unknown> | null, error };
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const token = cleanToken((await params).token);
   if (!token) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 
@@ -110,12 +137,15 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
   if (!row) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 
-  const views = (typeof row.views_count === 'number' ? row.views_count : 0) + 1;
-  const { error: viewError } = await supabase.from('posts').update({ views_count: views }).eq('id', row.id);
-  if (viewError) console.warn('Não foi possível registrar a visualização:', viewError.message);
+  // ?atualizar=1: a página aberta busca mensagens novas sem contar outro acesso
+  if (!new URL(request.url).searchParams.has('atualizar')) {
+    const views = (typeof row.views_count === 'number' ? row.views_count : 0) + 1;
+    const { error: viewError } = await supabase.from('posts').update({ views_count: views }).eq('id', row.id);
+    if (viewError) console.warn('Não foi possível registrar a visualização:', viewError.message);
+  }
 
-  const versions = await loadVersions(supabase, row.id);
-  return NextResponse.json({ post: toClientPost(row, versions) }, { headers: noStore });
+  const [versions, messages] = await Promise.all([loadVersions(supabase, row.id), loadMessages(supabase, row.id)]);
+  return NextResponse.json({ post: toClientPost(row, versions, messages) }, { headers: noStore });
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -127,6 +157,31 @@ export async function POST(request: Request, { params }: RouteParams) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'invalid_body' }, { status: 400, headers: noStore });
+  }
+
+  // Mensagem da Thereza no chat (não muda o status)
+  const rawMessage = (body as { message?: unknown })?.message;
+  if (typeof rawMessage === 'string') {
+    const text = rawMessage.trim();
+    if (!text) return NextResponse.json({ error: 'message_empty' }, { status: 400, headers: noStore });
+    if (text.length > MAX_FEEDBACK_LENGTH) return NextResponse.json({ error: 'feedback_too_long' }, { status: 400, headers: noStore });
+    const found = await findPost(token);
+    if (found.error) return NextResponse.json({ error: 'lookup_failed' }, { status: 500, headers: noStore });
+    if (!found.row) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
+    const versionsNow = await loadVersions(found.supabase, found.row.id);
+    const { error: insertError } = await found.supabase.from('post_messages').insert({
+      post_id: found.row.id,
+      version: versionsNow.at(-1)?.version ?? 1,
+      author_kind: 'aprovadora',
+      author_label: 'Thereza (link de aprovação)',
+      body: text,
+    });
+    if (insertError) {
+      console.error('Falha ao gravar mensagem do link de aprovação:', insertError.message);
+      return NextResponse.json({ error: 'message_failed' }, { status: 500, headers: noStore });
+    }
+    const messagesNow = await loadMessages(found.supabase, found.row.id);
+    return NextResponse.json({ post: toClientPost(found.row, versionsNow, messagesNow) }, { headers: noStore });
   }
 
   const decision = (body as { decision?: unknown })?.decision;
@@ -157,7 +212,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const latestVersion = versionsBefore.reduce((max, v) => Math.max(max, typeof v.version === 'number' ? v.version : 0), 0);
   if (answeredVersion !== null && latestVersion > 0 && answeredVersion !== latestVersion) {
     return NextResponse.json(
-      { error: 'new_version', post: toClientPost(row, versionsBefore) },
+      { error: 'new_version', post: toClientPost(row, versionsBefore, await loadMessages(supabase, row.id)) },
       { status: 409, headers: noStore },
     );
   }
@@ -177,11 +232,11 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
   if (!updated) {
     return NextResponse.json(
-      { error: 'already_answered', post: toClientPost(row, versionsBefore) },
+      { error: 'already_answered', post: toClientPost(row, versionsBefore, await loadMessages(supabase, row.id)) },
       { status: 409, headers: noStore },
     );
   }
 
-  const versionsAfter = await loadVersions(supabase, row.id);
-  return NextResponse.json({ post: toClientPost(updated as Record<string, unknown>, versionsAfter) }, { headers: noStore });
+  const [versionsAfter, messagesAfter] = await Promise.all([loadVersions(supabase, row.id), loadMessages(supabase, row.id)]);
+  return NextResponse.json({ post: toClientPost(updated as Record<string, unknown>, versionsAfter, messagesAfter) }, { headers: noStore });
 }

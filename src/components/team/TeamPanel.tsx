@@ -603,6 +603,8 @@ export function describeActivity(row: ActivityRow): { icon: LucideIcon; tone: st
       return { icon: CalendarClock, tone: 'text-status-info', text: `${who} mudou ${title} de ${formatSlot(d.de)} para ${formatSlot(d.para)}` };
     case 'post.apagado':
       return { icon: Trash2, tone: 'text-status-danger', text: `${who} apagou ${title}` };
+    case 'post.mensagem':
+      return { icon: MessageSquareWarning, tone: 'text-accent', text: `Thereza escreveu no chat de ${title}`, note: comment };
     case 'post.aprovado':
       return { icon: CheckCircle2, tone: 'text-status-success', text: `${who} aprovou ${title}`, note: comment };
     case 'post.ajustes_solicitados':

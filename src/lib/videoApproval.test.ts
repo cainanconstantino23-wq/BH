@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GROUPS, STAGES, groupOf, stageOf, stagePath, timelineEvents } from './videoApproval.ts';
+import { GROUPS, STAGES, chatItems, groupOf, stageOf, stagePath, timelineEvents } from './videoApproval.ts';
 
 const v = (version: number, decision = '', extra: Record<string, string> = {}) => ({
   version, decision, created_at: `2026-11-${10 + version}T12:00:00Z`, created_by_label: 'Ana', note: '', feedback: '', responded_at: '', responded_by_label: '', ...extra,
@@ -82,4 +82,18 @@ test('resposta anterior fica no caminho e na linha do tempo depois de voltar par
       ['esperando', 'aguardando', ''],
     ],
   );
+});
+
+test('chatItems junta envios, decisões e mensagens por horário', () => {
+  const versions = [{
+    ...v(1, 'changes_requested', { feedback: 'Olá Thereza', responded_at: '2026-11-26T21:23:00Z', responded_by_label: 'Cainan' }),
+    history: [{ decision: 'changes_requested', feedback: 'não quero ainda', responded_at: '2026-11-26T13:34:00Z', responded_by_label: 'Aprovador pelo link', reopened_at: '2026-11-26T21:12:00Z', reopened_by: 'Cainan' }],
+  }];
+  const msg = (id: number, at: string, kind: 'equipe' | 'aprovadora' = 'equipe') => ({ id, author_kind: kind, author_id: 'u', author_label: 'X', body: `m${id}`, created_at: at });
+  const items = chatItems(versions, [msg(1, '2026-11-26T21:20:00Z'), msg(2, '2026-11-26T09:00:00Z', 'aprovadora')]);
+  assert.deepEqual(items.map((i) => i.kind === 'decisao' ? `decisao:${i.fromLink}` : i.kind === 'mensagem' ? `m${i.message.id}` : i.kind), [
+    'enviado', 'm2', 'decisao:true', 'reaberto', 'm1', 'decisao:false',
+  ]);
+  const pending = chatItems([v(1)], [msg(3, '2026-11-20T00:00:00Z')]);
+  assert.deepEqual(pending.map((i) => i.kind), ['enviado', 'mensagem', 'esperando']);
 });
