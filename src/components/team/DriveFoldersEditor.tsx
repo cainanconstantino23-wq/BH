@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, Folder, Search, X } from 'lucide-react';
+import { Check, ChevronRight, Folder, Search, X } from 'lucide-react';
 import type { DriveFolderHit } from '@/app/api/drive/search/route';
 import type { DriveFolder } from '@/lib/google/driveScope';
 
@@ -56,7 +56,7 @@ export function DriveFoldersEditor({
   }, [restricted, text]);
 
   const chosen = new Set((draft ?? []).map((folder) => folder.id));
-  const add = (hit: DriveFolderHit) => {
+  const add = (hit: DriveFolder) => {
     if (chosen.has(hit.id)) return;
     setDraft([...(draft ?? []), { id: hit.id, name: hit.name }]);
     setQuery('');
@@ -97,7 +97,7 @@ export function DriveFoldersEditor({
               value={query}
               disabled={busy}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar pasta pelo nome…"
+              placeholder="Buscar pasta pelo nome (ou navegue abaixo)…"
               autoComplete="off"
               className="min-h-9 w-full rounded-control border border-border bg-surface pl-8 pr-3 text-xs text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
@@ -128,6 +128,8 @@ export function DriveFoldersEditor({
               )}
             </div>
           )}
+
+          {text.length < 2 && <FolderBrowser chosen={chosen} onPick={add} busy={busy} />}
 
           {draft.length === 0 ? (
             <p className="text-xs text-status-warning">Nenhuma pasta escolhida: a pessoa não verá nada do Drive.</p>
@@ -164,5 +166,148 @@ export function DriveFoldersEditor({
         </button>
       )}
     </div>
+  );
+}
+
+interface ListResult {
+  key: string;
+  folders: DriveFolder[];
+  nextPage: string | null;
+  error: boolean;
+}
+
+const listUrl = (folder: string, page?: string | null) =>
+  `/api/drive/list?folder=${encodeURIComponent(folder)}${page ? `&page=${encodeURIComponent(page)}` : ''}`;
+
+async function fetchFolders(folder: string, page?: string | null): Promise<{ folders: DriveFolder[]; nextPage: string | null }> {
+  const response = await fetch(listUrl(folder, page), { cache: 'no-store' });
+  const body = (await response.json().catch(() => ({}))) as { entries?: { id: string; name: string; kind: string }[]; nextPage?: string | null };
+  if (!response.ok) throw new Error(String(response.status));
+  return {
+    folders: (body.entries ?? []).filter((entry) => entry.kind === 'folder').map(({ id, name }) => ({ id, name })),
+    nextPage: body.nextPage ?? null,
+  };
+}
+
+/** Navega nas pastas do Drive (a partir de "Compartilhados comigo") para escolher quais liberar. */
+function FolderBrowser({ chosen, onPick, busy }: { chosen: ReadonlySet<string>; onPick: (folder: DriveFolder) => void; busy: boolean }) {
+  const [path, setPath] = useState<DriveFolder[]>([]);
+  const [result, setResult] = useState<ListResult | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const current = path.at(-1)?.id ?? 'shared';
+  const loading = result?.key !== current;
+
+  useEffect(() => {
+    let active = true;
+    fetchFolders(current)
+      .then((data) => active && setResult({ key: current, ...data, error: false }))
+      .catch(() => active && setResult({ key: current, folders: [], nextPage: null, error: true }));
+    return () => {
+      active = false;
+    };
+  }, [current]);
+
+  const loadMore = async () => {
+    if (!result?.nextPage) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchFolders(current, result.nextPage);
+      setResult((prev) => (prev && prev.key === current ? { ...prev, folders: [...prev.folders, ...data.folders], nextPage: data.nextPage } : prev));
+    } catch {
+      setResult((prev) => (prev ? { ...prev, nextPage: null, error: true } : prev));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const crumb = 'rounded px-1 py-0.5 font-medium text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-accent';
+
+  return (
+    <div className="max-w-xl overflow-hidden rounded-control border border-border bg-surface">
+      <nav aria-label="Caminho no Drive" className="flex flex-wrap items-center gap-1 border-b border-border px-3 py-2 text-xs text-ink-muted">
+        <button type="button" onClick={() => setPath([])} className={crumb}>
+          Compartilhados comigo
+        </button>
+        {path.map((folder, index) => (
+          <span key={folder.id} className="inline-flex items-center gap-1">
+            <ChevronRight size={12} aria-hidden="true" />
+            <button type="button" onClick={() => setPath(path.slice(0, index + 1))} className={`${crumb} max-w-[12rem] truncate`}>
+              {folder.name}
+            </button>
+          </span>
+        ))}
+      </nav>
+
+      {path.length > 0 && (
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-surface-muted px-3 py-2 text-xs">
+          <span className="min-w-0 truncate text-ink">
+            Pasta aberta: <strong className="font-semibold">{path.at(-1)?.name}</strong>
+          </span>
+          <PickButton folder={path.at(-1)!} chosen={chosen} onPick={onPick} busy={busy} label="Escolher esta pasta" />
+        </div>
+      )}
+
+      <div aria-live="polite" className="max-h-72 overflow-y-auto">
+        {loading && <p className="px-3 py-3 text-xs text-ink-muted">Carregando pastas…</p>}
+        {!loading && result?.error && result.folders.length === 0 && (
+          <p className="px-3 py-3 text-xs text-status-danger">Não foi possível abrir o Drive. Confira se ele está conectado.</p>
+        )}
+        {!loading && !result?.error && result?.folders.length === 0 && (
+          <p className="px-3 py-3 text-xs text-ink-muted">{path.length ? 'Nenhuma subpasta aqui.' : 'Nenhuma pasta compartilhada com a conta conectada.'}</p>
+        )}
+        {!loading && result && result.folders.length > 0 && (
+          <ul className="divide-y divide-border">
+            {result.folders.map((folder) => (
+              <li key={folder.id} className="flex items-center gap-2 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPath([...path, folder])}
+                  className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded px-1 text-left text-xs hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-accent"
+                  title="Abrir a pasta"
+                >
+                  <Folder size={14} aria-hidden="true" className="shrink-0 text-ink-muted" />
+                  <span className="min-w-0 truncate font-medium text-ink">{folder.name}</span>
+                  <ChevronRight size={13} aria-hidden="true" className="ml-auto shrink-0 text-ink-muted" />
+                </button>
+                <PickButton folder={folder} chosen={chosen} onPick={onPick} busy={busy} label="Escolher" />
+              </li>
+            ))}
+          </ul>
+        )}
+        {!loading && result?.nextPage && (
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+            className="w-full border-t border-border px-3 py-2 text-xs font-medium text-ink hover:bg-surface-muted disabled:opacity-50"
+          >
+            {loadingMore ? 'Carregando…' : 'Mostrar mais pastas'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PickButton({ folder, chosen, onPick, busy, label }: { folder: DriveFolder; chosen: ReadonlySet<string>; onPick: (folder: DriveFolder) => void; busy: boolean; label: string }) {
+  const picked = chosen.has(folder.id);
+  return (
+    <button
+      type="button"
+      disabled={busy || picked}
+      onClick={() => onPick(folder)}
+      aria-label={picked ? `${folder.name} já escolhida` : `${label}: ${folder.name}`}
+      className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-[11px] font-semibold disabled:cursor-default ${
+        picked ? 'border-status-success-border bg-status-success-soft text-status-success' : 'border-border text-ink hover:bg-surface-muted disabled:opacity-50'
+      }`}
+    >
+      {picked ? (
+        <>
+          <Check size={12} aria-hidden="true" /> Escolhida
+        </>
+      ) : (
+        label
+      )}
+    </button>
   );
 }
