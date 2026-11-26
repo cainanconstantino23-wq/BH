@@ -15,7 +15,7 @@ import { useFileDrop } from '@/lib/useFileDrop';
 import { MediaLightbox } from '@/components/media/MediaLightbox';
 import { InstagramImageEditor } from '@/components/media/InstagramImageEditor';
 import { findClosestFormat, findExactFormat, formatPlaceLabel, type InstagramFormat } from '@/lib/instagramFormats';
-import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, ListChecks, RefreshCw, Crop, Check, Video, ChevronRight } from 'lucide-react';
+import { Plus, Copy, Calendar, Send, Trash2, Image as ImageIcon, X, CheckCircle2, AlertCircle, Eye, MessageSquareWarning, XCircle, Sparkles, Loader2, Upload, ListChecks, RefreshCw, Crop, Check, Video, ChevronRight, Clock } from 'lucide-react';
 
 interface ApprovalVersion {
   version: number;
@@ -584,7 +584,7 @@ export default function ApprovalSectionOrange() {
     }
   };
 
-  const decide = async (postId: string | number, status: 'approved' | 'changes_requested' | 'rejected') => {
+  const decide = async (postId: string | number, status: 'pending' | 'approved' | 'changes_requested' | 'rejected') => {
     if (status === 'changes_requested' && !decisionComment.trim()) {
       setFeedbackMessage('Escreva o que precisa mudar antes de pedir ajustes.');
       return;
@@ -592,7 +592,7 @@ export default function ApprovalSectionOrange() {
     setDeciding(true);
     const { error } = await supabase
       .from('posts')
-      .update({ approval_status: status, client_feedback: decisionComment.trim() || null })
+      .update({ approval_status: status, client_feedback: status === 'pending' ? null : decisionComment.trim() || null })
       .eq('id', postId);
     setDeciding(false);
     if (error) {
@@ -602,7 +602,7 @@ export default function ApprovalSectionOrange() {
     setDecisionComment('');
     await refreshPosts();
     setFeedbackMessage(
-      status === 'approved' ? 'Publicação aprovada.' : status === 'changes_requested' ? 'Pedido de ajustes registrado.' : 'Publicação reprovada.',
+      status === 'approved' ? 'Publicação aprovada.' : status === 'changes_requested' ? 'Pedido de ajustes registrado.' : status === 'pending' ? 'Voltou para aguardando aprovação.' : 'Publicação reprovada.',
     );
   };
 
@@ -927,16 +927,28 @@ export default function ApprovalSectionOrange() {
                     placeholder="Comentário (obrigatório para pedir ajustes)"
                     className="w-full resize-y rounded-control border border-border bg-canvas p-3 text-sm text-ink placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                   />
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'approved')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-accent px-3 text-xs font-semibold text-white hover:bg-accent-hover disabled:opacity-50">
-                      <CheckCircle2 size={14} aria-hidden="true" /> Aprovar
-                    </button>
-                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'changes_requested')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-status-warning-border bg-status-warning-soft px-3 text-xs font-semibold text-status-warning hover:bg-status-warning-border disabled:opacity-50">
-                      <MessageSquareWarning size={14} aria-hidden="true" /> Pedir ajustes
-                    </button>
-                    <button type="button" disabled={deciding} onClick={() => void decide(selectedPost.id, 'rejected')} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control border border-status-danger-border bg-status-danger-soft px-3 text-xs font-semibold text-status-danger hover:bg-status-danger-border disabled:opacity-50">
-                      <XCircle size={14} aria-hidden="true" /> Reprovar
-                    </button>
+                  <div role="group" aria-label="Status da aprovação" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {([
+                      ['pending', 'Aguardando aprovação', Clock, 'border border-border bg-white/80 text-ink hover:bg-surface-muted', 'ring-2 ring-ink/40'],
+                      ['approved', 'Aprovar', CheckCircle2, 'bg-accent text-white hover:bg-accent-hover', 'ring-2 ring-accent/50'],
+                      ['changes_requested', 'Pedir ajustes', MessageSquareWarning, 'border border-status-warning-border bg-status-warning-soft text-status-warning hover:bg-status-warning-border', 'ring-2 ring-status-warning/50'],
+                      ['rejected', 'Reprovar', XCircle, 'border border-status-danger-border bg-status-danger-soft text-status-danger hover:bg-status-danger-border', 'ring-2 ring-status-danger/50'],
+                    ] as const).map(([value, label, Icon, tone, ring]) => {
+                      const current = (selectedPost.approval_status || 'pending') === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={current}
+                          disabled={deciding || current}
+                          onClick={() => void decide(selectedPost.id, value)}
+                          title={current ? 'Status atual' : undefined}
+                          className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-semibold ${tone} ${current ? `${ring} ring-offset-1 disabled:opacity-100` : 'disabled:opacity-50'}`}
+                        >
+                          <Icon size={14} aria-hidden="true" /> {current && value === 'approved' ? 'Aprovado' : current && value === 'changes_requested' ? 'Ajustes pedidos' : current && value === 'rejected' ? 'Reprovado' : label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
