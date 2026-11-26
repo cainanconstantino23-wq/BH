@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
 import { collectionKind, collectionName, loadCollection, logCoverActivity } from '@/lib/covers-server';
 import { parentsOf } from '@/lib/coverFolder-server';
+import { canSeeDriveItem } from '@/lib/google/driveAccess';
 import { RECORD_FILE_NAME, SAVED_TO_DRIVE_ACTION, approvalRecord, approvedFolderName, photoRecordLines, savedFileName } from '@/lib/coverDrive';
 import {
   DriveNotConnectedError,
@@ -40,6 +41,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     // pasta da casa = onde está a primeira capa no Drive
     const parent = (await parentsOf(capas[0].driveId))[0];
     if (!parent) return fail('house_folder_missing', 409);
+    if (!(await canSeeDriveItem(member, parent))) return fail('blocked', 403);
 
     const house = await collectionName(admin, id);
     const savedAt = new Date().toISOString();

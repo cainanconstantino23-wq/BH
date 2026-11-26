@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMember } from '@/lib/team-server';
 import { DRIVE_ID, DriveNotConnectedError, clampThumbSize, driveThumbnail } from '@/lib/google/drive';
-import { isSharedWithMe } from '@/lib/google/driveAccess';
+import { canSeeDriveItem } from '@/lib/google/driveAccess';
 
 // Miniatura de uma imagem do Drive, pelo servidor (o link do Google exige o token).
 // ?s=tamanho do lado maior em px (até 2000).
@@ -14,8 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!DRIVE_ID.test(id) || id === 'root') return new NextResponse(null, { status: 400 });
 
   try {
-    // só o que veio de "Compartilhados comigo"
-    if (!(await isSharedWithMe(id))) return new NextResponse(null, { status: 403 });
+    // só o que a pessoa pode ver (Compartilhados comigo + pastas dela)
+    if (!(await canSeeDriveItem(member, id))) return new NextResponse(null, { status: 403 });
     return await driveThumbnail(id, clampThumbSize(request.nextUrl.searchParams.get('s')));
   } catch (error) {
     if (error instanceof DriveNotConnectedError) return new NextResponse(null, { status: 409 });

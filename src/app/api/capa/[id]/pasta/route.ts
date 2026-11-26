@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { getActiveMember } from '@/lib/team-server';
 import { collectionFolders } from '@/lib/coverFolder-server';
+import { onlyVisible } from '@/lib/google/driveAccess';
 import { DriveNotConnectedError, driveFetch } from '@/lib/google/drive';
 
 // "Casas com capas selecionadas" → "Adicionar fotos": a pasta da casa no Drive (de onde vieram as capas já salvas),
@@ -23,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!id) return NextResponse.json({ error: 'not_found' }, { status: 404, headers: noStore });
 
   try {
-    const ids = await collectionFolders(createAdminClient(), id);
+    const ids = await onlyVisible(member, await collectionFolders(createAdminClient(), id));
     const folders = await Promise.all(
       ids.map(async (folderId) => {
         const meta = await folderMeta(folderId).catch(() => null);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMember } from '@/lib/team-server';
 import { DRIVE_ID, DriveNotConnectedError, driveFetch, getDriveAccessToken } from '@/lib/google/drive';
-import { isSharedWithMe } from '@/lib/google/driveAccess';
+import { canSeeDriveItem } from '@/lib/google/driveAccess';
 
 // Vídeo do Drive para assistir no app (estúdio "Selecionar capas"): repassa o arquivo em partes (Range),
 // assim o player do navegador começa logo e consegue avançar sem baixar o vídeo inteiro. Só leitura.
@@ -18,8 +18,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!DRIVE_ID.test(id) || id === 'root') return new NextResponse(null, { status: 400 });
 
   try {
-    // só o que veio de "Compartilhados comigo"
-    if (!(await isSharedWithMe(id))) return new NextResponse(null, { status: 403 });
+    // só o que a pessoa pode ver (Compartilhados comigo + pastas dela)
+    if (!(await canSeeDriveItem(member, id))) return new NextResponse(null, { status: 403 });
     const meta = (await (await driveFetch(`/files/${id}`, { fields: 'mimeType', supportsAllDrives: 'true' })).json()) as { mimeType?: string };
     if (!meta.mimeType?.startsWith('video/')) return new NextResponse(null, { status: 415 });
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMember } from '@/lib/team-server';
 import { DriveNotConnectedError, driveFetch } from '@/lib/google/drive';
-import { onlyShared } from '@/lib/google/driveAccess';
+import { onlyVisible } from '@/lib/google/driveAccess';
 import type { DriveEntry } from '@/app/api/drive/list/route';
 
 // Busca pastas pelo nome só em "Compartilhados comigo" (Meu Drive e drives compartilhados bloqueados: src/lib/google/driveAccess.ts).
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       fields: 'files(id,name,parents)',
     });
     const found = (((await response.json()) as { files?: { id: string; name: string; parents?: string[] }[] }).files ?? []).filter((file) => !file.name.startsWith('.'));
-    const allowed = new Set(await onlyShared(found.map((file) => file.id)));
+    const allowed = new Set(await onlyVisible(member, found.map((file) => file.id)));
     const files = found.filter((file) => allowed.has(file.id));
 
     // nome da pasta de cima (ex.: o bairro), para mostrar onde fica e sugerir o bairro
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
       fields: 'files(id,name,imageMediaMetadata(width,height,rotation))',
     });
     const rawImages = (((await imageResponse.json()) as { files?: { id: string; name: string; imageMediaMetadata?: { width?: number; height?: number; rotation?: number } }[] }).files ?? []).filter((file) => !file.name.startsWith('.'));
-    const allowedImages = new Set(await onlyShared(rawImages.map((file) => file.id)));
+    const allowedImages = new Set(await onlyVisible(member, rawImages.map((file) => file.id)));
     const images: DriveEntry[] = rawImages
       .filter((file) => allowedImages.has(file.id))
       .map((file) => {

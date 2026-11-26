@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMember } from '@/lib/team-server';
 import { DRIVE_ID, DriveNotConnectedError, driveFetch } from '@/lib/google/drive';
-import { isSharedWithMe } from '@/lib/google/driveAccess';
+import { canSeeDriveItem } from '@/lib/google/driveAccess';
 
 // Conteúdo de uma pasta do Drive: subpastas e imagens (e vídeos só com ?videos=1, para o estúdio de capas).
 // folder = "shared" (Compartilhados comigo) ou o ID de uma pasta dentro dele.
@@ -42,7 +42,13 @@ export async function GET(request: NextRequest) {
     if (folder !== 'shared' && !DRIVE_ID.test(folder)) {
       return NextResponse.json({ error: 'invalid_folder' }, { status: 400, headers: noStore });
     }
-    if (folder !== 'shared' && !(await isSharedWithMe(folder))) return NextResponse.json({ error: 'blocked' }, { status: 403, headers: noStore });
+    // pessoa com pastas escolhidas (team_members.drive_folders): o ponto de partida são essas pastas
+    if (folder === 'shared' && member.driveFolders) {
+      const visible = await Promise.all(member.driveFolders.map(async (row) => ((await canSeeDriveItem(member, row.id)) ? row : null)));
+      const entries: DriveEntry[] = visible.filter((row) => row !== null).map((row) => ({ id: row.id, name: row.name, kind: 'folder' }));
+      return NextResponse.json({ entries, nextPage: null }, { headers: noStore });
+    }
+    if (folder !== 'shared' && !(await canSeeDriveItem(member, folder))) return NextResponse.json({ error: 'blocked' }, { status: 403, headers: noStore });
 
     const kinds = `(mimeType = '${FOLDER}' or mimeType contains 'image/'${withVideos ? " or mimeType contains 'video/'" : ''} or mimeType = '${SHORTCUT}')`;
     const q = folder === 'shared' ? `sharedWithMe = true and trashed = false and ${kinds}` : `'${folder}' in parents and trashed = false and ${kinds}`;

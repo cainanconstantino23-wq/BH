@@ -41,6 +41,10 @@ const ERRORS: Record<string, { title: string; text: string; reconnect?: boolean 
     title: 'Planilha não encontrada',
     text: 'Não achamos no Drive um arquivo com o nome "POSTAGENS INSTA 2025". Confira o nome ou se a conta conectada tem acesso a ele.',
   },
+  drive_restrito: {
+    title: 'Tabela indisponível para o seu acesso',
+    text: 'Seu acesso ao Drive está limitado a algumas pastas. Peça a quem gerencia a equipe para liberar o Drive inteiro.',
+  },
   sheet_not_found: { title: 'Aba POSTAGENS não encontrada', text: 'O arquivo foi achado, mas não tem uma aba chamada POSTAGENS.' },
 };
 

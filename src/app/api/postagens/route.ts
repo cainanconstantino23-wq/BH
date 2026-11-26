@@ -101,6 +101,8 @@ function sheetRows(sheet: ExcelJS.Worksheet) {
 export async function GET() {
   const member = await getActiveMember();
   if (!member) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: noStore });
+  // a planilha lista todas as casas: quem só vê algumas pastas do Drive não abre a tabela
+  if (member.driveFolders) return NextResponse.json({ error: 'drive_restrito' }, { status: 403, headers: noStore });
 
   try {
     const file = await findFile();
